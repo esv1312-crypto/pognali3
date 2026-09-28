@@ -131,7 +131,7 @@ body{min-height:100dvh;overscroll-behavior:none}
 /* Живая жизнь — визуальный слой: спокойный интерфейс, энергия внутри событий */
 .top{padding-left:12px;padding-right:12px;gap:8px}
 .logo-btn{box-shadow:0 5px 16px #00000022}
-.life-tagline{font-size:10px;font-weight:750;color:#737881;white-space:nowrap;letter-spacing:-.05px;margin-left:-2px}
+.life-tagline{font-size:10px;font-weight:750;color:#737881;white-space:nowrap;letter-spacing:-.05px;margin-left:-2px;flex:1;min-width:0}
 .life-tagline b{color:#17191d;font-size:13px;margin-left:2px}
 .mapwrap:after{content:"";position:absolute;left:0;right:0;top:0;height:92px;z-index:350;pointer-events:none;background:linear-gradient(180deg,rgba(255,255,255,.78),rgba(255,255,255,0))}
 .mapwrap .filters{z-index:500}
@@ -188,7 +188,7 @@ body{min-height:100dvh;overscroll-behavior:none}
 .cat-choice{min-height:76px;padding:10px 6px;border-radius:16px}
 .cat-choice.active{transform:translateY(-1px)}
 .notice{border:1px solid #f0df9a}
-@media(max-width:430px){.life-tagline{flex:1;min-width:0;max-width:none;overflow:visible;text-overflow:clip;white-space:nowrap;font-size:10px;font-weight:800;line-height:1.1;letter-spacing:-.12px}.logo-btn{font-size:19px;padding-left:10px;padding-right:11px}.bottomnav{height:80px;min-height:80px}.nav{min-height:60px}}
+@media(max-width:430px){.life-tagline{flex:1;min-width:0;max-width:none;overflow:visible;text-overflow:clip;white-space:nowrap;font-size:9px;font-weight:800;line-height:1.1;letter-spacing:-.18px}.logo-btn{font-size:19px;padding-left:10px;padding-right:11px;flex:none}.lang-btn{flex:none;white-space:nowrap}.bottomnav{height:80px;min-height:80px}.nav{min-height:60px}}
 @media(prefers-reduced-motion:reduce){.event-card,.nav,.cat-choice{transition:none}}
 </style><style id="pognali-system-bars-fix">html,body{width:100%;max-width:100%;overflow-x:hidden}.app{width:100%;max-width:560px;box-sizing:border-box;overflow:hidden}.content,.top,.bottomnav{width:100%;max-width:100%;box-sizing:border-box;min-width:0}</style><style id="pognali-calendar-fix">
 .calendar-panel{box-sizing:border-box;width:calc(100% - 20px);min-width:0;overflow:hidden}
@@ -360,7 +360,7 @@ function calendarHTML(){
   const counts={}; db.events.filter(isVisibleEvent).forEach(e=>{if(e.date&&e.date.startsWith(`${y}-${String(m+1).padStart(2,'0')}-`))counts[e.date]=(counts[e.date]||0)+1});
   let cells='';
   for(let i=0;i<start;i++)cells+='<div class="cal-day empty-day"></div>';
-  for(let day=1;day<=days;day++){const key=`${y}-${String(m+1).padStart(2,'0')}-${String(day).padStart(2,'0')}`;const c=counts[key]||0;const active=selectedDate===key?' active':'';const word=c===1?translateText('событие'):(c<5?translateText('события'):translateText('событий'));cells+=`<button class="cal-day${active}${c?' has-events':''}" onclick="pickCalendarDate('${key}')"><span>${day}</span>${c?`<small>${c} ${word}</small>`:''}</button>`}
+  for(let day=1;day<=days;day++){const key=`${y}-${String(m+1).padStart(2,'0')}-${String(day).padStart(2,'0')}`;const c=counts[key]||0;const active=selectedDate===key?' active':'';const aria=c?` aria-label="${day} — ${c} ${c===1?translateText('событие'):(c<5?translateText('события'):translateText('событий'))}"`:'';cells+=`<button class="cal-day${active}${c?' has-events':''}"${aria} onclick="pickCalendarDate('${key}')"><span>${day}</span>${c?`<small>${c}</small>`:''}</button>`}
   const wd={ru:['Пн','Вт','Ср','Чт','Пт','Сб','Вс'],en:['Mon','Tue','Wed','Thu','Fri','Sat','Sun'],es:['Lun','Mar','Mié','Jue','Vie','Sáb','Dom'],it:['Lun','Mar','Mer','Gio','Ven','Sab','Dom'],de:['Mo','Di','Mi','Do','Fr','Sa','So'],fr:['Lun','Mar','Mer','Jeu','Ven','Sam','Dim']}[getLang()]||['Пн','Вт','Ср','Чт','Пт','Сб','Вс'];
   return `<div class="calendar-panel"><div class="calendar-head"><button onclick="moveCalendar(-1)">‹</button><b>${monthTitle()}</b><button onclick="moveCalendar(1)">›</button></div><div class="calendar-week">${wd.map(x=>`<span>${x}</span>`).join('')}</div><div class="calendar-grid">${cells}</div><div class="calendar-foot"><button onclick="clearCalendarDate()">${translateText('Все даты')}</button></div></div>`;
 }
