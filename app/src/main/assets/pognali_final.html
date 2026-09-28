@@ -365,6 +365,7 @@ function calendarHTML(){
 function renderFilters(){return ['Мир','Рядом','Мои'].map(x=>`<button class="filter ${x===selectedFilter&&!selectedDate?'active':''}" onclick="setFilter('${x}')">${filterLabel(x)}</button>`).join('')+`<button class="filter date-filter ${selectedDate||calendarOpen?'active':''}" onclick="toggleCalendar()">📅 ${translateText('Календарь')}${selectedDate?`<span class="filter-count">${filtered().length}</span>`:''}</button>`}
 function destroyMainMap(){if(map){try{map.remove()}catch(e){}map=null;}markers=[];userLocationMarker=null;}
 function destroyPickerMap(){if(pickerMap){try{pickerMap.remove()}catch(e){}pickerMap=null;pickerMarker=null;}}
+function refreshMainMapLayout(fitToEvents=false){if(!map)return;const run=()=>{if(!map)return;try{map.invalidateSize({pan:false,animate:false});if(fitToEvents){const points=filtered().map(e=>[Number(e.lat),Number(e.lng)]).filter(([lat,lng])=>Number.isFinite(lat)&&Number.isFinite(lng));if(points.length===1)map.setView(points[0],Math.min(map.getZoom(),13),{animate:false});else if(points.length>1)map.fitBounds(L.latLngBounds(points),{padding:[42,72],maxZoom:13,animate:false})}}catch(e){}};requestAnimationFrame(run);setTimeout(run,120);setTimeout(run,320)}
 function renderEvents(){destroyMainMap();document.getElementById('content').innerHTML=`<div class="mapwrap"><div id="map" class="map"></div><div class="filters">${renderFilters()}</div>${calendarOpen?calendarHTML():''}<button class="my-location-btn" onclick="centerOnMyLocation()" aria-label="Моё местоположение" title="Моё местоположение">⌖</button><div id="mapScope" class="map-scope">📍 Определяем город…</div><div class="live-map-hint">🟢 Идёт сейчас</div><div class="viewtoggle"><button id="mapbtn" class="active" onclick="switchView('map')">Карта</button><button id="listbtn" onclick="switchView('list')">Список</button></div></div>`;initMap()}
 function setFilter(x){
   if(map) { const c=map.getCenter(); lastMapView={lat:c.lat,lng:c.lng,zoom:map.getZoom()}; mapViews[selectedFilter]=lastMapView; }
@@ -415,6 +416,7 @@ function initMap(){
   }
   if(!userGeo && selectedFilter!=='Мои') requestUserLocation();
   else if(userGeo && selectedFilter!=='Мои') drawUserLocation(userGeo.lat,userGeo.lng,false);
+  refreshMainMapLayout(!!selectedDate);
 }
 function drawUserLocation(lat,lng,center){
   if(!map)return;
@@ -428,8 +430,17 @@ function requestUserLocation(){
   navigator.geolocation.getCurrentPosition(pos=>{
     const {latitude,longitude}=pos.coords;
     userGeo={lat:latitude,lng:longitude};
-    drawUserLocation(latitude,longitude,selectedFilter==='Рядом');
-    if(selectedFilter==='Рядом') renderEventsMarkersOnly();
+    const savedNearby=mapViews['Рядом'];
+    const savedTooFar=savedNearby&&distanceKm(latitude,longitude,Number(savedNearby.lat),Number(savedNearby.lng))>NEARBY_RADIUS_KM;
+    if(selectedFilter==='Рядом'&&savedTooFar){
+      mapViews['Рядом']={lat:latitude,lng:longitude,zoom:9};
+      lastMapView=mapViews['Рядом'];
+      try{localStorage.setItem(KEY+'_map_views',JSON.stringify(mapViews))}catch(e){}
+      if(map)map.setView([latitude,longitude],9,{animate:false});
+    }
+    if(map)drawUserLocation(latitude,longitude,false);
+    if(selectedFilter==='Рядом')renderEventsMarkersOnly();
+    refreshMainMapLayout(!!selectedDate);
   },()=>{userLocationRequested=false;const scope=document.getElementById('mapScope');if(scope)scope.textContent='📍 Включи геолокацию для событий рядом';}, {enableHighAccuracy:false,timeout:8000,maximumAge:300000});
 }
 async function getApproxLocationByIP(){
@@ -492,6 +503,7 @@ function renderEventsMarkersOnly(){
     m.bindPopup(`<div class=\"eventmini\"><h3>${esc(e.title)}</h3><div>${esc(fmt(e))}</div><div>${esc(displayPlace(e))}</div><div>${e.people.length}/${e.limit} ${T('Participants').toLowerCase()}</div><button onclick=\"openEvent(${e.id})\">${T('Open event')}</button></div>`);
     markers.push(m);
   });
+  refreshMainMapLayout(false);
 }
 function eventLabel(title,cat){
   const t=String(title||'').trim();
