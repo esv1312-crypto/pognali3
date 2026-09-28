@@ -6,6 +6,7 @@ import android.content.pm.PackageManager;
 import android.content.Intent;
 import android.net.Uri;
 import android.view.WindowInsets;
+import android.graphics.Insets;
 import android.os.Bundle;
 import android.webkit.GeolocationPermissions;
 import android.webkit.WebChromeClient;
@@ -25,12 +26,14 @@ public class MainActivity extends Activity {
         super.onCreate(savedInstanceState);
         webView = new WebView(this);
         setContentView(webView);
-        // Android 15 may draw the WebView edge-to-edge. Keep HTML content clear of
-        // the real system bars so the top/bottom UI does not sit underneath them.
+        // Keep the WebView full-size. The HTML owns safe-area spacing so Android
+        // insets are not applied twice (once by WebView and once by CSS).
         webView.setOnApplyWindowInsetsListener((v, insets) -> {
-            android.graphics.Insets bars = insets.getInsets(
+            Insets bars = insets.getInsets(
                 WindowInsets.Type.statusBars() | WindowInsets.Type.navigationBars());
-            v.setPadding(v.getPaddingLeft(), bars.top, v.getPaddingRight(), bars.bottom);
+            String js = "(function(){document.documentElement.style.setProperty('--safe-top','" + bars.top
+                + "px');document.documentElement.style.setProperty('--safe-bottom','" + bars.bottom + "px');})();";
+            v.evaluateJavascript(js, null);
             return insets;
         });
         WebSettings s = webView.getSettings();
