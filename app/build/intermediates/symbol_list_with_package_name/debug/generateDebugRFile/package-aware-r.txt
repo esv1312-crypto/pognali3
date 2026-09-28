@@ -1,0 +1,2 @@
+com.pognali.app
+style AppTheme

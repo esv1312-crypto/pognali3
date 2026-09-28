@@ -1,0 +1,20 @@
+{
+    "logs": [
+        {
+            "outputFile": "com.pognali.app-debug-3:/values_values.arsc.flat",
+            "map": [
+                {
+                    "source": "C:\\Users\\User\\Desktop\\pognali3\\Pognali\\app\\src\\main\\res\\values\\styles.xml",
+                    "from": {
+                        "startLines": "2",
+                        "startColumns": "4",
+                        "startOffsets": "55",
+                        "endLines": "10",
+                        "endColumns": "12",
+                        "endOffsets": "575"
+                    }
+                }
+            ]
+        }
+    ]
+}

@@ -1,0 +1,8 @@
+com.pognali.app-pngs-0 C:\Users\User\Desktop\pognali3\Pognali\app\build\generated\res\pngs\debug
+com.pognali.app-updated_navigation_xml-1 C:\Users\User\Desktop\pognali3\Pognali\app\build\generated\updated_navigation_xml\debug
+com.pognali.app-packageDebugResources-2 C:\Users\User\Desktop\pognali3\Pognali\app\build\intermediates\incremental\debug\packageDebugResources\merged.dir
+com.pognali.app-packageDebugResources-3 C:\Users\User\Desktop\pognali3\Pognali\app\build\intermediates\incremental\debug\packageDebugResources\stripped.dir
+com.pognali.app-debug-4 C:\Users\User\Desktop\pognali3\Pognali\app\build\intermediates\merged_res\debug\mergeDebugResources
+com.pognali.app-debug-5 C:\Users\User\Desktop\pognali3\Pognali\app\src\debug\res
+com.pognali.app-main-6 C:\Users\User\Desktop\pognali3\Pognali\app\src\main\res
+gradleHome-0 C:\Users\User\.gradle
