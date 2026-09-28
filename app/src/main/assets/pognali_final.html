@@ -92,16 +92,16 @@
 .message-section{margin-top:18px;padding:14px;border:1px solid #e7e9ed;border-radius:18px;background:linear-gradient(180deg,#fff,#fafbfc);box-shadow:0 5px 18px #00000008}.message-section h3{margin:0 0 10px;font-size:15px}.message-tabs{display:flex;gap:7px;margin-bottom:10px}.message-tabs button{flex:1;border:0;background:#f0f1f3;border-radius:11px;padding:9px;font-size:12px;font-weight:800}.message-tabs button.active{background:#17191d;color:#fff}.message-list{display:grid;gap:7px}.message-item{display:flex;align-items:center;gap:10px;padding:10px;border:1px solid #eceef1;border-radius:13px;background:#fff;text-align:left;width:100%}.message-icon{width:38px;height:38px;border-radius:12px;background:#f0f1f3;display:grid;place-items:center;flex:none}.message-item b{font-size:13px}.message-item small{display:block;color:#777;font-size:11px;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.lang-list{display:grid;gap:8px;margin-top:12px}.lang-option{width:100%;padding:12px 13px;border:1px solid #e5e7eb;background:#fff;border-radius:13px;text-align:left;display:flex;justify-content:space-between;align-items:center;font-weight:750}.lang-option.active{border-color:#17191d;background:#f4f4f5}.profile h2{margin-bottom:14px}
 </style>
 <style id="pognali-qa-v1">.qa-toast{position:fixed;left:50%;bottom:92px;transform:translate(-50%,16px);z-index:5000;opacity:0;pointer-events:none;background:#17191d;color:#fff;padding:11px 14px;border-radius:14px;box-shadow:0 8px 28px #0003;font-size:13px;font-weight:750;max-width:min(92vw,480px);text-align:center;transition:opacity .18s,transform .18s}.qa-toast.open{opacity:1;transform:translate(-50%,0)}.qa-toast.success{background:#187a3d}.qa-toast.error{background:#b42318}.qa-dialog{padding-top:8px}.qa-dialog h2{padding-right:42px;margin:0 0 8px}.qa-dialog p{margin:0 0 14px;color:#656a72;font-size:13px;line-height:1.45}.qa-dialog-actions{display:flex;gap:8px;margin-top:14px}.qa-dialog-actions button{flex:1}.age-custom{display:none;margin-top:8px}.age-custom.open{display:grid;grid-template-columns:1fr 1fr;gap:8px}.age-custom input{width:100%;padding:12px 13px;border:1px solid #e1e3e7;border-radius:13px;background:#fff}.age-custom .meta{grid-column:1/-1}</style><style id="pognali-final-safearea">
-:root{--safe-top:0px;--safe-bottom:0px}
+:root{--safe-top:0px;--safe-bottom:0px;--keyboard-bottom:0px}
 body{min-height:100dvh;overscroll-behavior:none}
 .app{height:100dvh;min-height:100dvh}
 .top{padding-top:max(12px,var(--safe-top));min-height:calc(56px + var(--safe-top));}
 .bottomnav{height:calc(78px + var(--safe-bottom));min-height:calc(78px + var(--safe-bottom));padding-bottom:max(7px,var(--safe-bottom));}
 .content{min-height:0;overscroll-behavior:contain}
-.modal{align-items:center;padding:calc(12px + var(--safe-top)) 12px calc(12px + var(--safe-bottom));}
-.sheet{width:min(560px,100%);max-height:calc(100dvh - 24px - var(--safe-top) - var(--safe-bottom));border-radius:22px;padding:18px;overflow:auto;overflow-x:hidden;box-shadow:0 20px 60px #0003;}
-.sheet:has(.chat){max-height:calc(100dvh - 24px - var(--safe-top) - var(--safe-bottom));}
-.sheet h2,.sheet h3,.sheet p,.sheet .meta,.sheet .card{max-width:100%;overflow-wrap:anywhere;}
+.modal{align-items:center;padding:calc(12px + var(--safe-top)) 12px calc(12px + max(var(--safe-bottom),var(--keyboard-bottom)));}
+.sheet{width:min(560px,100%);max-height:calc(100dvh - 24px - var(--safe-top) - max(var(--safe-bottom),var(--keyboard-bottom)));border-radius:22px;padding:18px;overflow:auto;overflow-x:hidden;box-shadow:0 20px 60px #0003;}
+.sheet:has(.chat){max-height:calc(100dvh - 24px - var(--safe-top) - max(var(--safe-bottom),var(--keyboard-bottom)));}
+.sheet h2,.sheet h3,.sheet p,.sheet .meta,.sheet .card{max-width:100%;overflow-wrap:anywhere;}.sheet{box-sizing:border-box;}
 .actions,.mine-actions{flex-wrap:wrap;}
 .actions button,.mine-actions button{min-width:0;flex:1 1 140px;}
 .row{flex-wrap:wrap;}
@@ -109,13 +109,13 @@ body{min-height:100dvh;overscroll-behavior:none}
 .profile-mini>div:last-child{min-width:0;flex:1;}
 .profile-mini h3{line-height:1.2;overflow-wrap:anywhere;word-break:break-word;}
 .profile-mini .meta{overflow-wrap:anywhere;}
-.profile p{overflow-wrap:anywhere;word-break:break-word;line-height:1.5;}
+.profile{min-width:0;overflow-x:hidden}.profile p{overflow-wrap:anywhere;word-break:break-word;line-height:1.5}.profile input,.profile textarea{max-width:100%;min-width:0;box-sizing:border-box;}
 .interest-tags{max-width:100%;}
 .interest-tag{max-width:100%;overflow-wrap:anywhere;}
 .participant-row{min-width:0;}
 .participant-info{min-width:0;overflow:hidden;}
 .participant-name{overflow-wrap:anywhere;word-break:break-word;}
-.composer{padding-bottom:max(10px,var(--safe-bottom));background:#fff;position:relative;z-index:2;}
+.composer{padding-bottom:max(10px,var(--safe-bottom));background:#fff;position:sticky;bottom:0;z-index:2;}
 .composer input{min-width:0;}
 .chat{height:min(72vh,620px);min-height:260px;}
 .messages{min-height:0;overscroll-behavior:contain;}
@@ -236,7 +236,7 @@ function seedDemoEvents(){
 seedDemoEvents();
 db.events.forEach(e=>{if(!e.country&&e.city==='Симферополь')e.country='Россия';if(!e.city&&e.place) e.city=db.profile?.city||'';});
 save();
-let currentTab='events', map, markers=[]; let selectedFilter='Рядом', eventView='map'; let selectedDate=null, calendarOpen=false, calendarMonth=new Date(2026,8,1); let lastMapView=null; let mapViews={Мир:null,Рядом:null,Мои:null}; let userLocationMarker=null; let userLocationRequested=false; let userGeo=null;
+let currentTab='events', map, markers=[]; let selectedFilter='Рядом', eventView='map'; let selectedDate=null, calendarOpen=false, calendarMonth=new Date(2026,8,1); let lastMapView=null; let mapViews={Мир:null,Рядом:null,Мои:null}; try{mapViews={...mapViews,...(JSON.parse(localStorage.getItem(KEY+'_map_views')||'{}')||{})}}catch(e){} let userLocationMarker=null; let userLocationRequested=false; let userGeo=null;
 const NEARBY_RADIUS_KM=200; const MAP_RADIUS_LEVELS=[{minZoom:13,km:25},{minZoom:11,km:50},{minZoom:9,km:150},{minZoom:7,km:600}];
 function mapRadiusKm(zoom){for(const x of MAP_RADIUS_LEVELS)if(zoom>=x.minZoom)return x.km;return null}
 function mapScopeLabel(){if(selectedFilter==='Мир')return '🌍 Весь мир';if(selectedFilter==='Рядом')return userGeo?`📍 Рядом · ${NEARBY_RADIUS_KM} км`:'📍 Включи геолокацию';return '🙋 Мои события'}
@@ -302,7 +302,7 @@ function initMap(){
   const initialZoom=savedView ? savedView.zoom : (worldMode?2:9);
   map=L.map('map').setView(initialView,initialZoom);
   L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19,subdomains:'abc',attribution:'© OpenStreetMap contributors'}).addTo(map);
-  const updateMapState=()=>{const c=map.getCenter();lastMapView={lat:c.lat,lng:c.lng,zoom:map.getZoom()};mapViews[selectedFilter]=lastMapView;const el=document.getElementById('map');if(el)el.classList.toggle('map-zoomed',map.getZoom()>=16);const scope=document.getElementById('mapScope');if(scope){scope.textContent=mapScopeLabel();scope.classList.toggle('world',!mapRadiusKm(map.getZoom())&&!!userGeo)}};
+  const updateMapState=()=>{const c=map.getCenter();lastMapView={lat:c.lat,lng:c.lng,zoom:map.getZoom()};mapViews[selectedFilter]=lastMapView;try{localStorage.setItem(KEY+'_map_views',JSON.stringify(mapViews))}catch(e){};const el=document.getElementById('map');if(el)el.classList.toggle('map-zoomed',map.getZoom()>=16);const scope=document.getElementById('mapScope');if(scope){scope.textContent=mapScopeLabel();scope.classList.toggle('world',!mapRadiusKm(map.getZoom())&&!!userGeo)}};
   map.on('moveend',updateMapState);
   updateMapState();
   markers=[];
@@ -345,7 +345,7 @@ function requestUserLocation(){
     userGeo={lat:latitude,lng:longitude};
     drawUserLocation(latitude,longitude,selectedFilter==='Рядом');
     if(selectedFilter==='Рядом') renderEventsMarkersOnly();
-  },()=>{const scope=document.getElementById('mapScope');if(scope)scope.textContent='📍 Включи геолокацию для событий рядом';}, {enableHighAccuracy:false,timeout:8000,maximumAge:300000});
+  },()=>{userLocationRequested=false;const scope=document.getElementById('mapScope');if(scope)scope.textContent='📍 Включи геолокацию для событий рядом';}, {enableHighAccuracy:false,timeout:8000,maximumAge:300000});
 }
 async function getApproxLocationByIP(){
   const endpoints=[
@@ -669,6 +669,21 @@ function renderProfile(){let p=db.profile;document.getElementById('content').inn
 function handlePhoto(input){let file=input.files?.[0];if(!file)return;if(!file.type.startsWith('image/'))return showToast('Выбери изображение.','error');let reader=new FileReader();reader.onload=()=>{let img=new Image();img.onload=()=>{let max=512,scale=Math.min(1,max/Math.max(img.width,img.height)),c=document.createElement('canvas');c.width=Math.round(img.width*scale);c.height=Math.round(img.height*scale);c.getContext('2d').drawImage(img,0,0,c.width,c.height);db.profile.photo=c.toDataURL('image/jpeg',0.82);save();renderProfile()};img.src=reader.result};reader.readAsDataURL(file)}
 function saveProfile(){db.profile={...db.profile,name:document.getElementById('pname').value.trim()||'Пользователь',birth:document.getElementById('pbirth').value,city:document.getElementById('pcity').value.trim(),bio:document.getElementById('pbio').value.trim()};db.users[2]={...(db.users[2]||{}),...db.profile};save();renderProfile();showToast('Профиль сохранён','success')}
 function openProfile(){go('profile')}
+function updateKeyboardInset(){
+  const vv=window.visualViewport;
+  if(!vv){document.documentElement.style.setProperty('--keyboard-bottom','0px');return;}
+  const keyboard=Math.max(0,Math.round(window.innerHeight-vv.height-vv.offsetTop));
+  document.documentElement.style.setProperty('--keyboard-bottom',keyboard+'px');
+}
+if(window.visualViewport){
+  window.visualViewport.addEventListener('resize',updateKeyboardInset);
+  window.visualViewport.addEventListener('scroll',updateKeyboardInset);
+}
+window.addEventListener('resize',updateKeyboardInset);
+document.addEventListener('focusin',()=>setTimeout(updateKeyboardInset,50));
+document.addEventListener('focusout',()=>setTimeout(updateKeyboardInset,150));
+updateKeyboardInset();
+
 function openModal(html){document.getElementById('sheet').innerHTML=html;document.getElementById('modal').classList.add('open');setTimeout(localizeUI,0)}
 function closeModal(){document.getElementById('modal').classList.remove('open')}
 function esc(s){return String(s??'').replace(/[&<>'"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c]))}
