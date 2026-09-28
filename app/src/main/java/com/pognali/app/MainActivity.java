@@ -18,6 +18,8 @@ public class MainActivity extends Activity {
     private static final int LOCATION_REQUEST = 1001;
     private static final int FILE_CHOOSER_REQUEST = 1002;
     private android.webkit.ValueCallback<Uri[]> filePathCallback;
+    private GeolocationPermissions.Callback pendingGeoCallback;
+    private String pendingGeoOrigin;
 
     @Override protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -45,8 +47,9 @@ public class MainActivity extends Activity {
                     checkSelfPermission(Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED) {
                     callback.invoke(origin, true, false);
                 } else {
+                    pendingGeoOrigin = origin;
+                    pendingGeoCallback = callback;
                     requestPermissions(new String[]{Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION}, LOCATION_REQUEST);
-                    callback.invoke(origin, true, false);
                 }
             }
 
@@ -68,6 +71,19 @@ public class MainActivity extends Activity {
         webView.loadUrl("file:///android_asset/pognali_final.html");
     }
 
+    @Override public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] grantResults) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults);
+        if (requestCode == LOCATION_REQUEST && pendingGeoCallback != null) {
+            boolean granted = checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED
+                    || checkSelfPermission(Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED;
+            GeolocationPermissions.Callback callback = pendingGeoCallback;
+            String origin = pendingGeoOrigin;
+            pendingGeoCallback = null;
+            pendingGeoOrigin = null;
+            callback.invoke(origin, granted, false);
+        }
+    }
+
     @Override protected void onActivityResult(int requestCode, int resultCode, Intent data) {
         super.onActivityResult(requestCode, resultCode, data);
         if (requestCode == FILE_CHOOSER_REQUEST) {
@@ -83,6 +99,14 @@ public class MainActivity extends Activity {
     }
 
     @Override public void onBackPressed() {
-        if (webView.canGoBack()) webView.goBack(); else super.onBackPressed();
+        webView.evaluateJavascript(
+            "(function(){" +
+            "var m=document.getElementById('modal');" +
+            "if(m&&m.classList.contains('open')){closeModal();return true;}" +
+            "if(typeof currentTab!=='undefined'&&currentTab!=='events'){go('events');return true;}" +
+            "return false;" +
+            "})()",
+            value -> { if ("true".equals(value)) return; MainActivity.super.onBackPressed(); }
+        );
     }
 }
