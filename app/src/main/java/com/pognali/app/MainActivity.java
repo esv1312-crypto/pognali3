@@ -33,7 +33,7 @@ public class MainActivity extends Activity {
                 WindowInsets.Type.statusBars() | WindowInsets.Type.navigationBars());
             String js = "(function(){document.documentElement.style.setProperty('--safe-top','" + bars.top
                 + "px');document.documentElement.style.setProperty('--safe-bottom','" + bars.bottom + "px');})();";
-            v.evaluateJavascript(js, null);
+            webView.evaluateJavascript(js, null);
             return insets;
         });
         WebSettings s = webView.getSettings();
