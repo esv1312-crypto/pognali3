@@ -379,7 +379,10 @@ let currentTab='events', map, markers=[]; let mapSessionToken=0, mapLayoutTimers
 const NEARBY_RADIUS_KM=200; const MAP_RADIUS_LEVELS=[{minZoom:13,km:25},{minZoom:11,km:50},{minZoom:9,km:150},{minZoom:7,km:600}];
 function mapRadiusKm(zoom){for(const x of MAP_RADIUS_LEVELS)if(zoom>=x.minZoom)return x.km;return null}
 function mapScopeLabel(){if(selectedFilter==='Мир')return '🌍 Весь мир';if(selectedFilter==='Рядом')return userGeo?`📍 Рядом · ${NEARBY_RADIUS_KM} км`:'📍 Включи геолокацию';return '🙋 Мои события'}
-function save(){localStorage.setItem(KEY,JSON.stringify(db))}
+let eventsRevision=0;
+const filteredCache=new Map();
+function save(){eventsRevision++;filteredCache.clear();localStorage.setItem(KEY,JSON.stringify(db))}
+
 function age(b){if(!b)return '';let d=new Date(b),n=new Date();let a=n.getFullYear()-d.getFullYear();if(n<new Date(n.getFullYear(),d.getMonth(),d.getDate()))a--;return a}
 function fmt(e){return new Date(e.date+'T12:00:00').toLocaleDateString(LOCALES[getLang()]||'ru-RU',{day:'numeric',month:'long'})+' · '+e.time}
 function localDateKey(d=new Date()){return [d.getFullYear(),String(d.getMonth()+1).padStart(2,'0'),String(d.getDate()).padStart(2,'0')].join('-')}
@@ -403,14 +406,21 @@ function eventState(e){
 function isVisibleEvent(e){return eventState(e)!=='FINISHED'}
 function distanceKm(a,b,c,d){const R=6371,rad=Math.PI/180;const dLat=(c-a)*rad,dLng=(d-b)*rad;const x=Math.sin(dLat/2)**2+Math.cos(a*rad)*Math.cos(c*rad)*Math.sin(dLng/2)**2;return 2*R*Math.asin(Math.sqrt(x));}
 function filtered(filter=selectedFilter){
+  const minute=Math.floor(Date.now()/60000);
+  const lat=userGeo&&Number.isFinite(+userGeo.lat)?Number(userGeo.lat).toFixed(4):'';
+  const lng=userGeo&&Number.isFinite(+userGeo.lng)?Number(userGeo.lng).toFixed(4):'';
+  const key=[eventsRevision,minute,filter,selectedDate||'',lat,lng].join('|');
+  const cached=filteredCache.get(key);
+  if(cached)return cached;
   let es=db.events.filter(isVisibleEvent);
   if(selectedDate) es=es.filter(e=>e.date===selectedDate);
   if(filter==='Рядом'){
-    if(!userGeo) return [];
+    if(!userGeo){filteredCache.set(key,[]);return []}
     es=es.filter(e=>Number.isFinite(+e.lat)&&Number.isFinite(+e.lng)&&distanceKm(userGeo.lat,userGeo.lng,+e.lat,+e.lng)<=NEARBY_RADIUS_KM);
   } else if(filter==='Мои'){
     es=es.filter(e=>e.owner===2||e.people.includes(2));
   }
+  filteredCache.set(key,es);
   return es;
 }
 function go(tab){
