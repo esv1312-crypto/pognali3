@@ -682,9 +682,13 @@ function initMap(){
       const p=map._screenFromCamera(lat,lng,screenCamera);
       if(p.x<-margin||p.x>map._el.clientWidth+margin||p.y<-margin||p.y>map._el.clientHeight+margin)return;
       const cx=Math.floor(p.x/cellPx),cy=Math.floor(p.y/cellPx),key=cx+':'+cy;
-      if(!cells.has(key))cells.set(key,{lat:0,lng:0,events:[]});
-      const cell=cells.get(key);
-      cell.lat+=lat;cell.lng+=lng;cell.events.push(e);
+      let cell=cells.get(key);
+      if(!cell)cell={lat:0,lng:0,count:0,event:null,icons:new Set()};
+      cell.lat+=lat;cell.lng+=lng;cell.count++;
+      if(cell.count===1)cell.event=e;
+      const icon=eventIcon(e.cat,e.title,e.emoji);
+      if(icon&&cell.icons.size<3)cell.icons.add(icon);
+      cells.set(key,cell);
     });
 
     const activeClusterKeys=new Set();
@@ -692,15 +696,14 @@ function initMap(){
 
     cells.forEach((cell,key)=>{
       if(token!==markerRenderToken)return;
-      const count=cell.events.length;
+      const count=cell.count;
 
       // Screen-space density is the rule: a cluster exists only when events
       // actually compete for the same piece of the screen.
       if(count>1){
         const lat=cell.lat/count,lng=cell.lng/count;
         activeClusterKeys.add(key);
-        const icons=[...new Set(cell.events.map(e=>eventIcon(e.cat,e.title,e.emoji)).filter(Boolean))].slice(0,3);
-        const emojiLine=icons.join(' ');
+        const emojiLine=[...cell.icons].join(' ');
         const html='<div class="event-cluster event-cluster-rich" title="'+esc(count+' событий')+'"><div class="event-cluster-emojis">'+esc(emojiLine||'✨')+'</div><span>'+count+'</span></div>';
         const icon=L.divIcon({className:'',html,iconSize:[56,56],iconAnchor:[28,28]});
         let m=clusterMarkerByKey.get(key);
@@ -734,7 +737,7 @@ function initMap(){
         return;
       }
 
-      const e=cell.events[0];
+      const e=cell.event;
       if(!e)return;
       const id=String(e.id);
       activeIds.add(id);
