@@ -5,6 +5,18 @@ import android.app.Activity;
 import android.content.pm.PackageManager;
 import android.content.Intent;
 import android.net.Uri;
+import android.os.Environment;
+import android.provider.MediaStore;
+import android.webkit.JavascriptInterface;
+import android.webkit.ConsoleMessage;
+import android.webkit.WebResourceError;
+import android.webkit.WebResourceRequest;
+import android.widget.Toast;
+import java.io.OutputStream;
+import java.nio.charset.StandardCharsets;
+import java.text.SimpleDateFormat;
+import java.util.Date;
+import java.util.Locale;
 import android.view.WindowInsets;
 import android.graphics.Insets;
 import android.os.Bundle;
@@ -24,11 +36,70 @@ public class MainActivity extends Activity {
     private android.webkit.ValueCallback<Uri[]> filePathCallback;
     private GeolocationPermissions.Callback pendingGeoCallback;
     private String pendingGeoOrigin;
+    private final StringBuilder diagnostics = new StringBuilder();
+    private final Object diagnosticsLock = new Object();
+
+    private void diag(String source, String message) {
+        String line = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss.SSS", Locale.US).format(new Date())
+                + " [" + source + "] " + String.valueOf(message) + "\n";
+        synchronized (diagnosticsLock) {
+            diagnostics.append(line);
+            if (diagnostics.length() > 200000) diagnostics.delete(0, diagnostics.length() - 200000);
+        }
+        android.util.Log.e("PognaliDiag", line.trim());
+    }
+
+    private String diagnosticsText() {
+        synchronized (diagnosticsLock) {
+            return "POGNALI DIAGNOSTICS\n"
+                    + "Android=" + Build.VERSION.RELEASE + " (SDK " + Build.VERSION.SDK_INT + ")\n"
+                    + "WebView UA=Pognali/1.0 (Android; com.pognali.app)\n"
+                    + "generated=" + new SimpleDateFormat("yyyy-MM-dd HH:mm:ss.SSSZ", Locale.US).format(new Date()) + "\n\n"
+                    + diagnostics.toString();
+        }
+    }
+
+    private void saveDiagnosticsFile() {
+        String name = "pognali-diagnostics-" + new SimpleDateFormat("yyyyMMdd-HHmmss", Locale.US).format(new Date()) + ".txt";
+        byte[] data = diagnosticsText().getBytes(StandardCharsets.UTF_8);
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                android.content.ContentValues values = new android.content.ContentValues();
+                values.put(MediaStore.Downloads.DISPLAY_NAME, name);
+                values.put(MediaStore.Downloads.MIME_TYPE, "text/plain");
+                values.put(MediaStore.Downloads.RELATIVE_PATH, Environment.DIRECTORY_DOWNLOADS + "/Pognali");
+                Uri uri = getContentResolver().insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, values);
+                if (uri == null) throw new Exception("MediaStore insert returned null");
+                try (OutputStream out = getContentResolver().openOutputStream(uri)) {
+                    if (out == null) throw new Exception("openOutputStream returned null");
+                    out.write(data);
+                }
+                Toast.makeText(this, "Лог сохранён в Downloads/Pognali/" + name, Toast.LENGTH_LONG).show();
+            } else {
+                java.io.File dir = new java.io.File(getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS), "Pognali");
+                if (!dir.exists() && !dir.mkdirs()) throw new Exception("mkdirs failed: " + dir);
+                java.io.File file = new java.io.File(dir, name);
+                try (OutputStream out = new java.io.FileOutputStream(file)) { out.write(data); }
+                Toast.makeText(this, "Лог сохранён: " + file.getAbsolutePath(), Toast.LENGTH_LONG).show();
+            }
+            diag("NATIVE", "Diagnostics file saved: " + name);
+        } catch (Exception e) {
+            diag("NATIVE", "Diagnostics save FAILED: " + e);
+            Toast.makeText(this, "Не удалось сохранить лог: " + e.getMessage(), Toast.LENGTH_LONG).show();
+        }
+    }
+
+    public class DiagnosticsBridge {
+        @JavascriptInterface public void log(String message) { diag("JS", message); }
+        @JavascriptInterface public void saveDiagnostics() { runOnUiThread(() -> saveDiagnosticsFile()); }
+    }
 
     @Override protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         webView = new WebView(this);
+        webView.addJavascriptInterface(new DiagnosticsBridge(), "PognaliDiagnostics");
         setContentView(webView);
+        diag("NATIVE", "App start");
         // Keep the WebView full-size. The HTML owns safe-area spacing so Android
         // insets are not applied twice (once by WebView and once by CSS).
         webView.setOnApplyWindowInsetsListener((v, insets) -> {
@@ -56,6 +127,26 @@ public class MainActivity extends Activity {
                 .addPathHandler("/assets/", new WebViewAssetLoader.AssetsPathHandler(this))
                 .build();
         webView.setWebViewClient(new WebViewClient() {
+            @Override public void onPageFinished(WebView view, String url) {
+                diag("PAGE", "Finished: " + url);
+                view.evaluateJavascript("(function(){"
+                        + "window.addEventListener('error',function(e){if(window.PognaliDiagnostics)PognaliDiagnostics.log('window.error: '+(e.message||'')+' @ '+(e.filename||'')+':'+(e.lineno||0)+':'+(e.colno||0));});"
+                        + "window.addEventListener('unhandledrejection',function(e){if(window.PognaliDiagnostics)PognaliDiagnostics.log('unhandledrejection: '+(e.reason&&e.reason.stack||e.reason||'unknown'));});"
+                        + "if(window.PognaliDiagnostics)PognaliDiagnostics.log('JS diagnostics hooks installed; location='+location.href);"
+                        + "})()", null);
+            }
+            @Override public void onReceivedError(WebView view, WebResourceRequest request, WebResourceError error) {
+                String u = request != null && request.getUrl() != null ? request.getUrl().toString() : "<unknown>";
+                diag("WEB_RESOURCE_ERROR", u + " code=" + (error != null ? error.getErrorCode() : "?")
+                        + " desc=" + (error != null ? error.getDescription() : "?"));
+                super.onReceivedError(view, request, error);
+            }
+            @Override public void onReceivedHttpError(WebView view, WebResourceRequest request, android.webkit.WebResourceResponse response) {
+                String u = request != null && request.getUrl() != null ? request.getUrl().toString() : "<unknown>";
+                diag("HTTP_ERROR", u + " status=" + (response != null ? response.getStatusCode() : "?")
+                        + " reason=" + (response != null ? response.getReasonPhrase() : "?"));
+                super.onReceivedHttpError(view, request, response);
+            }
             @Override public android.webkit.WebResourceResponse shouldInterceptRequest(WebView view, android.webkit.WebResourceRequest request) {
                 return assetLoader.shouldInterceptRequest(request.getUrl());
             }
@@ -69,6 +160,10 @@ public class MainActivity extends Activity {
             }
         });
         webView.setWebChromeClient(new WebChromeClient() {
+            @Override public boolean onConsoleMessage(ConsoleMessage cm) {
+                diag("CONSOLE", "[" + cm.messageLevel() + "] " + cm.message() + " @ " + cm.sourceId() + ":" + cm.lineNumber());
+                return true;
+            }
             @Override public void onGeolocationPermissionsShowPrompt(String origin, GeolocationPermissions.Callback callback) {
                 if (checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED ||
                     checkSelfPermission(Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED) {
