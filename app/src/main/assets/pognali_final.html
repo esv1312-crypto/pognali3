@@ -417,6 +417,70 @@ function renderFilters(){return ['Мир','Рядом','Мои'].map(x=>`<button
 function destroyMainMap(){if(map){try{map.remove()}catch(e){}map=null;}markers=[];userLocationMarker=null;}
 function destroyPickerMap(){if(pickerMap){try{pickerMap.remove()}catch(e){}pickerMap=null;pickerMarker=null;}}
 function refreshMainMapLayout(fitToEvents=false){if(!map)return;const targetMap=map;const run=()=>{if(!targetMap||map!==targetMap)return;try{targetMap.invalidateSize({pan:false,animate:false});if(fitToEvents){const points=filtered().map(e=>[Number(e.lat),Number(e.lng)]).filter(([lat,lng])=>Number.isFinite(lat)&&Number.isFinite(lng));if(points.length===1)targetMap.setView(points[0],13,{animate:false});else if(points.length>1)targetMap.fitBounds(L.latLngBounds(points),{padding:[42,72],maxZoom:13,animate:false})}}catch(e){}};requestAnimationFrame(run);setTimeout(run,120);setTimeout(run,320)}
+
+function drawUserLocation(lat,lng,center){
+  if(!map || !Number.isFinite(lat) || !Number.isFinite(lng)) return;
+  if(userLocationMarker){
+    try{userLocationMarker.setLatLng([lat,lng]);}catch(e){}
+  }else{
+    userLocationMarker=L.circleMarker([lat,lng],{
+      radius:8,color:'#fff',weight:3,fillColor:'#2477ff',fillOpacity:1
+    }).addTo(map).bindTooltip('Вы здесь',{direction:'top',offset:[0,-8]});
+  }
+  if(center){
+    const z=selectedFilter==='Рядом'?12:13;
+    lastMapView={lat,lng,zoom:z};
+    mapViews[selectedFilter]=lastMapView;
+    map.setView([lat,lng],z,{animate:false});
+  }
+}
+function requestUserLocation(){
+  if(userLocationRequested) return;
+  userLocationRequested=true;
+  if(!navigator.geolocation){
+    const scope=document.getElementById('mapScope');
+    if(scope)scope.textContent='📍 Включи геолокацию для событий рядом';
+    return;
+  }
+  navigator.geolocation.getCurrentPosition(pos=>{
+    userGeo={lat:pos.coords.latitude,lng:pos.coords.longitude};
+    if(map) drawUserLocation(userGeo.lat,userGeo.lng,false);
+    const scope=document.getElementById('mapScope');
+    if(scope)scope.textContent=mapScopeLabel();
+    if(selectedFilter==='Рядом'){
+      renderEvents();
+    }
+  },()=>{
+    const scope=document.getElementById('mapScope');
+    if(scope)scope.textContent='📍 Включи геолокацию для событий рядом';
+  },{enableHighAccuracy:false,timeout:10000,maximumAge:300000});
+}
+async function centerOnMyLocation(){
+  if(!map)return;
+  if(userGeo && Number.isFinite(userGeo.lat) && Number.isFinite(userGeo.lng)){
+    drawUserLocation(userGeo.lat,userGeo.lng,true);
+    const scope=document.getElementById('mapScope');
+    if(scope)scope.textContent=mapScopeLabel();
+    if(selectedFilter==='Рядом') renderEvents();
+    return;
+  }
+  if(navigator.geolocation){
+    try{
+      const pos=await new Promise((resolve,reject)=>
+        navigator.geolocation.getCurrentPosition(resolve,reject,{
+          enableHighAccuracy:true,timeout:10000,maximumAge:300000
+        })
+      );
+      userGeo={lat:pos.coords.latitude,lng:pos.coords.longitude};
+      userLocationRequested=true;
+      renderEvents();
+      return;
+    }catch(e){}
+  }
+  const scope=document.getElementById('mapScope');
+  if(scope)scope.textContent='📍 Не удалось определить местоположение';
+}
+
 function renderEvents(){destroyMainMap();document.getElementById('content').innerHTML=`<div class="mapwrap"><div id="map" class="map"></div><div class="filters">${renderFilters()}</div>${calendarOpen?calendarHTML():''}<button class="my-location-btn" onclick="centerOnMyLocation()" aria-label="Моё местоположение" title="Моё местоположение">⌖</button><div id="mapScope" class="map-scope">📍 Определяем город…</div><div class="live-map-hint">🟢 Идёт сейчас</div><div class="viewtoggle"><button id="mapbtn" class="active" onclick="switchView('map')">Карта</button><button id="listbtn" onclick="switchView('list')">Список</button></div></div>`;initMap()}
 function setFilter(x){
   if(map) { const c=map.getCenter(); lastMapView={lat:c.lat,lng:c.lng,zoom:map.getZoom()}; mapViews[selectedFilter]=lastMapView; }
@@ -493,6 +557,8 @@ function initMap(){
   };
   map.on('zoomend',renderMapMarkers);
   renderMapMarkers();
+  if(userGeo) drawUserLocation(userGeo.lat,userGeo.lng,false);
+  else requestUserLocation();
   refreshMainMapLayout(false);
 }
 function eventLabel(title,cat){
