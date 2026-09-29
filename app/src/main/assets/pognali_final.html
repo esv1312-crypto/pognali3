@@ -583,14 +583,26 @@ function initMap(){
   updateMapState();
   markers=[];
   let markerRenderToken=0;
+  let eventMarkerById=new Map();
+  let clusterMarkers=[];
+  let lastClusterMode=null;
+  const clearClusterMarkers=()=>{
+    clusterMarkers.forEach(m=>{try{m.remove()}catch(e){}});
+    clusterMarkers=[];
+  };
+  const clearEventMarkers=()=>{
+    eventMarkerById.forEach(m=>{try{m.remove()}catch(e){}});
+    eventMarkerById.clear();
+  };
   const renderMapMarkers=()=>{
     es=filtered();
     const token=++markerRenderToken;
-    markers.forEach(m=>{try{m.remove()}catch(e){}});
-    markers=[];
     const zoom=map.getZoom();
     const useClusters=es.length>60 && zoom<13;
     if(useClusters){
+      if(lastClusterMode!==true){clearEventMarkers();clearClusterMarkers();}
+      else clearClusterMarkers();
+      lastClusterMode=true;
       const cells=new Map();
       const cellSize=zoom<=10?0.025:0.012;
       es.forEach(e=>{
@@ -606,23 +618,34 @@ function initMap(){
         const icon=L.divIcon({className:'',html:`<div class="event-cluster" title="${count} событий"><span>${count}</span></div>`,iconSize:[48,48],iconAnchor:[24,24]});
         const m=L.marker([lat,lng],{icon}).addTo(map);
         m.on('click',()=>map.setView([lat,lng],Math.min(14,zoom+2),{animate:true}));
-        markers.push(m);
+        clusterMarkers.push(m);
       });
+      markers=clusterMarkers.slice();
       return;
     }
-    const occupied=new Map();
+    if(lastClusterMode!==false)clearClusterMarkers();
+    lastClusterMode=false;
+    const activeIds=new Set();
     es.forEach(e=>{
       let lat=Number(e.lat),lng=Number(e.lng);
       if(!Number.isFinite(lat)||!Number.isFinite(lng))return;
-      const key=lat.toFixed(6)+','+lng.toFixed(6);
-      const n=occupied.get(key)||0; occupied.set(key,n+1);
-      if(n>0){const angle=n*2.399963,radius=0.00035*Math.ceil((n+1)/2);lat+=Math.sin(angle)*radius;lng+=Math.cos(angle)*radius;}
+      activeIds.add(String(e.id));
+      let m=eventMarkerById.get(String(e.id));
+      if(!m){
+        const icon=L.divIcon({className:'',html:`<div class="event-marker-wrap"><div class="event-pin" title="${esc(e.title)}"><span>${eventIcon(e.cat,e.title,e.emoji)}</span></div></div>`,iconSize:[42,42],iconAnchor:[21,21],popupAnchor:[0,-22]});
+        m=L.marker([lat,lng],{icon}).addTo(map);
+        eventMarkerById.set(String(e.id),m);
+      }else{
+        m.setLatLng([lat,lng]);
+      }
       const isLive=eventState(e)==='STARTED',liveClass=isLive?' live':'';
       const icon=L.divIcon({className:'',html:`<div class="event-marker-wrap${liveClass}"><div class="event-pin" title="${esc(e.title)}"><span>${eventIcon(e.cat,e.title,e.emoji)}</span></div>${eventLabel(e.title,e.cat)?`<div class="event-label">${eventLabel(e.title,e.cat)}</div>`:''}</div>`,iconSize:[42,42],iconAnchor:[21,21],popupAnchor:[0,-22]});
-      const m=L.marker([lat,lng],{icon}).addTo(map);
+      m.options.icon=icon;
+      if(m._icon)m._icon.innerHTML=icon.options.html;
       m.bindPopup(`<div class="eventmini"><h3>${esc(e.title)}</h3><div>${esc(fmt(e))}</div><div>${esc(displayPlace(e))}</div><div>${e.people.length}/${e.limit} ${T('Participants').toLowerCase()}</div><button onclick="openEvent(${e.id})">${T('Open event')}</button></div>`);
-      markers.push(m);
     });
+    eventMarkerById.forEach((m,id)=>{if(!activeIds.has(id)){try{m.remove()}catch(e){}eventMarkerById.delete(id)}});
+    markers=Array.from(eventMarkerById.values());
   };
   map.on('zoomend',renderMapMarkers);
   map._pognaliRenderMarkers=renderMapMarkers;
