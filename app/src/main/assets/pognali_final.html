@@ -383,11 +383,12 @@ let eventsRevision=0;
 const filteredCache=new Map();
 const visibleEventsCache=new Map();
 const visibleEventsByDateCache=new Map();
+const visibleAllEventsCache=new Map();
 const visibleMyEventsCache=new Map();
 let filterCacheRevision=-1;
 let filterCacheMinute=-1;
 function clearEventFilterCaches(){
-  filteredCache.clear();visibleEventsCache.clear();visibleEventsByDateCache.clear();visibleMyEventsCache.clear();
+  filteredCache.clear();visibleEventsCache.clear();visibleEventsByDateCache.clear();visibleAllEventsCache.clear();visibleMyEventsCache.clear();
   filterCacheRevision=eventsRevision;
   filterCacheMinute=Math.floor(Date.now()/60000);
 }
@@ -442,7 +443,18 @@ function visibleEvents(date=''){
   const cached=visibleEventsCache.get(key);
   if(cached)return cached;
   const byDate=visibleEventsByDate();
-  const es=date?(byDate.get(date)||[]):Array.from(byDate.values()).flat();
+  let es;
+  if(date){
+    es=byDate.get(date)||[];
+  }else{
+    const allKey=eventsRevision+'|'+minute;
+    es=visibleAllEventsCache.get(allKey);
+    if(!es){
+      es=[];
+      byDate.forEach(list=>{for(let i=0;i<list.length;i++)es.push(list[i])});
+      visibleAllEventsCache.set(allKey,es);
+    }
+  }
   visibleEventsCache.set(key,es);
   return es;
 }
