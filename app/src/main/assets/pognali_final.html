@@ -1344,7 +1344,7 @@ function localizeUI(){
 function getLang(){return localStorage.getItem('pognali_lang')||'ru'}
 function openLanguage(){const cur=getLang();openModal(`<button class="close" onclick="closeModal()">✕</button><h2>${T('AppLanguage')}</h2><div class="meta">${T('ChooseLanguage')}</div><div class="lang-list">${[['ru','🇷🇺 Русский'],['en','🇬🇧 English'],['es','🇪🇸 Español'],['it','🇮🇹 Italiano'],['de','🇩🇪 Deutsch'],['fr','🇫🇷 Français']].map(([id,n])=>`<button class="lang-option ${cur===id?'active':''}" onclick="setLang('${id}')"><span>${n}</span>${cur===id?'✓':''}</button>`).join('')}</div>`)}
 function setLang(lang){localStorage.setItem('pognali_lang',lang);updateLangLabel();closeModal();go(currentTab);setTimeout(localizeUI,30)}
-function updateLangLabel(){const el=document.getElementById('langLabel');if(el)el.textContent=getLang().toUpperCase()}
+function updateLangLabel(){const el=document.getElementById('langLabel');if(!el)return;const next=getLang().toUpperCase();if(el.textContent!==next)el.textContent=next}
 function profileMessages(){
   const events=db.events.filter(e=>isEventMember(e));
   const chats=events.filter(e=>Array.isArray(db.chats[e.id])&&db.chats[e.id].length).map(e=>{const msgs=db.chats[e.id];const last=msgs[msgs.length-1];return {e,last}});
