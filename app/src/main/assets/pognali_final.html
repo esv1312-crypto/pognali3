@@ -802,8 +802,8 @@ function initMap(){
         for(let i=0;i<es.length;i++){
           const e=es[i],lat=Number(e.lat),lng=Number(e.lng);
           if(!Number.isFinite(lat)||!Number.isFinite(lng))continue;
-          const gx=Math.floor((lng+180)/cellDeg);
-          const gy=Math.floor((lat+90)/cellDeg);
+          const gx=Math.min(Math.floor(360/cellDeg)-1,Math.max(0,Math.floor((lng+180)/cellDeg)));
+          const gy=Math.min(Math.floor(180/cellDeg)-1,Math.max(0,Math.floor((lat+90)/cellDeg)));
           const key=gx+':'+gy;
           let bucket=index.get(key);
           if(!bucket)index.set(key,bucket=[e]);else bucket.push(e);
@@ -811,8 +811,8 @@ function initMap(){
         visibleGeoIndexCache.set(indexKey,index);
       }
       const cellDeg=4;
-      const gy0=Math.max(0,Math.floor((geoMinLat+90)/cellDeg));
-      const gy1=Math.min(Math.floor(180/cellDeg)-1,Math.floor((geoMaxLat+90)/cellDeg));
+      const gy0=Math.max(0,Math.min(Math.floor(180/cellDeg)-1,Math.floor((geoMinLat+90)/cellDeg)));
+      const gy1=Math.max(0,Math.min(Math.floor(180/cellDeg)-1,Math.floor((geoMaxLat+90)/cellDeg)));
       const buckets=[];
       const gx0=Math.floor((geoMinLng+180)/cellDeg);
       const gx1=Math.floor((geoMaxLng+180)/cellDeg);
