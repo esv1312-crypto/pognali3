@@ -24,6 +24,16 @@ MapLite.prototype._screen=function(lat,lng){const p=project(lat,lng,this._zoom),
 MapLite.prototype._fromScreen=function(x,y){const c=project(this._center.lat,this._center.lng,this._zoom),w=this._world();let wx=c.x+x-this._el.clientWidth/2,wy=c.y+y-this._el.clientHeight/2;wx=((wx%w)+w)%w;return unproject(wx,wy,this._zoom)};
 MapLite.prototype._render=function(){if(this._removed)return;this._tiles();this._layers.forEach(l=>l&&l._render&&l._render())};
 MapLite.prototype._scheduleRender=function(){if(this._removed||this._renderFrame)return;this._renderFrame=requestAnimationFrame(()=>{this._renderFrame=0;this._render()})};
+MapLite.prototype._gestureTransform=function(tx,ty,scale){
+  if(this._removed)return;
+  const t='translate3d('+tx+'px,'+ty+'px,0)'+(scale===1?'':' scale('+scale+')');
+  if(this._tilesEl)this._tilesEl.style.transform=t;
+  if(this._markersEl)this._markersEl.style.transform=t;
+};
+MapLite.prototype._clearGestureTransform=function(){
+  if(this._tilesEl)this._tilesEl.style.transform='';
+  if(this._markersEl)this._markersEl.style.transform='';
+};
 MapLite.prototype._tiles=function(){
   const w=this._el.clientWidth||360,h=this._el.clientHeight||600,z=this._zoom,n=2**z,c=project(this._center.lat,this._center.lng,z);
   const layer=this._tileLayer,template=layer?.url||layer?._url||'https://tile.openstreetmap.org/{z}/{x}/{y}.png',subs=layer?.options?.subdomains||'abc';
@@ -80,7 +90,9 @@ el.addEventListener('pointermove',e=>{
     let cx=tp.x-screenX+el.clientWidth/2,cy=tp.y-screenY+el.clientHeight/2;
     cx=((cx%w)+w)%w;
     this._center=unproject(cx,cy,nz);
-    this._scheduleRender();
+    const baseScale=2**(this._zoom-pinch.zoom);
+    const tx=screenX*(1-baseScale),ty=screenY*(1-baseScale);
+    this._gestureTransform(tx,ty,baseScale);
     return;
   }
   if(this._pointers.size===1&&this._gesture==='pan'){
@@ -89,7 +101,7 @@ el.addEventListener('pointermove',e=>{
     if(Math.abs(dx)+Math.abs(dy)>4)this._gestureMoved=true;
     const p0=project(pan.cy,pan.cx,this._zoom);
     this._center=unproject(p0.x-dx,p0.y-dy,this._zoom);
-    this._scheduleRender();
+    this._gestureTransform(dx,dy,1);
   }
 });
 el.addEventListener('pointerup',e=>{
@@ -103,7 +115,7 @@ el.addEventListener('pointerup',e=>{
   }
   const wasMoved=this._gestureMoved,wasPan=this._gesture==='pan'||this._gesture==='pinch';
   this._gesture='idle';this._pan=null;this._pinch=null;
-  if(wasPan)this.fire('moveend');
+  if(wasPan){this._clearGestureTransform();this._render();this.fire('moveend');}
   if(!wasMoved){
     const r=el.getBoundingClientRect();
     this.fire('click',{latlng:this._fromScreen(e.clientX-r.left,e.clientY-r.top),originalEvent:e});
@@ -114,7 +126,7 @@ el.addEventListener('pointercancel',e=>{
   if(this._pointers.size===1){
     const p=[...this._pointers.values()][0];beginPan(p);return;
   }
-  if(this._pointers.size===0){this._gesture='idle';this._pan=null;this._pinch=null;this.fire('moveend')}
+  if(this._pointers.size===0){this._gesture='idle';this._pan=null;this._pinch=null;this._clearGestureTransform();this._render();this.fire('moveend')}
 });
 el.addEventListener('wheel',e=>{
   e.preventDefault();
