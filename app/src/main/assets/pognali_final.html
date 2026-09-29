@@ -744,8 +744,11 @@ function initMap(){
   mainMapUserInteracted=false;
   map.on('usergesturestart',()=>{mainMapUserInteracted=true;});
   const tileLayer=L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19,subdomains:'abc',attribution:'© OpenStreetMap contributors'}).addTo(map);
-  let tileErrors=0,tileFallbackUsed=false;
-  tileLayer.on('tileerror',()=>{tileErrors++;if(tileErrors>=3&&!tileFallbackUsed){tileFallbackUsed=true;map.removeLayer(tileLayer);L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png',{maxZoom:19,subdomains:'abcd',attribution:'© OpenStreetMap contributors © CARTO'}).addTo(map);}});
+  // Keep the map on OpenStreetMap only. Do not fall back to CARTO:
+  // CARTO basemaps now require an API key and can render an "API KEY REQUIRED"
+  // watermark when the key is absent. A tile failure must never silently switch
+  // the provider to a keyed service.
+  tileLayer.on('tileerror',()=>{});
   const updateMapState=()=>{const c=map.getCenter();if(selectedDate)return;lastMapView={lat:c.lat,lng:c.lng,zoom:map.getZoom()};mapViews[selectedFilter]=lastMapView;try{localStorage.setItem(KEY+'_map_views',JSON.stringify(mapViews))}catch(e){};const el=document.getElementById('map');if(el)el.classList.toggle('map-zoomed',map.getZoom()>=16);const scope=document.getElementById('mapScope');if(scope){scope.textContent=mapScopeLabel();scope.classList.toggle('world',!mapRadiusKm(map.getZoom())&&!!userGeo)}};
   map.on('moveend',updateMapState);
   updateMapState();
