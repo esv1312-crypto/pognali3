@@ -674,7 +674,6 @@ function initMap(){
     const cellPx=zoom<=8?74:zoom<=12?64:56;
     const margin=120;
     const cells=new Map();
-    const visibleEventIds=new Set();
     const screenCamera=map._screenCamera();
 
     es.forEach(e=>{
@@ -708,6 +707,8 @@ function initMap(){
         if(!m){
           m=L.marker([lat,lng],{icon}).addTo(map);
           m._pognaliClusterKey=key;
+          m._pognaliLat=lat;m._pognaliLng=lng;
+          m._pognaliClusterHtml=html;
           m._pognaliClusterCenter={lat,lng};
           m._pognaliClusterZoom=zoom;
           m.on('click',()=>{
@@ -718,11 +719,17 @@ function initMap(){
           clusterMarkers.push(m);
           clusterMarkerByKey.set(key,m);
         }else{
-          m.setLatLng([lat,lng]);
+          if(m._pognaliLat!==lat||m._pognaliLng!==lng){
+            m.setLatLng([lat,lng]);
+            m._pognaliLat=lat;m._pognaliLng=lng;
+          }
           m._pognaliClusterCenter={lat,lng};
           m._pognaliClusterZoom=zoom;
-          m.options.icon=icon;
-          if(m._icon&&m._icon.innerHTML!==html)m._icon.innerHTML=html;
+          if(m._pognaliClusterHtml!==html){
+            m.options.icon=icon;
+            if(m._icon)m._icon.innerHTML=html;
+            m._pognaliClusterHtml=html;
+          }
         }
         return;
       }
@@ -731,7 +738,6 @@ function initMap(){
       if(!e)return;
       const id=String(e.id);
       activeIds.add(id);
-      visibleEventIds.add(id);
       const lat=Number(e.lat),lng=Number(e.lng);
       let m=eventMarkerById.get(id);
       const isLive=eventState(e)==='STARTED',liveClass=isLive?' live':'';
