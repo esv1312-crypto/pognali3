@@ -771,8 +771,18 @@ function initMap(){
 
     markers=clusterMarkers.concat(Array.from(eventMarkerById.values()));
   };
-  map.on('zoomend',renderMapMarkers);
-  map.on('moveend',renderMapMarkers);
+  let markerRenderFrame=0;
+  const scheduleMapMarkerRender=()=>{
+    if(markerRenderFrame)return;
+    const targetMap=map;
+    markerRenderFrame=requestAnimationFrame(()=>{
+      markerRenderFrame=0;
+      if(map!==targetMap||!document.getElementById('map'))return;
+      renderMapMarkers();
+    });
+  };
+  map.on('zoomend',scheduleMapMarkerRender);
+  map.on('moveend',scheduleMapMarkerRender);
   map._pognaliRenderMarkers=renderMapMarkers;
   renderMapMarkers();
   if(userGeo) drawUserLocation(userGeo.lat,userGeo.lng,false);
