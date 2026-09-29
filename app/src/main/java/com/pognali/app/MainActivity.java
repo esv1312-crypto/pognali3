@@ -8,6 +8,8 @@ import android.net.Uri;
 import android.view.WindowInsets;
 import android.graphics.Insets;
 import android.os.Bundle;
+import android.os.Build;
+import android.location.LocationManager;
 import android.webkit.GeolocationPermissions;
 import android.webkit.WebChromeClient;
 import android.webkit.WebSettings;
@@ -52,6 +54,14 @@ public class MainActivity extends Activity {
             @Override public android.webkit.WebResourceResponse shouldInterceptRequest(WebView view, android.webkit.WebResourceRequest request) {
                 return assetLoader.shouldInterceptRequest(request.getUrl());
             }
+            @Override public boolean onRenderProcessGone(WebView view, android.webkit.RenderProcessGoneDetail detail) {
+                try { view.destroy(); } catch (Exception ignored) {}
+                webView = new WebView(MainActivity.this);
+                setContentView(webView);
+                runJs("if(typeof onAndroidWebViewRecovered==='function')onAndroidWebViewRecovered();");
+                webView.loadUrl("https://appassets.androidplatform.net/assets/pognali_final.html");
+                return true;
+            }
         });
         webView.setWebChromeClient(new WebChromeClient() {
             @Override public void onGeolocationPermissionsShowPrompt(String origin, GeolocationPermissions.Callback callback) {
@@ -83,6 +93,48 @@ public class MainActivity extends Activity {
         webView.loadUrl("https://appassets.androidplatform.net/assets/pognali_final.html");
     }
 
+    private void runJs(String js) {
+        if (webView == null) return;
+        try { webView.post(() -> webView.evaluateJavascript(js, null)); } catch (Exception ignored) {}
+    }
+
+    private boolean locationServicesEnabled() {
+        try {
+            LocationManager lm = (LocationManager)getSystemService(LOCATION_SERVICE);
+            if (lm == null) return false;
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) return lm.isLocationEnabled();
+            return lm.isProviderEnabled(LocationManager.GPS_PROVIDER) || lm.isProviderEnabled(LocationManager.NETWORK_PROVIDER);
+        } catch (Exception e) { return false; }
+    }
+
+    @Override protected void onResume() {
+        super.onResume();
+        if (webView != null) {
+            webView.onResume();
+            webView.resumeTimers();
+            runJs("if(typeof onAndroidAppResume==='function')onAndroidAppResume();");
+            if (!locationServicesEnabled()) runJs("if(typeof onAndroidLocationServicesOff==='function')onAndroidLocationServicesOff();");
+        }
+    }
+
+    @Override protected void onPause() {
+        if (webView != null) {
+            webView.onPause();
+            webView.pauseTimers();
+        }
+        super.onPause();
+    }
+
+    @Override protected void onDestroy() {
+        if (webView != null) {
+            try { webView.stopLoading(); } catch (Exception ignored) {}
+            try { webView.onPause(); } catch (Exception ignored) {}
+            try { webView.destroy(); } catch (Exception ignored) {}
+            webView = null;
+        }
+        super.onDestroy();
+    }
+
     @Override public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] grantResults) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults);
         if (requestCode == LOCATION_REQUEST && pendingGeoCallback != null) {
@@ -93,6 +145,8 @@ public class MainActivity extends Activity {
             pendingGeoCallback = null;
             pendingGeoOrigin = null;
             callback.invoke(origin, granted, false);
+            runJs("if(typeof onAndroidLocationPermissionChanged==='function')onAndroidLocationPermissionChanged(" + granted + ");");
+            if (granted && !locationServicesEnabled()) runJs("if(typeof onAndroidLocationServicesOff==='function')onAndroidLocationServicesOff();");
         }
     }
 
