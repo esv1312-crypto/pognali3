@@ -430,7 +430,18 @@ function filtered(filter=selectedFilter){
   let es=visibleEvents(date);
   if(filter==='Рядом'){
     if(!userGeo){filteredCache.set(key,[]);return []}
-    es=es.filter(e=>Number.isFinite(+e.lat)&&Number.isFinite(+e.lng)&&distanceKm(userGeo.lat,userGeo.lng,+e.lat,+e.lng)<=NEARBY_RADIUS_KM);
+    const centerLat=Number(userGeo.lat),centerLng=Number(userGeo.lng);
+    const latDelta=NEARBY_RADIUS_KM/111.32;
+    const cosLat=Math.max(0.173648,Math.cos(centerLat*Math.PI/180));
+    const lngDelta=NEARBY_RADIUS_KM/(111.32*cosLat);
+    es=es.filter(e=>{
+      const lat=Number(e.lat),lng=Number(e.lng);
+      if(!Number.isFinite(lat)||!Number.isFinite(lng))return false;
+      if(Math.abs(lat-centerLat)>latDelta)return false;
+      let dLng=Math.abs(lng-centerLng);if(dLng>180)dLng=360-dLng;
+      if(dLng>lngDelta)return false;
+      return distanceKm(centerLat,centerLng,lat,lng)<=NEARBY_RADIUS_KM;
+    });
   } else if(filter==='Мои'){
     es=es.filter(e=>e.owner===2||e.people.includes(2));
   }
