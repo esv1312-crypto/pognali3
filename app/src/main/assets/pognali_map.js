@@ -5,7 +5,7 @@ const TILE=256,MAX_LAT=85.05112878,clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
 function project(lat,lng,z){lat=clamp(+lat,-MAX_LAT,MAX_LAT);const n=2**z,r=lat*Math.PI/180;return{x:(+lng+180)/360*n*TILE,y:(1-Math.asinh(Math.tan(r))/Math.PI)/2*n*TILE}}
 function unproject(x,y,z){const n=2**z,t=Math.PI*(1-2*y/TILE/n);return{lat:180/Math.PI*Math.atan(Math.sinh(t)),lng:x/TILE/n*360-180}}
 function E(){this._ev={}} E.prototype.on=function(n,f){(this._ev[n]||(this._ev[n]=[])).push(f);return this};E.prototype.fire=function(n,d){(this._ev[n]||[]).slice().forEach(f=>{try{f(d||{})}catch(_){}});return this};
-function MapLite(id){E.call(this);this._el=typeof id==='string'?document.getElementById(id):id;this._layers=[];this._tileLayer=null;this._center={lat:0,lng:0};this._zoom=2;this._removed=false;this._pointers=new Map();this._gesture='idle';this._pan=null;this._pinch=null;this._gestureTx=0;this._gestureTy=0;this._gestureScale=1;this._renderFrame=0;this._tileCache=new Map();if(!this._el)throw Error('Map container not found');this._el.classList.add('pognali-map');this._el.innerHTML='<div class="pm-tiles"></div><div class="pm-markers"></div><div class="pm-popup"></div><div class="pm-controls"><button type="button">+</button><button type="button">−</button></div><div class="pm-attrib">© OpenStreetMap contributors</div>';this._tilesEl=this._el.querySelector('.pm-tiles');this._markersEl=this._el.querySelector('.pm-markers');this._popupEl=this._el.querySelector('.pm-popup');this._el.querySelectorAll('.pm-controls button')[0].onclick=()=>this.setZoom(this._zoom+1,true);this._el.querySelectorAll('.pm-controls button')[1].onclick=()=>this.setZoom(this._zoom-1,true);this._bind();this._render()}
+function MapLite(id){E.call(this);this._el=typeof id==='string'?document.getElementById(id):id;this._layers=[];this._tileLayer=null;this._center={lat:0,lng:0};this._zoom=2;this._removed=false;this._pointers=new Map();this._gesture='idle';this._pan=null;this._pinch=null;this._gestureTx=0;this._gestureTy=0;this._gestureScale=1;this._renderFrame=0;this._tileCache=new Map();this._resizeObserver=null;if(!this._el)throw Error('Map container not found');this._el.classList.add('pognali-map');this._el.innerHTML='<div class="pm-tiles"></div><div class="pm-markers"></div><div class="pm-popup"></div><div class="pm-controls"><button type="button">+</button><button type="button">−</button></div><div class="pm-attrib">© OpenStreetMap contributors</div>';this._tilesEl=this._el.querySelector('.pm-tiles');this._markersEl=this._el.querySelector('.pm-markers');this._popupEl=this._el.querySelector('.pm-popup');this._el.querySelectorAll('.pm-controls button')[0].onclick=()=>this.setZoom(this._zoom+1,true);this._el.querySelectorAll('.pm-controls button')[1].onclick=()=>this.setZoom(this._zoom-1,true);this._bind();if(typeof ResizeObserver!=='undefined'){this._resizeObserver=new ResizeObserver(()=>this._scheduleRender());this._resizeObserver.observe(this._el)}this._render()}
 MapLite.prototype=Object.create(E.prototype);MapLite.prototype.constructor=MapLite;
 MapLite.prototype.setView=function(ll,z){this._center={lat:+ll[0],lng:+ll[1]};this._zoom=clamp(Number.isFinite(+z)?+z:0,0,19);this._render();return this};
 MapLite.prototype.getCenter=function(){return{lat:this._center.lat,lng:this._center.lng}};
@@ -18,7 +18,7 @@ MapLite.prototype.getPane=function(name){return this._panes&&this._panes[name]||
 MapLite.prototype._clearTiles=function(){this._tileCache.forEach(img=>{try{img.remove()}catch(_){}});this._tileCache.clear();};
 MapLite.prototype.addLayer=function(l){if(l&&!this._layers.includes(l)){this._layers.push(l);l._map=this;l._addTo&&l._addTo(this)}return this};
 MapLite.prototype.removeLayer=function(l){this._layers=this._layers.filter(x=>x!==l);l&&l._remove&&l._remove();this._render();return this};
-MapLite.prototype.remove=function(){this._removed=true;if(this._renderFrame){cancelAnimationFrame(this._renderFrame);this._renderFrame=0}this._pointers.clear();this._layers.slice().forEach(l=>l._remove&&l._remove());this._layers=[];this._tileLayer=null;this._clearTiles();this._ev={};if(this._el)this._el.innerHTML='';return this};
+MapLite.prototype.remove=function(){this._removed=true;if(this._renderFrame){cancelAnimationFrame(this._renderFrame);this._renderFrame=0}this._pointers.clear();this._layers.slice().forEach(l=>l._remove&&l._remove());this._layers=[];this._tileLayer=null;this._clearTiles();this._ev={};if(this._resizeObserver){try{this._resizeObserver.disconnect()}catch(_){}}this._resizeObserver=null;if(this._el)this._el.innerHTML='';return this};
 MapLite.prototype._world=function(){return 2**this._zoom*TILE};
 MapLite.prototype._screenCamera=function(){
   const w=this._world(),cw=this._el.clientWidth||360,ch=this._el.clientHeight||600;
@@ -41,12 +41,12 @@ MapLite.prototype._scheduleRender=function(){if(this._removed||this._renderFrame
 MapLite.prototype._gestureTransform=function(tx,ty,scale){
   if(this._removed)return;
   const t='translate3d('+tx+'px,'+ty+'px,0)'+(scale===1?'':' scale('+scale+')');
-  if(this._tilesEl)this._tilesEl.style.transform=t;
-  if(this._markersEl)this._markersEl.style.transform=t;
+  if(this._tilesEl){this._tilesEl.style.transformOrigin='0 0';this._tilesEl.style.transform=t}
+  if(this._markersEl){this._markersEl.style.transformOrigin='0 0';this._markersEl.style.transform=t}
 };
 MapLite.prototype._clearGestureTransform=function(){
-  if(this._tilesEl)this._tilesEl.style.transform='';
-  if(this._markersEl)this._markersEl.style.transform='';
+  if(this._tilesEl){this._tilesEl.style.transform='';this._tilesEl.style.transformOrigin=''}
+  if(this._markersEl){this._markersEl.style.transform='';this._markersEl.style.transformOrigin=''}
 };
 MapLite.prototype._tiles=function(){
   const w=this._el.clientWidth||360,h=this._el.clientHeight||600,z=this._zoom,n=2**z,c=project(this._center.lat,this._center.lng,z);
