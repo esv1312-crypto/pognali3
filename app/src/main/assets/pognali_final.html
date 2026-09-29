@@ -372,7 +372,7 @@ function seedDemoEvents(){
 seedDemoEvents();
 db.events.forEach(e=>{if(!e.country&&e.city==='Симферополь')e.country='Россия';if(!e.city&&e.place) e.city=db.profile?.city||'';});
 save();
-let currentTab='events', map, markers=[]; let selectedFilter='Мир', eventView='map'; let selectedDate=null, calendarOpen=false, calendarMonth=new Date(new Date().getFullYear(),new Date().getMonth(),1); let lastMapView=null; let mapViews={Мир:null,Рядом:null,Мои:null}; try{mapViews={...mapViews,...(JSON.parse(localStorage.getItem(KEY+'_map_views')||'{}')||{})}}catch(e){} let userLocationMarker=null; let userLocationRequested=false; let userLocationRequestToken=0; let userGeo=null; let userLocationWaiters=[]; try{userGeo=JSON.parse(localStorage.getItem(KEY+'_user_geo')||'null');if(userGeo&&(!Number.isFinite(+userGeo.lat)||!Number.isFinite(+userGeo.lng)))userGeo=null;else if(userGeo)userGeo={lat:+userGeo.lat,lng:+userGeo.lng}}catch(e){userGeo=null}
+let currentTab='events', map, markers=[]; let mapSessionToken=0, mapLayoutTimers=[]; let selectedFilter='Мир', eventView='map'; let selectedDate=null, calendarOpen=false, calendarMonth=new Date(new Date().getFullYear(),new Date().getMonth(),1); let lastMapView=null; let mapViews={Мир:null,Рядом:null,Мои:null}; try{mapViews={...mapViews,...(JSON.parse(localStorage.getItem(KEY+'_map_views')||'{}')||{})}}catch(e){} let userLocationMarker=null; let userLocationRequested=false; let userLocationRequestToken=0; let userGeo=null; let userLocationWaiters=[]; try{userGeo=JSON.parse(localStorage.getItem(KEY+'_user_geo')||'null');if(userGeo&&(!Number.isFinite(+userGeo.lat)||!Number.isFinite(+userGeo.lng)))userGeo=null;else if(userGeo)userGeo={lat:+userGeo.lat,lng:+userGeo.lng}}catch(e){userGeo=null}
 const NEARBY_RADIUS_KM=200; const MAP_RADIUS_LEVELS=[{minZoom:13,km:25},{minZoom:11,km:50},{minZoom:9,km:150},{minZoom:7,km:600}];
 function mapRadiusKm(zoom){for(const x of MAP_RADIUS_LEVELS)if(zoom>=x.minZoom)return x.km;return null}
 function mapScopeLabel(){if(selectedFilter==='Мир')return '🌍 Весь мир';if(selectedFilter==='Рядом')return userGeo?`📍 Рядом · ${NEARBY_RADIUS_KM} км`:'📍 Включи геолокацию';return '🙋 Мои события'}
@@ -436,6 +436,8 @@ function saveMainMapView(){
 }
 function destroyMainMap(){
   saveMainMapView();
+  mapSessionToken++;
+  mapLayoutTimers.forEach(t=>{try{clearTimeout(t)}catch(e){}});mapLayoutTimers=[];
   if(map){try{map.remove()}catch(e){}map=null;}
   markers=[];userLocationMarker=null;
 }
@@ -455,7 +457,7 @@ function applyMainMapView(){
   }
 }
 function destroyPickerMap(){if(pickerMap){try{pickerMap.remove()}catch(e){}pickerMap=null;}pickerMarker=null;pickerUserLocationMarker=null;}
-function refreshMainMapLayout(fitToEvents=false){if(!map)return;const targetMap=map;const run=()=>{if(!targetMap||map!==targetMap)return;try{targetMap.invalidateSize({pan:false,animate:false});if(fitToEvents){const points=filtered().map(e=>[Number(e.lat),Number(e.lng)]).filter(([lat,lng])=>Number.isFinite(lat)&&Number.isFinite(lng));if(points.length===1)targetMap.setView(points[0],13,{animate:false});else if(points.length>1)targetMap.fitBounds(L.latLngBounds(points),{padding:[42,72],maxZoom:13,animate:false})}}catch(e){}};requestAnimationFrame(run);setTimeout(run,120);setTimeout(run,320)}
+function refreshMainMapLayout(fitToEvents=false){if(!map)return;const targetMap=map,token=mapSessionToken;const run=()=>{if(!targetMap||map!==targetMap||token!==mapSessionToken)return;try{targetMap.invalidateSize({pan:false,animate:false});if(fitToEvents){const points=filtered().map(e=>[Number(e.lat),Number(e.lng)]).filter(([lat,lng])=>Number.isFinite(lat)&&Number.isFinite(lng));if(points.length===1)targetMap.setView(points[0],13,{animate:false});else if(points.length>1)targetMap.fitBounds(L.latLngBounds(points),{padding:[42,72],maxZoom:13,animate:false})}}catch(e){}};requestAnimationFrame(run);mapLayoutTimers.push(setTimeout(run,120));mapLayoutTimers.push(setTimeout(run,320))}
 
 let pickerUserLocationMarker=null;
 function drawPickerUserLocation(lat,lng){
@@ -575,7 +577,7 @@ function renderEvents(){
     applyMainMapView();
     if(typeof map._pognaliRenderMarkers==='function')map._pognaliRenderMarkers();
     else refreshMainMapLayout(!!selectedDate);
-    if(selectedFilter==='Рядом'&&!userGeo)setTimeout(()=>requestUserLocation(true),80);
+    
     if(selectedDate)refreshMainMapLayout(true);
     return;
   }
@@ -618,7 +620,7 @@ function initMap(){
   const tileLayer=L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19,subdomains:'abc',attribution:'© OpenStreetMap contributors'}).addTo(map);
   let tileErrors=0,tileFallbackUsed=false;
   tileLayer.on('tileerror',()=>{tileErrors++;if(tileErrors>=3&&!tileFallbackUsed){tileFallbackUsed=true;map.removeLayer(tileLayer);L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png',{maxZoom:19,subdomains:'abcd',attribution:'© OpenStreetMap contributors © CARTO'}).addTo(map);}});
-  const updateMapState=()=>{const c=map.getCenter();lastMapView={lat:c.lat,lng:c.lng,zoom:map.getZoom()};mapViews[selectedFilter]=lastMapView;try{localStorage.setItem(KEY+'_map_views',JSON.stringify(mapViews))}catch(e){};const el=document.getElementById('map');if(el)el.classList.toggle('map-zoomed',map.getZoom()>=16);const scope=document.getElementById('mapScope');if(scope){scope.textContent=mapScopeLabel();scope.classList.toggle('world',!mapRadiusKm(map.getZoom())&&!!userGeo)}};
+  const updateMapState=()=>{const c=map.getCenter();if(selectedDate)return;lastMapView={lat:c.lat,lng:c.lng,zoom:map.getZoom()};mapViews[selectedFilter]=lastMapView;try{localStorage.setItem(KEY+'_map_views',JSON.stringify(mapViews))}catch(e){};const el=document.getElementById('map');if(el)el.classList.toggle('map-zoomed',map.getZoom()>=16);const scope=document.getElementById('mapScope');if(scope){scope.textContent=mapScopeLabel();scope.classList.toggle('world',!mapRadiusKm(map.getZoom())&&!!userGeo)}};
   map.on('moveend',updateMapState);
   updateMapState();
   markers=[];
