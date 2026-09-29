@@ -384,7 +384,17 @@ const filteredCache=new Map();
 const visibleEventsCache=new Map();
 const visibleEventsByDateCache=new Map();
 const visibleMyEventsCache=new Map();
-function clearEventFilterCaches(){filteredCache.clear();visibleEventsCache.clear();visibleEventsByDateCache.clear();visibleMyEventsCache.clear()}
+let filterCacheRevision=-1;
+let filterCacheMinute=-1;
+function clearEventFilterCaches(){
+  filteredCache.clear();visibleEventsCache.clear();visibleEventsByDateCache.clear();visibleMyEventsCache.clear();
+  filterCacheRevision=eventsRevision;
+  filterCacheMinute=Math.floor(Date.now()/60000);
+}
+function syncEventFilterCaches(){
+  const minute=Math.floor(Date.now()/60000);
+  if(filterCacheRevision!==eventsRevision||filterCacheMinute!==minute)clearEventFilterCaches();
+}
 function save(){eventsRevision++;clearEventFilterCaches();localStorage.setItem(KEY,JSON.stringify(db))}
 
 function age(b){if(!b)return '';let d=new Date(b),n=new Date();let a=n.getFullYear()-d.getFullYear();if(n<new Date(n.getFullYear(),d.getMonth(),d.getDate()))a--;return a}
@@ -426,7 +436,8 @@ function visibleEventsByDate(){
   return byDate;
 }
 function visibleEvents(date=''){
-  const minute=Math.floor(Date.now()/60000);
+  syncEventFilterCaches();
+  const minute=filterCacheMinute;
   const key=[eventsRevision,minute,date].join('|');
   const cached=visibleEventsCache.get(key);
   if(cached)return cached;
@@ -436,7 +447,8 @@ function visibleEvents(date=''){
   return es;
 }
 function filtered(filter=selectedFilter){
-  const minute=Math.floor(Date.now()/60000);
+  syncEventFilterCaches();
+  const minute=filterCacheMinute;
   const lat=userGeo&&Number.isFinite(+userGeo.lat)?Number(userGeo.lat).toFixed(4):'';
   const lng=userGeo&&Number.isFinite(+userGeo.lng)?Number(userGeo.lng).toFixed(4):'';
   const date=selectedDate||'';
