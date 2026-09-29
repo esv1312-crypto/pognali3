@@ -245,7 +245,8 @@ ensureUserProfiles();
 // Миграция демо-профиля: текущий пользователь — Стас (id 2).
 if(db.profile && db.profile.name==='Антон') db.profile.name='Стас';
 db.users[2]={...(db.users[2]||{}),name:db.profile?.name||'Стас',city:db.profile?.city||'Екатеринбург'};
-save();
+// Do not persist here: save() depends on the event-filter caches declared below.
+// normalizeEvents()/seedDemoEvents() persist the initialized state after those declarations.
 const MAP_CENTER={lat:56.8389,lng:60.6057};
 function normalizeEvents(){
   const seen=new Set();
