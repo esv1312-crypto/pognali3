@@ -1065,16 +1065,27 @@ function onAndroidAppResume(){
   }catch(e){}
 }
 function onAndroidLocationServicesOff(){
+  userLocationRequestToken++;
   userLocationRequested=false;
+  const waiters=userLocationWaiters.splice(0);
+  const err={code:2,message:'Location services disabled'};
+  waiters.forEach(cb=>{try{cb(null,err)}catch(e){}});
   const message='📍 Геолокация выключена. Включи её в настройках Android.';
   const scope=document.getElementById('mapScope');if(scope)scope.textContent=message;
   const empty=document.querySelector('.map-location-empty');if(empty)empty.textContent=message;
 }
 function onAndroidLocationPermissionChanged(granted){
   if(!granted){
+    userLocationRequestToken++;
+    userLocationRequested=false;
+    const waiters=userLocationWaiters.splice(0);
+    const err={code:1,message:'Location permission denied'};
+    waiters.forEach(cb=>{try{cb(null,err)}catch(e){}});
     const scope=document.getElementById('mapScope');if(scope)scope.textContent='📍 Геолокация запрещена. Разреши доступ в настройках Android.';
+    const empty=document.querySelector('.map-location-empty');if(empty)empty.textContent='📍 Геолокация запрещена. Разреши доступ в настройках Android.';
     return;
   }
+  userLocationRequestToken++;
   userLocationRequested=false;
   if(typeof requestUserLocation==='function')requestUserLocation(true);
 }
