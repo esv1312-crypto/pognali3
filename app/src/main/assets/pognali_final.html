@@ -218,32 +218,32 @@ body{min-height:100dvh;overscroll-behavior:none}
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script>
 const KEY='pognali_demo_02';
-const base={profile:{name:'Стас',birth:'1988-04-01',city:'Симферополь',bio:'Люблю спорт, новые места и когда можно просто сказать: «Погнали».',photo:''},events:[
+const base={profile:{name:'Стас',birth:'1988-04-01',city:'Екатеринбург',bio:'Люблю спорт, новые места и когда можно просто сказать: «Погнали».',photo:''},events:[
 {id:1,title:'Прогулка по Гагаринскому парку',cat:'Прогулка',date:'2026-09-25',time:'18:30',place:'Гагаринский парк',country:'Россия',city:'Симферополь',lat:44.9463,lng:34.0957,limit:8,desc:'Спокойно пройтись, поболтать и познакомиться с новыми людьми.',people:[2],owner:1,status:'ACTIVE'},
 {id:2,title:'Футбол 5×5',cat:'Спорт',date:'2026-09-26',time:'17:00',place:'Спортивная площадка в Гагаринском парке',country:'Россия',city:'Симферополь',lat:44.9448,lng:34.1015,limit:10,desc:'Нужны игроки на дружеский футбол. Без профессионализма.',people:[2,3,4],owner:2,status:'ACTIVE'},
 {id:3,title:'Кофе и знакомство',cat:'Общение',date:'2026-09-27',time:'13:00',place:'Центр Симферополя',country:'Россия',city:'Симферополь',lat:44.9521,lng:34.1024,limit:6,desc:'Кофе, разговоры и новые знакомства. Без обязательств.',people:[2],owner:3,status:'ACTIVE'},
-{id:4,title:'Вечерний забег',cat:'Спорт',date:'2026-09-28',time:'19:00',place:'Набережная Салгира',country:'Россия',city:'Симферополь',lat:44.9569,lng:34.1045,limit:12,desc:'Лёгкий темп, около 5 км. Бежим вместе.',people:[2,5],owner:4,status:'ACTIVE'}],users:{1:{name:'Стас',city:'Симферополь'},2:{name:'Стас',city:'Симферополь'},3:{name:'Маша',city:'Симферополь'},4:{name:'Илья',city:'Симферополь'},5:{name:'Олег',city:'Симферополь'}},chats:{},questions:{}};
+{id:4,title:'Вечерний забег',cat:'Спорт',date:'2026-09-28',time:'19:00',place:'Набережная Салгира',country:'Россия',city:'Симферополь',lat:44.9569,lng:34.1045,limit:12,desc:'Лёгкий темп, около 5 км. Бежим вместе.',people:[2,5],owner:4,status:'ACTIVE'}],users:{1:{name:'Стас',city:'Екатеринбург'},2:{name:'Стас',city:'Екатеринбург'},3:{name:'Маша',city:'Екатеринбург'},4:{name:'Илья',city:'Екатеринбург'},5:{name:'Олег',city:'Екатеринбург'}},chats:{},questions:{}};
 let db=JSON.parse(localStorage.getItem(KEY)||'null')||base;
 if(!db.questions)db.questions={};
 if(!db.chats)db.chats={};
 const demoProfileData={
-  1:{name:'Стас',city:'Симферополь',birth:'1988-04-01',bio:'Организую встречи и люблю, когда люди реально собираются.',interests:['спорт','походы','новые места']},
-  2:{name:'Антон',city:'Симферополь',birth:'1992-06-18',bio:'Люблю спорт, кофе и спонтанные планы.',interests:['футбол','бег','кофе']},
-  3:{name:'Маша',city:'Симферополь',birth:'1997-02-11',bio:'За интересные разговоры и новые знакомства.',interests:['кино','музыка','общение']},
-  4:{name:'Илья',city:'Симферополь',birth:'1990-09-23',bio:'Люблю активный отдых и собирать компанию.',interests:['спорт','авто','походы']},
-  5:{name:'Олег',city:'Симферополь',birth:'1989-12-05',bio:'Бегаю, играю в футбол, иногда просто гуляю.',interests:['бег','футбол','прогулки']}
+  1:{name:'Стас',city:'Екатеринбург',birth:'1988-04-01',bio:'Организую встречи и люблю, когда люди реально собираются.',interests:['спорт','походы','новые места']},
+  2:{name:'Антон',city:'Екатеринбург',birth:'1992-06-18',bio:'Люблю спорт, кофе и спонтанные планы.',interests:['футбол','бег','кофе']},
+  3:{name:'Маша',city:'Екатеринбург',birth:'1997-02-11',bio:'За интересные разговоры и новые знакомства.',interests:['кино','музыка','общение']},
+  4:{name:'Илья',city:'Екатеринбург',birth:'1990-09-23',bio:'Люблю активный отдых и собирать компанию.',interests:['спорт','авто','походы']},
+  5:{name:'Олег',city:'Екатеринбург',birth:'1989-12-05',bio:'Бегаю, играю в футбол, иногда просто гуляю.',interests:['бег','футбол','прогулки']}
 };
 function ensureUserProfiles(){
   db.users=db.users||{};
   Object.entries(demoProfileData).forEach(([id,v])=>{db.users[id]={...(db.users[id]||{}),...v}});
-  Object.keys(db.users).forEach((id,i)=>{let u=db.users[id]||{};if(!u.city)u.city='Симферополь';if(!u.bio)u.bio='Открыт к новым встречам и интересным событиям.';if(!Array.isArray(u.interests))u.interests=['общение','новые места'];db.users[id]=u});
+  Object.keys(db.users).forEach((id,i)=>{let u=db.users[id]||{};if(!u.city)u.city='Екатеринбург';if(!u.bio)u.bio='Открыт к новым встречам и интересным событиям.';if(!Array.isArray(u.interests))u.interests=['общение','новые места'];db.users[id]=u});
 }
 ensureUserProfiles();
 // Миграция демо-профиля: текущий пользователь — Стас (id 2).
 if(db.profile && db.profile.name==='Антон') db.profile.name='Стас';
-db.users[2]={...(db.users[2]||{}),name:db.profile?.name||'Стас',city:db.profile?.city||'Симферополь'};
+db.users[2]={...(db.users[2]||{}),name:db.profile?.name||'Стас',city:db.profile?.city||'Екатеринбург'};
 save();
-const MAP_CENTER={lat:44.9521,lng:34.1024};
+const MAP_CENTER={lat:56.8389,lng:60.6057};
 function normalizeEvents(){
   const seen=new Set();
   db.events=(Array.isArray(db.events)?db.events:[]).filter(e=>{
@@ -270,60 +270,139 @@ function normalizeEvents(){
 }
 normalizeEvents();
 function seedDemoEvents(){
-  const target=100;
-  if(localStorage.getItem('pognali_seed_v3_done')==='1')return;
-  if(db.events.length>=target){localStorage.setItem('pognali_seed_v3_done','1');return;}
+  const target=200;
+  if(localStorage.getItem('pognali_seed_v4_yekaterinburg_done')==='1')return;
+
+  // Remove only the previous generated demo layer. User-created events are preserved.
+  db.events=(Array.isArray(db.events)?db.events:[]).filter(e=>{
+    const id=Number(e&&e.id), owner=Number(e&&e.owner);
+    return !(id>=1000&&id<2000&&owner>=100&&owner<400);
+  });
+
+  const oldDemoIds=new Set([1,2,3,4]);
+  db.events=db.events.map(e=>{
+    if(!oldDemoIds.has(Number(e.id))||e.city!=='Симферополь')return e;
+    return {
+      ...e,
+      city:'Екатеринбург',
+      country:'Россия',
+      date:localDateKey(new Date(Date.now()+86400000*(1+Number(e.id)))),
+      place:['Плотинка','ЦПКиО им. Маяковского','Парк УрГУПС','Набережная Исети'][Number(e.id)-1],
+      lat:[56.8389,56.8210,56.8534,56.8397][Number(e.id)-1],
+      lng:[60.6057,60.6250,60.6090,60.6180][Number(e.id)-1]
+    };
+  });
+
   const templates=[
-    ['Прогулка','Прогулка по набережной','🚶','Набережная Салгира'],
-    ['Спорт','Футбол 5×5','⚽','Спортивная площадка в Гагаринском парке'],
-    ['Общение','Кофе и знакомство','☕','Центр Симферополя'],
-    ['Игры','Настолки вечером','🎲','Антикафе в центре'],
-    ['Кино','Идём на новый фильм','🎬','Кинотеатр в центре'],
-    ['Музыка/концерт','Живая музыка','🎵','Музыкальный бар'],
-    ['Кафе/еда','Ужин без повода','🍕','Кафе на проспекте Кирова'],
-    ['Вечеринка','Вечеринка после работы','🥳','Бар в центре'],
-    ['Природа/поход','Небольшой поход','🥾','Окрестности Симферополя'],
-    ['Учёба','Английский разговорный клуб','📚','Кофейня в центре'],
-    ['Творчество','Рисуем вместе','🎨','Творческая студия'],
-    ['Фото','Фотопрогулка по городу','📸','Парк имени Гагарина'],
-    ['Авто','Вечерняя встреча автолюбителей','🚗','Парковка у центра'],
-    ['Знакомства','Знакомства за кофе','💑','Кофейня в центре'],
-    ['Мафия','Мафия на 10 человек','🕵️','Антикафе'],
-    ['Шопинг','Идём выбирать кроссовки','🛍️','Торговый центр'],
-    ['Путешествие','Мини-поездка на день','🧳','Сбор у центра'],
-    ['Общение','Просто познакомиться','👋','Площадь в центре'],
-    ['Игры','Вечер в настолки','🎮','Игровое пространство'],
-    ['Другое','Спонтанно встретимся','✨','Центр Симферополя']
+    ['Прогулка','Прогулка и новые знакомства','🚶'],
+    ['Спорт','Футбол 5×5','⚽'],
+    ['Спорт','Лёгкий вечерний забег','🏃'],
+    ['Спорт','Волейбол на свежем воздухе','🏐'],
+    ['Спорт','Тренировка вместе','🥊'],
+    ['Игры','Настолки вечером','🎲'],
+    ['Игры','Игровой вечер','🎮'],
+    ['Общение','Кофе и новые знакомства','☕'],
+    ['Общение','Просто познакомиться','👋'],
+    ['Кино','Идём в кино вместе','🎬'],
+    ['Музыка/концерт','Живая музыка','🎵'],
+    ['Кафе/еда','Ужин без повода','🍕'],
+    ['Кафе/еда','Кофе после работы','🍰'],
+    ['Вечеринка','Вечеринка после работы','🥳'],
+    ['Природа/поход','Прогулка на природе','🥾'],
+    ['Учёба','Разговорный клуб','📚'],
+    ['Творчество','Рисуем вместе','🎨'],
+    ['Фото','Фотопрогулка','📸'],
+    ['Авто','Встреча автолюбителей','🚗'],
+    ['Знакомства','Знакомства за кофе','💑'],
+    ['Мафия','Мафия на компанию','🕵️'],
+    ['Шопинг','Идём выбирать вещи','🛍️'],
+    ['Путешествие','Небольшая поездка','🧳'],
+    ['Другое','Спонтанно встретимся','✨']
   ];
-  const start=target-db.events.length;
-  for(let i=0;i<start;i++){
-    const idx=db.events.length;
-    const t=templates[idx%templates.length];
-    const dayOffset=(idx*3)%36;
+
+  const areas=[
+    ['Екатеринбург','Плотинка и центр',56.8389,60.6057],
+    ['Екатеринбург','Вайнера',56.8320,60.5970],
+    ['Екатеринбург','Ельцин Центр',56.8440,60.5820],
+    ['Екатеринбург','ВИЗ',56.8500,60.5550],
+    ['Екатеринбург','Парк УрГУПС',56.8534,60.6090],
+    ['Екатеринбург','ЦПКиО Маяковского',56.8210,60.6250],
+    ['Екатеринбург','Шарташ',56.8650,60.6720],
+    ['Екатеринбург','Пионерский',56.8600,60.6250],
+    ['Екатеринбург','Уралмаш',56.8870,60.6100],
+    ['Екатеринбург','Эльмаш',56.9000,60.6500],
+    ['Екатеринбург','ЖБИ',56.8750,60.6950],
+    ['Екатеринбург','Автовокзал',56.8150,60.6100],
+    ['Екатеринбург','Ботанический',56.7900,60.6200],
+    ['Екатеринбург','Юго-Западный',56.8000,60.5600],
+    ['Екатеринбург','Академический',56.7900,60.5100],
+    ['Екатеринбург','Уктус',56.7600,60.6400],
+    ['Верхняя Пышма','Центр Верхней Пышмы',56.9707,60.5801],
+    ['Верхняя Пышма','Парк Верхней Пышмы',56.9760,60.5850],
+    ['Берёзовский','Центр Берёзовского',56.9097,60.7907],
+    ['Берёзовский','Парк Берёзовского',56.9140,60.8000],
+    ['Среднеуральск','Центр Среднеуральска',56.9890,60.4660],
+    ['Среднеуральск','Озеро Исетское',57.0050,60.4550]
+  ];
+
+  const cityLimits={Екатеринбург:160,'Верхняя Пышма':15,'Берёзовский':15,'Среднеуральск':10};
+  const counts={Екатеринбург:0,'Верхняя Пышма':0,'Берёзовский':0,'Среднеуральск':0};
+  const names=['Алексей','Катя','Денис','Лера','Максим','Оля','Сергей','Алина','Роман','Настя','Игорь','Полина','Михаил','Вика','Артём','Юля','Дима','Саша','Никита','Лиза'];
+  const bios=['Люблю новые компании и активные выходные.','За спонтанные планы и хорошие разговоры.','Люблю спорт, музыку и новые места.','Часто выбираюсь из дома ради интересных событий.','Просто люблю, когда есть чем заняться.'];
+  const interests=[['спорт','бег','футбол'],['кино','кофе','общение'],['музыка','вечеринки','прогулки'],['походы','природа','фото'],['настолки','игры','новые места']];
+
+  let created=0, cityIndex=0;
+  while(created<target){
+    const city=created<160?'Екатеринбург':created<175?'Верхняя Пышма':created<190?'Берёзовский':'Среднеуральск';
+    if(counts[city]>=cityLimits[city]){cityIndex++;continue;}
+    const area=areas.filter(a=>a[0]===city)[counts[city]%areas.filter(a=>a[0]===city).length];
+    const t=templates[created%templates.length];
+    const angle=created*2.399963;
+    const radius=city==='Екатеринбург' ? 0.0015+((created%8)*0.0008) : 0.0010+((created%5)*0.0007);
+    const lat=area[2]+Math.sin(angle)*radius;
+    const lng=area[3]+Math.cos(angle)*radius*1.45;
     const d=new Date();
     d.setHours(12,0,0,0);
-    d.setDate(d.getDate()+1+dayOffset);
+    d.setDate(d.getDate()+1+((created*3)%30));
     const date=localDateKey(d);
     const hours=[10,12,13,15,17,18,19,20,21];
-    const time=String(hours[idx%hours.length]).padStart(2,'0')+':'+(idx%2?'30':'00');
-    const angle=idx*2.399963;
-    const radius=0.004+((idx%9)*0.0011);
-    const lat=44.9521+Math.sin(angle)*radius;
-    const lng=34.1024+Math.cos(angle)*radius*1.35;
-    const owner=100+idx;
-    db.users[owner]={name:['Алексей','Катя','Денис','Лера','Максим','Оля','Сергей','Алина','Роман','Настя'][idx%10],city:'Симферополь',birth:['1991-03-14','1996-07-22','1988-11-09','1994-05-17','1990-01-28'][idx%5],bio:['Люблю новые компании и активные выходные.','За спонтанные планы и хорошие разговоры.','Люблю спорт, музыку и новые места.','Часто выбираюсь из дома ради интересных событий.','Просто люблю, когда есть чем заняться.'][idx%5],interests:[['спорт','бег','футбол'],['кино','кофе','общение'],['музыка','вечеринки','прогулки'],['походы','природа','фото'],['настолки','игры','новые места']][idx%5]};
+    const time=String(hours[created%hours.length]).padStart(2,'0')+':'+(created%2?'30':'00');
+    const owner=100+created;
+    db.users[owner]={
+      name:names[created%names.length],
+      city,
+      birth:['1991-03-14','1996-07-22','1988-11-09','1994-05-17','1990-01-28'][created%5],
+      bio:bios[created%bios.length],
+      interests:interests[created%interests.length]
+    };
     db.events.push({
-      id:1000+idx,title:t[1]+(idx%5===0?' — компания собирается':''),cat:t[0],emoji:t[2],date,time,place:t[3],lat,lng,
-      limit:[4,6,8,10,12,15][idx%6],desc:'Открытое событие. Можно присоединиться и провести время вместе.',people:[owner],owner,status:'ACTIVE'
+      id:1000+created,
+      title:t[1]+(created%5===0?' — компания собирается':''),
+      cat:t[0],
+      emoji:t[2],
+      date,
+      time,
+      place:area[1],
+      country:'Россия',
+      city,
+      lat,
+      lng,
+      limit:[4,6,8,10,12,15][created%6],
+      desc:'Открытое событие. Можно присоединиться и провести время вместе.',
+      people:[owner],
+      owner,
+      status:'ACTIVE'
     });
+    counts[city]++;
+    created++;
   }
   save();
-  localStorage.setItem('pognali_seed_v3_done','1');
+  localStorage.setItem('pognali_seed_v4_yekaterinburg_done','1');
 }
 seedDemoEvents();
 db.events.forEach(e=>{if(!e.country&&e.city==='Симферополь')e.country='Россия';if(!e.city&&e.place) e.city=db.profile?.city||'';});
 save();
-let currentTab='events', map, markers=[]; let selectedFilter='Рядом', eventView='map'; let selectedDate=null, calendarOpen=false, calendarMonth=new Date(2026,8,1); let lastMapView=null; let mapViews={Мир:null,Рядом:null,Мои:null}; try{mapViews={...mapViews,...(JSON.parse(localStorage.getItem(KEY+'_map_views')||'{}')||{})}}catch(e){} let userLocationMarker=null; let userLocationRequested=false; let userGeo=null;
+let currentTab='events', map, markers=[]; let selectedFilter='Мир', eventView='map'; let selectedDate=null, calendarOpen=false, calendarMonth=new Date(2026,8,1); let lastMapView=null; let mapViews={Мир:null,Рядом:null,Мои:null}; try{mapViews={...mapViews,...(JSON.parse(localStorage.getItem(KEY+'_map_views')||'{}')||{})}}catch(e){} let userLocationMarker=null; let userLocationRequested=false; let userGeo=null;
 const NEARBY_RADIUS_KM=200; const MAP_RADIUS_LEVELS=[{minZoom:13,km:25},{minZoom:11,km:50},{minZoom:9,km:150},{minZoom:7,km:600}];
 function mapRadiusKm(zoom){for(const x of MAP_RADIUS_LEVELS)if(zoom>=x.minZoom)return x.km;return null}
 function mapScopeLabel(){if(selectedFilter==='Мир')return '🌍 Весь мир';if(selectedFilter==='Рядом')return userGeo?`📍 Рядом · ${NEARBY_RADIUS_KM} км`:'📍 Включи геолокацию';return '🙋 Мои события'}
