@@ -854,6 +854,39 @@ function initPickerMap(lat,lng,hasPoint){
   }
 }
 function invalidatePlaceText(){const latEl=document.getElementById('elat'),lngEl=document.getElementById('elng'),countryEl=document.getElementById('ecountry'),cityEl=document.getElementById('ecity'),statusEl=document.getElementById('pickedCoords');if(latEl)latEl.value='';if(lngEl)lngEl.value='';if(countryEl)countryEl.value='';if(cityEl)cityEl.value='';if(statusEl)statusEl.textContent='Адрес изменён — нажми «Найти» или поставь точку на карте';}
+function onAndroidAppResume(){
+  try{
+    if(typeof updateEventsMapChrome==='function'&&currentTab==='events'&&map){
+      map.invalidateSize({pan:false,animate:false});
+      if(typeof refreshMainMapLayout==='function')refreshMainMapLayout(!!selectedDate);
+    }
+    if(typeof navigator!=='undefined'&&navigator.geolocation&&currentTab==='events'){
+      const scope=document.getElementById('mapScope');
+      if(scope&&selectedFilter==='Рядом'&&!userGeo)scope.textContent='📍 Проверяем местоположение…';
+    }
+    if(typeof requestUserLocation==='function'&&selectedFilter==='Рядом'&&!userGeo)requestUserLocation(false);
+    if(typeof pickerMap!=='undefined'&&pickerMap){
+      pickerMap.invalidateSize({pan:false,animate:false});
+      if(userGeo)drawPickerUserLocation(userGeo.lat,userGeo.lng);
+    }
+  }catch(e){}
+}
+function onAndroidLocationPermissionChanged(granted){
+  if(!granted){
+    const scope=document.getElementById('mapScope');if(scope)scope.textContent='📍 Геолокация запрещена. Разреши доступ в настройках Android.';
+    return;
+  }
+  userLocationRequested=false;
+  if(typeof requestUserLocation==='function')requestUserLocation(true);
+}
+function onAndroidWebViewRecovered(){
+  try{
+    userLocationMarker=null;
+    pickerUserLocationMarker=null;
+    if(typeof renderEvents==='function'&&currentTab==='events'&&document.getElementById('map'))renderEvents();
+    else if(typeof go==='function')go(currentTab||'events');
+  }catch(e){}
+}
 function centerPickerOnMyLocation(){if(!pickerMap)return;if(userGeo&&Number.isFinite(+userGeo.lat)&&Number.isFinite(+userGeo.lng)){pickerMap.setView([userGeo.lat,userGeo.lng],14,{animate:false});drawPickerUserLocation(userGeo.lat,userGeo.lng);return;}requestUserLocation(true,(geo)=>{if(!geo||!pickerMap)return;pickerMap.setView([geo.lat,geo.lng],14,{animate:false});drawPickerUserLocation(geo.lat,geo.lng);});}
 async function reverseGeocode(lat,lng){
   const fallback={place:'Точка на карте '+lat.toFixed(5)+', '+lng.toFixed(5),country:'',city:''};
