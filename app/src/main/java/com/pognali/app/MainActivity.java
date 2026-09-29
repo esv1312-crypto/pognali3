@@ -56,10 +56,10 @@ public class MainActivity extends Activity {
             }
             @Override public boolean onRenderProcessGone(WebView view, android.webkit.RenderProcessGoneDetail detail) {
                 try { view.destroy(); } catch (Exception ignored) {}
-                webView = new WebView(MainActivity.this);
-                setContentView(webView);
-                runJs("if(typeof onAndroidWebViewRecovered==='function')onAndroidWebViewRecovered();");
-                webView.loadUrl("https://appassets.androidplatform.net/assets/pognali_final.html");
+                Intent restart = new Intent(MainActivity.this, MainActivity.class);
+                restart.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TOP);
+                startActivity(restart);
+                finish();
                 return true;
             }
         });
