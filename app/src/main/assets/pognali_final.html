@@ -719,7 +719,7 @@ function initMap(){
       const lat=Number(e.lat),lng=Number(e.lng);
       let m=eventMarkerById.get(id);
       const isLive=eventState(e)==='STARTED',liveClass=isLive?' live':'';
-      const html='<div class="event-marker-wrap'+liveClass+'"><div class="event-pin" title="'+esc(e.title)+'"><span>'+eventIcon(e.cat,e.title,e.emoji)+'</span></div>'+(eventLabel(e.title,e.cat)?'<div class="event-label">'+eventLabel(e.title,e.cat)+'</div>':'')+'</div>';
+      const html='<div class="event-marker-wrap'+liveClass+'"><div class="event-pin" title="'+esc(e.title)+'"><span>'+eventIcon(e.cat,e.title,e.emoji)+'</span></div>'+(eventLabel(e.title,e.cat)?'<div class="event-label">'+esc(eventLabel(e.title,e.cat))+'</div>':'')+'</div>';
       if(!m){
         const icon=L.divIcon({className:'',html,iconSize:[42,42],iconAnchor:[21,21],popupAnchor:[0,-22]});
         m=L.marker([lat,lng],{icon}).addTo(map);
