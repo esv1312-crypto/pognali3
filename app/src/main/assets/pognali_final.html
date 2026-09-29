@@ -893,14 +893,34 @@ function initMap(){
           m._pognaliClusterKey=key;
           m._pognaliLat=lat;m._pognaliLng=lng;
           m._pognaliClusterHtml=html;
-          m._pognaliClusterCenter={lat,lng};
-          m._pognaliClusterZoom=zoom;
-          m.on('click',()=>{
-            const center=m._pognaliClusterCenter;
-            const z=m._pognaliClusterZoom;
-            if(center)map.setView([center.lat,center.lng],Math.min(19,z+2),{animate:true});
-          });
-          clusterMarkers.push(m);
+            m._pognaliClusterCenter={lat,lng};
+            m._pognaliClusterZoom=zoom;
+            // Handle cluster taps directly at the marker element for reliable
+            // Android WebView pointer behavior. Guard against double zoom from
+            // pointerup followed by the synthetic click event.
+            let clusterTapHandled=false;
+            const zoomCluster=()=>{
+              if(clusterTapHandled)return;
+              clusterTapHandled=true;
+              const center=m._pognaliClusterCenter;
+              const z=m._pognaliClusterZoom;
+              if(center)map.setView([center.lat,center.lng],Math.min(19,z+2),{animate:true});
+              setTimeout(()=>{clusterTapHandled=false},350);
+            };
+            m._pognaliClusterZoomHandler=zoomCluster;
+            if(m._icon){
+              m._icon.addEventListener('pointerdown',e=>{e.stopPropagation()});
+              m._icon.addEventListener('pointerup',e=>{
+                e.stopPropagation();
+                e.preventDefault();
+                zoomCluster();
+              });
+              m._icon.addEventListener('click',e=>{
+                e.stopPropagation();
+                zoomCluster();
+              });
+            }
+            clusterMarkers.push(m);
           clusterMarkerByKey.set(key,m);
         }else{
           if(m._pognaliLat!==lat||m._pognaliLng!==lng){
