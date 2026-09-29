@@ -224,6 +224,9 @@ const base={profile:{name:'Стас',birth:'1988-04-01',city:'Екатеринб
 {id:3,title:'Кофе и знакомство',cat:'Общение',date:'2026-09-27',time:'13:00',place:'Центр Симферополя',country:'Россия',city:'Симферополь',lat:44.9521,lng:34.1024,limit:6,desc:'Кофе, разговоры и новые знакомства. Без обязательств.',people:[2],owner:3,status:'ACTIVE'},
 {id:4,title:'Вечерний забег',cat:'Спорт',date:'2026-09-28',time:'19:00',place:'Набережная Салгира',country:'Россия',city:'Симферополь',lat:44.9569,lng:34.1045,limit:12,desc:'Лёгкий темп, около 5 км. Бежим вместе.',people:[2,5],owner:4,status:'ACTIVE'}],users:{1:{name:'Стас',city:'Екатеринбург'},2:{name:'Стас',city:'Екатеринбург'},3:{name:'Маша',city:'Екатеринбург'},4:{name:'Илья',city:'Екатеринбург'},5:{name:'Олег',city:'Екатеринбург'}},chats:{},questions:{}};
 let db=JSON.parse(localStorage.getItem(KEY)||'null')||base;
+if(!Array.isArray(db.events))db.events=[];
+db.events=db.events.filter(e=>e&&Number.isFinite(+e.id)&&validCoordinates(+e.lat,+e.lng)&&typeof e.title==='string').map(e=>({...e,id:+e.id,lat:+e.lat,lng:+e.lng,people:Array.isArray(e.people)?e.people.filter(Number.isFinite):[],limit:Math.max(1,Math.min(100,parseInt(e.limit,10)||1))}));
+if(!db.users||typeof db.users!=='object')db.users={};
 if(!db.questions)db.questions={};
 if(!db.chats)db.chats={};
 const demoProfileData={
