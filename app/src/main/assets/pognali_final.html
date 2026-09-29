@@ -657,56 +657,66 @@ function initMap(){
     es=filtered();
     const token=++markerRenderToken;
     const zoom=map.getZoom();
-    const useClusters=es.length>60 && zoom<13;
-    if(useClusters){
-      if(lastClusterMode!==true){clearEventMarkers();}
-      lastClusterMode=true;
-      const cells=new Map(), cellPx=zoom<=8?74:64;
-      es.forEach(e=>{
-        const lat=Number(e.lat),lng=Number(e.lng);
-        if(!Number.isFinite(lat)||!Number.isFinite(lng))return;
-        const p=map._screen(lat,lng),cx=Math.floor(p.x/cellPx),cy=Math.floor(p.y/cellPx),key=cx+':'+cy;
-        if(!cells.has(key))cells.set(key,{lat:0,lng:0,events:[]});
-        const cell=cells.get(key);cell.lat+=lat;cell.lng+=lng;cell.events.push(e);
-      });
-      const active=new Set();
-      cells.forEach((cell,key)=>{
-        if(token!==markerRenderToken)return;
-        const count=cell.events.length;
-        const lat=cell.lat/count,lng=cell.lng/count;
-        active.add(key);
-        const icons=[...new Set(cell.events.map(e=>eventIcon(e.cat,e.title,e.emoji)).filter(Boolean))].slice(0,3);
-        const emojiLine=icons.join(' ');
-        let m=clusterMarkers.find(x=>x._pognaliClusterKey===key);
-        const html='<div class="event-cluster event-cluster-rich" title="'+esc(count+' событий')+'"><div class="event-cluster-emojis">'+esc(emojiLine||'✨')+'</div><span>'+count+'</span></div>';
-        const icon=L.divIcon({className:'',html,iconSize:[56,56],iconAnchor:[28,28]});
-        if(!m){
-          m=L.marker([lat,lng],{icon}).addTo(map);
-          m._pognaliClusterKey=key;
-          m.on('click',()=>map.setView([lat,lng],Math.min(14,zoom+2),{animate:true}));
-          clusterMarkers.push(m);
-        }else{
-          m.setLatLng([lat,lng]);
-          m.options.icon=icon;
-          if(m._icon)m._icon.innerHTML=html;
-        }
-      });
-      clusterMarkers=clusterMarkers.filter(m=>{
-        if(active.has(m._pognaliClusterKey))return true;
-        try{m.remove()}catch(e){}
-        return false;
-      });
-      markers=clusterMarkers.slice();
-      return;
-    }
-    if(lastClusterMode!==false)clearClusterMarkers();
-    lastClusterMode=false;
-    const activeIds=new Set();
+    const cellPx=zoom<=8?74:zoom<=12?64:56;
+    const margin=120;
+    const cells=new Map();
+    const visibleEventIds=new Set();
+
     es.forEach(e=>{
       const lat=Number(e.lat),lng=Number(e.lng);
       if(!Number.isFinite(lat)||!Number.isFinite(lng))return;
+      const p=map._screen(lat,lng);
+      if(p.x<-margin||p.x>map._el.clientWidth+margin||p.y<-margin||p.y>map._el.clientHeight+margin)return;
+      const cx=Math.floor(p.x/cellPx),cy=Math.floor(p.y/cellPx),key=cx+':'+cy;
+      if(!cells.has(key))cells.set(key,{lat:0,lng:0,events:[]});
+      const cell=cells.get(key);
+      cell.lat+=lat;cell.lng+=lng;cell.events.push(e);
+    });
+
+    const activeClusterKeys=new Set();
+    const activeIds=new Set();
+
+    cells.forEach((cell,key)=>{
+      if(token!==markerRenderToken)return;
+      const count=cell.events.length;
+
+      // Screen-space density is the rule: a cluster exists only when events
+      // actually compete for the same piece of the screen.
+      if(count>1){
+        const lat=cell.lat/count,lng=cell.lng/count;
+        activeClusterKeys.add(key);
+        const icons=[...new Set(cell.events.map(e=>eventIcon(e.cat,e.title,e.emoji)).filter(Boolean))].slice(0,3);
+        const emojiLine=icons.join(' ');
+        const html='<div class="event-cluster event-cluster-rich" title="'+esc(count+' событий')+'"><div class="event-cluster-emojis">'+esc(emojiLine||'✨')+'</div><span>'+count+'</span></div>';
+        const icon=L.divIcon({className:'',html,iconSize:[56,56],iconAnchor:[28,28]});
+        let m=clusterMarkers.find(x=>x._pognaliClusterKey===key);
+        if(!m){
+          m=L.marker([lat,lng],{icon}).addTo(map);
+          m._pognaliClusterKey=key;
+          m._pognaliClusterCenter={lat,lng};
+          m._pognaliClusterZoom=zoom;
+          m.on('click',()=>{
+            const center=m._pognaliClusterCenter;
+            const z=m._pognaliClusterZoom;
+            if(center)map.setView([center.lat,center.lng],Math.min(19,z+2),{animate:true});
+          });
+          clusterMarkers.push(m);
+        }else{
+          m.setLatLng([lat,lng]);
+          m._pognaliClusterCenter={lat,lng};
+          m._pognaliClusterZoom=zoom;
+          m.options.icon=icon;
+          if(m._icon&&m._icon.innerHTML!==html)m._icon.innerHTML=html;
+        }
+        return;
+      }
+
+      const e=cell.events[0];
+      if(!e)return;
       const id=String(e.id);
       activeIds.add(id);
+      visibleEventIds.add(id);
+      const lat=Number(e.lat),lng=Number(e.lng);
       let m=eventMarkerById.get(id);
       const isLive=eventState(e)==='STARTED',liveClass=isLive?' live':'';
       const html='<div class="event-marker-wrap'+liveClass+'"><div class="event-pin" title="'+esc(e.title)+'"><span>'+eventIcon(e.cat,e.title,e.emoji)+'</span></div>'+(eventLabel(e.title,e.cat)?'<div class="event-label">'+eventLabel(e.title,e.cat)+'</div>':'')+'</div>';
@@ -723,10 +733,23 @@ function initMap(){
       }
       m.bindPopup('<div class="eventmini"><h3>'+esc(e.title)+'</h3><div>'+esc(fmt(e))+'</div><div>'+esc(displayPlace(e))+'</div><div>'+e.people.length+'/'+e.limit+' '+T('Participants').toLowerCase()+'</div><button onclick="openEvent('+e.id+')">'+T('Open event')+'</button></div>');
     });
-    eventMarkerById.forEach((m,id)=>{if(!activeIds.has(id)){try{m.remove()}catch(e){}eventMarkerById.delete(id)}});
-    markers=Array.from(eventMarkerById.values());
+
+    clusterMarkers=clusterMarkers.filter(m=>{
+      if(activeClusterKeys.has(m._pognaliClusterKey))return true;
+      try{m.remove()}catch(e){}
+      return false;
+    });
+
+    eventMarkerById.forEach((m,id)=>{
+      if(!activeIds.has(id)){
+        try{m.remove()}catch(e){}
+        eventMarkerById.delete(id);
+      }
+    });
+
+    markers=clusterMarkers.concat(Array.from(eventMarkerById.values()));
   };
-  map.on('zoomend',renderMapMarkers);
+  map.on('zoomend',renderMapMarkers);\n  map.on('moveend',renderMapMarkers);
   map._pognaliRenderMarkers=renderMapMarkers;
   renderMapMarkers();
   if(userGeo) drawUserLocation(userGeo.lat,userGeo.lng,false);
