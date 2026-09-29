@@ -553,7 +553,7 @@ function applyMainMapView(){
     map.setView([MAP_CENTER.lat,MAP_CENTER.lng],9);
   }
 }
-function destroyPickerMap(){if(pickerMap){try{pickerMap.remove()}catch(e){}pickerMap=null;}pickerMarker=null;pickerUserLocationMarker=null;}
+function destroyPickerMap(){pickerLookupToken++;if(pickerMap){try{pickerMap.remove()}catch(e){}pickerMap=null;}pickerMarker=null;pickerUserLocationMarker=null;}
 function refreshMainMapLayout(fitToEvents=false){if(!map)return;const targetMap=map,token=mapSessionToken;const run=()=>{if(!targetMap||map!==targetMap||token!==mapSessionToken)return;try{targetMap.invalidateSize({pan:false,animate:false});if(fitToEvents){const points=filtered().map(e=>[Number(e.lat),Number(e.lng)]).filter(([lat,lng])=>Number.isFinite(lat)&&Number.isFinite(lng));if(points.length===1)targetMap.setView(points[0],13,{animate:false});else if(points.length>1)targetMap.fitBounds(L.latLngBounds(points),{padding:[42,72],maxZoom:13,animate:false})}}catch(e){}};requestAnimationFrame(run);mapLayoutTimers.push(setTimeout(run,120));mapLayoutTimers.push(setTimeout(run,320))}
 
 let pickerUserLocationMarker=null;
@@ -1042,11 +1042,12 @@ function initPickerMap(lat,lng,hasPoint){
     if(!hasPoint)pickerMap.setView([userGeo.lat,userGeo.lng],14,{animate:false});
   }else{
     requestUserLocation(false,geo=>{
+      if(!geo||!validCoordinates(geo.lat,geo.lng))return;
       if(pickerMap){drawPickerUserLocation(geo.lat,geo.lng);if(!hasPoint && !pickerMarker)pickerMap.setView([geo.lat,geo.lng],14,{animate:false});}
     });
   }
 }
-function invalidatePlaceText(){const latEl=document.getElementById('elat'),lngEl=document.getElementById('elng'),countryEl=document.getElementById('ecountry'),cityEl=document.getElementById('ecity'),statusEl=document.getElementById('pickedCoords');if(latEl)latEl.value='';if(lngEl)lngEl.value='';if(countryEl)countryEl.value='';if(cityEl)cityEl.value='';if(statusEl)statusEl.textContent='Адрес изменён — нажми «Найти» или поставь точку на карте';}
+function invalidatePlaceText(){pickerLookupToken++;const latEl=document.getElementById('elat'),lngEl=document.getElementById('elng'),countryEl=document.getElementById('ecountry'),cityEl=document.getElementById('ecity'),statusEl=document.getElementById('pickedCoords');if(latEl)latEl.value='';if(lngEl)lngEl.value='';if(countryEl)countryEl.value='';if(cityEl)cityEl.value='';if(statusEl)statusEl.textContent='Адрес изменён — нажми «Найти» или поставь точку на карте';}
 function onAndroidAppResume(){
   try{
     if(typeof updateEventsMapChrome==='function'&&currentTab==='events'&&map){
@@ -1110,6 +1111,7 @@ async function setPickerPoint(lat,lng,lookupPlace=true){
   if(!validCoordinates(lat,lng))return showToast('Не удалось определить корректные координаты.','error');
   const lookupToken=++pickerLookupToken;
   const latEl=document.getElementById('elat'),lngEl=document.getElementById('elng'),placeEl=document.getElementById('eplace'),statusEl=document.getElementById('pickedCoords'),countryEl=document.getElementById('ecountry'),cityEl=document.getElementById('ecity');
+  if(!latEl||!lngEl||!placeEl||!statusEl||!pickerMap)return;
   latEl.value=lat;lngEl.value=lng;
   if(lookupPlace){placeEl.value='Определяю место…';statusEl.textContent='Определяю страну, город и адрес…';}
   else if(!placeEl.value.trim()) statusEl.textContent='Точка выбрана';
