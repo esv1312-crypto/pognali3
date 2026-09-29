@@ -98,7 +98,7 @@ el.addEventListener('pointermove',e=>{
   if(this._pointers.size>=2&&this._gesture==='pinch'){
     const ps=[...this._pointers.values()],a=ps[0],b=ps[1],mid=midpoint(a,b),d=Math.max(1,distance(a,b));
     const pinch=this._pinch;if(!pinch)return;
-    if(d>pinch.distance*1.01||d<pinch.distance*.99)this._gestureMoved=true;
+    if((d>pinch.distance*1.01||d<pinch.distance*.99)&&!this._gestureMoved){this._gestureMoved=true;this.fire('usergesturestart');}
     const nz=clamp(pinch.zoom+Math.log2(d/pinch.distance),0,19);
     this._zoom=nz;
     const target=pinch.target,screenX=mid.x-r.left,screenY=mid.y-r.top;
@@ -114,7 +114,7 @@ el.addEventListener('pointermove',e=>{
   if(this._pointers.size===1&&this._gesture==='pan'){
     const pan=this._pan;if(!pan)return;
     const dx=e.clientX-pan.x,dy=e.clientY-pan.y;
-    if(Math.abs(dx)+Math.abs(dy)>4)this._gestureMoved=true;
+    if(Math.abs(dx)+Math.abs(dy)>4&&!this._gestureMoved){this._gestureMoved=true;this.fire('usergesturestart');}
     const p0=project(pan.cy,pan.cx,this._zoom);
     this._center=unproject(p0.x-dx,p0.y-dy,this._zoom);
     this._gestureTransform(dx,dy,1);
