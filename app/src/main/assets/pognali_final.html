@@ -375,7 +375,7 @@ function seedDemoEvents(){
 seedDemoEvents();
 db.events.forEach(e=>{if(!e.country&&e.city==='Симферополь')e.country='Россия';if(!e.city&&e.place) e.city=db.profile?.city||'';});
 save();
-let currentTab='events', map, markers=[]; let mapSessionToken=0, mapLayoutTimers=[]; let selectedFilter='Мир', eventView='map'; let selectedDate=null, calendarOpen=false, calendarMonth=new Date(new Date().getFullYear(),new Date().getMonth(),1); let lastMapView=null; let mapViews={Мир:null,Рядом:null,Мои:null}; let mapDateViews={}; try{mapDateViews=JSON.parse(localStorage.getItem(KEY+'_map_date_views')||'{}')||{}}catch(e){mapDateViews={}} try{mapViews={...mapViews,...(JSON.parse(localStorage.getItem(KEY+'_map_views')||'{}')||{})}}catch(e){} let userLocationMarker=null; let userLocationRequested=false; let userLocationRequestToken=0; let userGeo=null; let userLocationWaiters=[]; try{userGeo=JSON.parse(localStorage.getItem(KEY+'_user_geo')||'null');if(userGeo&&(!Number.isFinite(+userGeo.lat)||!Number.isFinite(+userGeo.lng)))userGeo=null;else if(userGeo)userGeo={lat:+userGeo.lat,lng:+userGeo.lng}}catch(e){userGeo=null}
+let currentTab='events', map, markers=[]; let mapSessionToken=0, mapLayoutTimers=[]; let mainMapUserInteracted=false; let selectedFilter='Мир', eventView='map'; let selectedDate=null, calendarOpen=false, calendarMonth=new Date(new Date().getFullYear(),new Date().getMonth(),1); let lastMapView=null; let mapViews={Мир:null,Рядом:null,Мои:null}; let mapDateViews={}; try{mapDateViews=JSON.parse(localStorage.getItem(KEY+'_map_date_views')||'{}')||{}}catch(e){mapDateViews={}} try{mapViews={...mapViews,...(JSON.parse(localStorage.getItem(KEY+'_map_views')||'{}')||{})}}catch(e){} let userLocationMarker=null; let userLocationRequested=false; let userLocationRequestToken=0; let userGeo=null; let userLocationWaiters=[]; try{userGeo=JSON.parse(localStorage.getItem(KEY+'_user_geo')||'null');if(userGeo&&(!Number.isFinite(+userGeo.lat)||!Number.isFinite(+userGeo.lng)))userGeo=null;else if(userGeo)userGeo={lat:+userGeo.lat,lng:+userGeo.lng}}catch(e){userGeo=null}
 const NEARBY_RADIUS_KM=200; const MAP_RADIUS_LEVELS=[{minZoom:13,km:25},{minZoom:11,km:50},{minZoom:9,km:150},{minZoom:7,km:600}];
 function mapRadiusKm(zoom){for(const x of MAP_RADIUS_LEVELS)if(zoom>=x.minZoom)return x.km;return null}
 function mapScopeLabel(){if(selectedFilter==='Мир')return '🌍 Весь мир';if(selectedFilter==='Рядом')return userGeo?`📍 Рядом · ${NEARBY_RADIUS_KM} км`:'📍 Включи геолокацию';return '🙋 Мои события'}
@@ -627,7 +627,11 @@ function requestUserLocation(force=false,onReady=null){
     const scope=document.getElementById('mapScope');
     if(scope)scope.textContent=mapScopeLabel();
     if(selectedFilter==='Рядом' && currentTab==='events'){
-      if(eventView==='list')renderList();else renderEvents();
+      if(eventView==='list')renderList();
+      else if(map&&mainMapUserInteracted){
+        updateEventsMapChrome();
+        if(typeof map._pognaliRenderMarkers==='function')map._pognaliRenderMarkers();
+      }else renderEvents();
     }
   },err=>{
     if(requestToken!==userLocationRequestToken){userLocationRequested=false;return;}
@@ -708,6 +712,7 @@ function initMap(){
     return;
   }
   if(map){try{map.remove()}catch(e){}map=null;}
+  mainMapUserInteracted=false;
   if(userLocationMarker){try{userLocationMarker.remove()}catch(e){}userLocationMarker=null;}
   let es=filtered();
   const worldMode=selectedFilter==='Мир';
@@ -715,6 +720,8 @@ function initMap(){
   const initialView=savedView ? [savedView.lat,savedView.lng] : (userGeo?[userGeo.lat,userGeo.lng]:[MAP_CENTER.lat,MAP_CENTER.lng]);
   const initialZoom=savedView ? savedView.zoom : (selectedDate?12:(worldMode?2:9));
   map=L.map('map').setView(initialView,initialZoom);
+  mainMapUserInteracted=false;
+  map.on('usergesturestart',()=>{mainMapUserInteracted=true;});
   const tileLayer=L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19,subdomains:'abc',attribution:'© OpenStreetMap contributors'}).addTo(map);
   let tileErrors=0,tileFallbackUsed=false;
   tileLayer.on('tileerror',()=>{tileErrors++;if(tileErrors>=3&&!tileFallbackUsed){tileFallbackUsed=true;map.removeLayer(tileLayer);L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png',{maxZoom:19,subdomains:'abcd',attribution:'© OpenStreetMap contributors © CARTO'}).addTo(map);}});
