@@ -421,18 +421,20 @@ function refreshMainMapLayout(fitToEvents=false){if(!map)return;const targetMap=
 let pickerUserLocationMarker=null;
 function drawPickerUserLocation(lat,lng){
   if(!pickerMap || !Number.isFinite(lat) || !Number.isFinite(lng)) return;
+  if(!pickerMap.getPane('pognaliUserLocationPane')){const pane=pickerMap.createPane('pognaliUserLocationPane');pane.style.zIndex='700';pane.style.pointerEvents='none';}
   if(pickerUserLocationMarker){try{pickerUserLocationMarker.setLatLng([lat,lng]);}catch(e){pickerUserLocationMarker=null;}}
   if(!pickerUserLocationMarker){
-    pickerUserLocationMarker=L.circleMarker([lat,lng],{radius:8,color:'#fff',weight:3,fillColor:'#2477ff',fillOpacity:1,interactive:false}).addTo(pickerMap).bindTooltip('Вы здесь',{direction:'top',offset:[0,-8]});
+    pickerUserLocationMarker=L.circleMarker([lat,lng],{pane:'pognaliUserLocationPane',radius:8,color:'#fff',weight:3,fillColor:'#2477ff',fillOpacity:1,interactive:false}).addTo(pickerMap).bindTooltip('Вы здесь',{direction:'top',offset:[0,-8]});
   }
 }
 function drawUserLocation(lat,lng,center){
   if(!map || !Number.isFinite(lat) || !Number.isFinite(lng)) return;
+  if(!map.getPane('pognaliUserLocationPane')){const pane=map.createPane('pognaliUserLocationPane');pane.style.zIndex='700';pane.style.pointerEvents='none';}
   if(userLocationMarker){
     try{userLocationMarker.setLatLng([lat,lng]);}catch(e){userLocationMarker=null;}
   }
   if(!userLocationMarker){
-    userLocationMarker=L.circleMarker([lat,lng],{
+    userLocationMarker=L.circleMarker([lat,lng],{pane:'pognaliUserLocationPane',
       radius:8,color:'#fff',weight:3,fillColor:'#2477ff',fillOpacity:1
     }).addTo(map).bindTooltip('Вы здесь',{direction:'top',offset:[0,-8]});
   }
