@@ -248,6 +248,25 @@ db.users[2]={...(db.users[2]||{}),name:db.profile?.name||'Стас',city:db.prof
 // Do not persist here: save() depends on the event-filter caches declared below.
 // normalizeEvents()/seedDemoEvents() persist the initialized state after those declarations.
 const MAP_CENTER={lat:56.8389,lng:60.6057};
+let eventsRevision=0;
+const filteredCache=new Map();
+const visibleEventsCache=new Map();
+const visibleEventsByDateCache=new Map();
+const visibleAllEventsCache=new Map();
+const visibleMyEventsCache=new Map();
+const visibleGeoIndexCache=new Map();
+let filterCacheRevision=-1;
+let filterCacheMinute=-1;
+function clearEventFilterCaches(){
+  filteredCache.clear();visibleEventsCache.clear();visibleEventsByDateCache.clear();visibleAllEventsCache.clear();visibleMyEventsCache.clear();visibleGeoIndexCache.clear();
+  filterCacheRevision=eventsRevision;
+  filterCacheMinute=Math.floor(Date.now()/60000);
+}
+function syncEventFilterCaches(){
+  const minute=Math.floor(Date.now()/60000);
+  if(filterCacheRevision!==eventsRevision||filterCacheMinute!==minute)clearEventFilterCaches();
+}
+
 function normalizeEvents(){
   const seen=new Set();
   db.events=(Array.isArray(db.events)?db.events:[]).filter(e=>{
@@ -380,27 +399,9 @@ let currentTab='events', map, markers=[]; let mapSessionToken=0, mapLayoutTimers
 const NEARBY_RADIUS_KM=200; const MAP_RADIUS_LEVELS=[{minZoom:13,km:25},{minZoom:11,km:50},{minZoom:9,km:150},{minZoom:7,km:600}];
 function mapRadiusKm(zoom){for(const x of MAP_RADIUS_LEVELS)if(zoom>=x.minZoom)return x.km;return null}
 function mapScopeLabel(){if(selectedFilter==='Мир')return '🌍 Весь мир';if(selectedFilter==='Рядом')return userGeo?`📍 Рядом · ${NEARBY_RADIUS_KM} км`:'📍 Включи геолокацию';return '🙋 Мои события'}
-let eventsRevision=0;
-const filteredCache=new Map();
-const visibleEventsCache=new Map();
-const visibleEventsByDateCache=new Map();
-const visibleAllEventsCache=new Map();
-const visibleMyEventsCache=new Map();
 // Geographic index used by the map renderer to avoid scanning every filtered
 // event on every pan/zoom. The index is rebuilt only when the filtered event
 // set can actually change (data/minute/filter/date/location changes).
-const visibleGeoIndexCache=new Map();
-let filterCacheRevision=-1;
-let filterCacheMinute=-1;
-function clearEventFilterCaches(){
-  filteredCache.clear();visibleEventsCache.clear();visibleEventsByDateCache.clear();visibleAllEventsCache.clear();visibleMyEventsCache.clear();visibleGeoIndexCache.clear();
-  filterCacheRevision=eventsRevision;
-  filterCacheMinute=Math.floor(Date.now()/60000);
-}
-function syncEventFilterCaches(){
-  const minute=Math.floor(Date.now()/60000);
-  if(filterCacheRevision!==eventsRevision||filterCacheMinute!==minute)clearEventFilterCaches();
-}
 function save(){eventsRevision++;clearEventFilterCaches();localStorage.setItem(KEY,JSON.stringify(db))}
 
 function age(b){if(!b)return '';let d=new Date(b),n=new Date();let a=n.getFullYear()-d.getFullYear();if(n<new Date(n.getFullYear(),d.getMonth(),d.getDate()))a--;return a}
