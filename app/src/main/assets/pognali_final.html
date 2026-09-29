@@ -523,7 +523,11 @@ function destroyMainMap(){
   saveMainMapView();
   mapSessionToken++;
   mapLayoutTimers.forEach(t=>{try{clearTimeout(t)}catch(e){}});mapLayoutTimers=[];
-  if(map){try{map.remove()}catch(e){}map=null;}
+  if(map){
+    try{if(map._pognaliCancelMarkerRender)map._pognaliCancelMarkerRender();}catch(e){}
+    try{map.remove()}catch(e){}
+    map=null;
+  }
   markers=[];userLocationMarker=null;
 }
 function applyMainMapView(){
@@ -885,6 +889,9 @@ function initMap(){
   map.on('zoomend',scheduleMapMarkerRender);
   map.on('moveend',scheduleMapMarkerRender);
   map._pognaliRenderMarkers=renderMapMarkers;
+  map._pognaliCancelMarkerRender=()=>{
+    if(markerRenderFrame){cancelAnimationFrame(markerRenderFrame);markerRenderFrame=0;}
+  };
   renderMapMarkers();
   if(userGeo) drawUserLocation(userGeo.lat,userGeo.lng,false);
   else requestUserLocation();
