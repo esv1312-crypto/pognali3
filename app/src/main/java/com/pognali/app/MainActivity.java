@@ -45,6 +45,11 @@ public class MainActivity extends Activity {
         s.setDatabaseEnabled(true);
         s.setGeolocationEnabled(true);
         s.setUserAgentString("Pognali/1.0 (Android; com.pognali.app)");
+        // Always load the current bundled HTML/JS assets. This prevents a stale WebView
+        // cache from keeping an older map implementation after an APK update.
+        s.setCacheMode(WebSettings.LOAD_NO_CACHE);
+        webView.clearCache(true);
+        webView.clearHistory();
         s.setAllowFileAccess(true);
         s.setAllowContentAccess(true);
         final WebViewAssetLoader assetLoader = new WebViewAssetLoader.Builder()
