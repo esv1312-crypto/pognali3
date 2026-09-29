@@ -689,6 +689,7 @@ function initMap(){
   updateMapState();
   markers=[];
   let markerRenderToken=0;
+  let lastMarkerRenderKey='';
   let eventMarkerById=new Map();
   let clusterMarkers=[];
   let clusterMarkerByKey=new Map();
@@ -703,19 +704,23 @@ function initMap(){
     eventMarkerById.clear();
   };
   const renderMapMarkers=()=>{
+    const center=map.getCenter(),zoom=map.getZoom();
+    const markerRenderKey=[eventsRevision,Math.floor(Date.now()/60000),selectedFilter,selectedDate||'',zoom,center.lat,center.lng].join('|');
+    if(markerRenderKey===lastMarkerRenderKey)return;
+    lastMarkerRenderKey=markerRenderKey;
     es=filtered();
     const token=++markerRenderToken;
-    const zoom=map.getZoom();
     const cellPx=zoom<=8?74:zoom<=12?64:56;
     const margin=120;
     const cells=new Map();
     const screenCamera=map._screenCamera();
+    const viewportWidth=map._el.clientWidth||360,viewportHeight=map._el.clientHeight||600;
 
     es.forEach(e=>{
       const lat=Number(e.lat),lng=Number(e.lng);
       if(!Number.isFinite(lat)||!Number.isFinite(lng))return;
       const p=map._screenFromCamera(lat,lng,screenCamera);
-      if(p.x<-margin||p.x>map._el.clientWidth+margin||p.y<-margin||p.y>map._el.clientHeight+margin)return;
+      if(p.x<-margin||p.x>viewportWidth+margin||p.y<-margin||p.y>viewportHeight+margin)return;
       const cx=Math.floor(p.x/cellPx),cy=Math.floor(p.y/cellPx),key=cx+':'+cy;
       let cell=cells.get(key);
       if(!cell){
