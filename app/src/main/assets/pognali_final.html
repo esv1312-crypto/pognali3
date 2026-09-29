@@ -871,6 +871,12 @@ function onAndroidAppResume(){
     }
   }catch(e){}
 }
+function onAndroidLocationServicesOff(){
+  userLocationRequested=false;
+  const message='📍 Геолокация выключена. Включи её в настройках Android.';
+  const scope=document.getElementById('mapScope');if(scope)scope.textContent=message;
+  const empty=document.querySelector('.map-location-empty');if(empty)empty.textContent=message;
+}
 function onAndroidLocationPermissionChanged(granted){
   if(!granted){
     const scope=document.getElementById('mapScope');if(scope)scope.textContent='📍 Геолокация запрещена. Разреши доступ в настройках Android.';
