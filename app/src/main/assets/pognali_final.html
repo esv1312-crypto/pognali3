@@ -683,12 +683,21 @@ function initMap(){
       if(p.x<-margin||p.x>map._el.clientWidth+margin||p.y<-margin||p.y>map._el.clientHeight+margin)return;
       const cx=Math.floor(p.x/cellPx),cy=Math.floor(p.y/cellPx),key=cx+':'+cy;
       let cell=cells.get(key);
-      if(!cell)cell={lat:0,lng:0,count:0,event:null,icons:new Set()};
+      if(!cell){
+        cell={lat,lng,count:1,event:e,icons:null,firstIcon:eventIcon(e.cat,e.title,e.emoji)};
+        cells.set(key,cell);
+        return;
+      }
       cell.lat+=lat;cell.lng+=lng;cell.count++;
-      if(cell.count===1)cell.event=e;
       const icon=eventIcon(e.cat,e.title,e.emoji);
-      if(icon&&cell.icons.size<3)cell.icons.add(icon);
-      cells.set(key,cell);
+      if(cell.count===2){
+        cell.icons=new Set();
+        if(cell.firstIcon)cell.icons.add(cell.firstIcon);
+        if(icon)cell.icons.add(icon);
+        cell.firstIcon=null;
+      }else if(cell.icons&&icon&&cell.icons.size<3){
+        cell.icons.add(icon);
+      }
     });
 
     const activeClusterKeys=new Set();
