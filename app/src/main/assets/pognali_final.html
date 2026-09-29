@@ -696,13 +696,16 @@ function setFilter(x){
     try{localStorage.setItem(KEY+'_map_views',JSON.stringify(mapViews))}catch(e){}
   }
   selectedDate=null;calendarOpen=false;selectedFilter=x;lastMapView=mapViews[x]||null;
+  // A gesture made in another filter must not block the new filter's
+  // location/camera initialization when an async GPS result arrives.
+  mainMapUserInteracted=false;
   if(eventView==='list')renderList();else renderEvents();
   if(x==='Рядом' && (!userGeo || !Number.isFinite(+userGeo.lat) || !Number.isFinite(+userGeo.lng))) setTimeout(()=>requestUserLocation(true),80);
 }
 function toggleCalendar(){calendarOpen=!calendarOpen;if(calendarOpen&&selectedDate){const d=new Date(selectedDate+'T12:00:00');calendarMonth=new Date(d.getFullYear(),d.getMonth(),1)}if(eventView==='list')renderList();else renderEvents()}
 function moveCalendar(delta){calendarMonth=new Date(calendarMonth.getFullYear(),calendarMonth.getMonth()+delta,1);if(eventView==='list')renderList();else renderEvents()}
-function pickCalendarDate(key){if(map&&selectedDate)saveMainMapView();selectedDate=key;calendarOpen=false;lastMapView=null;if(eventView==='list')renderList();else renderEvents()}
-function clearCalendarDate(){if(map&&selectedDate)saveMainMapView();selectedDate=null;calendarOpen=false;lastMapView=mapViews[selectedFilter]||null;if(eventView==='list')renderList();else renderEvents()}
+function pickCalendarDate(key){if(map&&selectedDate)saveMainMapView();selectedDate=key;calendarOpen=false;lastMapView=null;mainMapUserInteracted=false;if(eventView==='list')renderList();else renderEvents()}
+function clearCalendarDate(){if(map&&selectedDate)saveMainMapView();selectedDate=null;calendarOpen=false;lastMapView=mapViews[selectedFilter]||null;mainMapUserInteracted=false;if(eventView==='list')renderList();else renderEvents()}
 function renderList(){destroyMainMap();eventView='list';let n=filtered().length;let title=selectedFilter==='Мои'?'Мои события':(selectedFilter==='Рядом'?'События рядом':'События по всему миру');let sub=selectedDate?`На выбранную дату ${n} ${n===1?'событие':'событий'}`:(selectedFilter==='Мир'?'Выбирай, присоединяйся или придумай своё':(n?`Сейчас по этому фильтру ${n} ${n===1?'событие':'события/событий'}`:'Пока здесь тихо — самое время что-нибудь придумать'));document.getElementById('content').innerHTML=`<div class="list"><div class="filters" style="position:static;display:flex">${renderFilters()}</div><div class="viewtoggle list-viewtoggle"><button id="mapbtn" onclick="switchView('map')">Карта</button><button id="listbtn" class="active" onclick="switchView('list')">Список</button></div>${calendarOpen?calendarHTML():''}<div class="list-intro"><div><h2>${title}</h2><p>${sub}</p></div><span class="list-intro-count">${n} ${n===1?'событие':'событий'}</span></div>${filtered().map(eventCard).join('')||'<div class="empty"><b>Пока здесь тихо.</b><br>Самое время придумать, чем заняться.</div>'}</div>`}
 function switchView(v){if(v==='list')renderList();else renderEvents()}
 function initMap(){
