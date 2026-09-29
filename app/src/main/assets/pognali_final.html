@@ -466,6 +466,8 @@ function requestUserLocation(force=false,onReady=null){
     userLocationRequested=false;
     try{localStorage.setItem(KEY+'_user_geo',JSON.stringify(userGeo))}catch(e){}
     if(map)drawUserLocation(userGeo.lat,userGeo.lng,false);
+    if(pickerMap)drawPickerUserLocation(userGeo.lat,userGeo.lng);
+    if(typeof onReady==='function')onReady(userGeo);
     const scope=document.getElementById('mapScope');
     if(scope)scope.textContent=mapScopeLabel();
     if(selectedFilter==='Рядом'){
