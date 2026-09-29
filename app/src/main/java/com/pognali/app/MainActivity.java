@@ -13,6 +13,7 @@ import android.webkit.WebChromeClient;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
+import androidx.webkit.WebViewAssetLoader;
 
 public class MainActivity extends Activity {
     private WebView webView;
@@ -44,7 +45,14 @@ public class MainActivity extends Activity {
         s.setUserAgentString("Pognali/1.0 (Android; com.pognali.app)");
         s.setAllowFileAccess(true);
         s.setAllowContentAccess(true);
-        webView.setWebViewClient(new WebViewClient());
+        final WebViewAssetLoader assetLoader = new WebViewAssetLoader.Builder()
+                .addPathHandler("/assets/", new WebViewAssetLoader.AssetsPathHandler(this))
+                .build();
+        webView.setWebViewClient(new WebViewClient() {
+            @Override public android.webkit.WebResourceResponse shouldInterceptRequest(WebView view, android.webkit.WebResourceRequest request) {
+                return assetLoader.shouldInterceptRequest(request.getUrl());
+            }
+        });
         webView.setWebChromeClient(new WebChromeClient() {
             @Override public void onGeolocationPermissionsShowPrompt(String origin, GeolocationPermissions.Callback callback) {
                 if (checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED ||
@@ -72,7 +80,7 @@ public class MainActivity extends Activity {
                 }
             }
         });
-        webView.loadUrl("file:///android_asset/pognali_final.html");
+        webView.loadUrl("https://appassets.androidplatform.net/assets/pognali_final.html");
     }
 
     @Override public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] grantResults) {
