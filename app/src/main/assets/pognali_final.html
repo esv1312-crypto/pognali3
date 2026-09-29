@@ -772,6 +772,7 @@ function initMap(){
 
     const activeClusterKeys=new Set();
     const activeIds=new Set();
+    const previousClusterKeys=new Set(clusterMarkerByKey.keys());
 
     cells.forEach((cell,key)=>{
       if(token!==markerRenderToken)return;
@@ -851,19 +852,23 @@ function initMap(){
       }
     });
 
-    clusterMarkers=clusterMarkers.filter(m=>{
-      if(activeClusterKeys.has(m._pognaliClusterKey))return true;
-      try{m.remove()}catch(e){}
-      clusterMarkerByKey.delete(m._pognaliClusterKey);
-      return false;
-    });
+    if(previousClusterKeys.size){
+      previousClusterKeys.forEach(key=>{
+        if(activeClusterKeys.has(key))return;
+        const m=clusterMarkerByKey.get(key);
+        if(m){try{m.remove()}catch(e){}}
+        clusterMarkerByKey.delete(key);
+      });
+      clusterMarkers=clusterMarkers.filter(m=>clusterMarkerByKey.get(m._pognaliClusterKey)===m);
+    }
 
-    eventMarkerById.forEach((m,id)=>{
-      if(!activeIds.has(id)){
+    if(eventMarkerById.size){
+      eventMarkerById.forEach((m,id)=>{
+        if(activeIds.has(id))return;
         try{m.remove()}catch(e){}
         eventMarkerById.delete(id);
-      }
-    });
+      });
+    }
 
     markers=clusterMarkers.concat(Array.from(eventMarkerById.values()));
   };
