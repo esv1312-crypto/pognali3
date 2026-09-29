@@ -719,7 +719,7 @@ function initMap(){
   if(userLocationMarker){try{userLocationMarker.remove()}catch(e){}userLocationMarker=null;}
   let es=filtered();
   const worldMode=selectedFilter==='Мир';
-  const savedView=selectedDate?null:(mapViews[selectedFilter]||lastMapView);
+  const savedView=selectedDate?null:(mapViews[selectedFilter]||null);
   const initialView=savedView ? [savedView.lat,savedView.lng] : (userGeo?[userGeo.lat,userGeo.lng]:[MAP_CENTER.lat,MAP_CENTER.lng]);
   const initialZoom=savedView ? savedView.zoom : (selectedDate?12:(worldMode?2:9));
   map=L.map('map').setView(initialView,initialZoom);
