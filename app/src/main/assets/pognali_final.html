@@ -409,6 +409,7 @@ function isVisibleEvent(e){return eventState(e)!=='FINISHED'}
 function distanceKm(a,b,c,d){const R=6371,rad=Math.PI/180;const dLat=(c-a)*rad,dLng=(d-b)*rad;const x=Math.sin(dLat/2)**2+Math.cos(a*rad)*Math.cos(c*rad)*Math.sin(dLng/2)**2;return 2*R*Math.asin(Math.sqrt(x));}
 function filtered(filter=selectedFilter){
   const minute=Math.floor(Date.now()/60000);
+  if(minute!==filteredCacheMinute){filteredCache.clear();filteredCacheMinute=minute}
   const lat=userGeo&&Number.isFinite(+userGeo.lat)?Number(userGeo.lat).toFixed(4):'';
   const lng=userGeo&&Number.isFinite(+userGeo.lng)?Number(userGeo.lng).toFixed(4):'';
   const key=[eventsRevision,minute,filter,selectedDate||'',lat,lng].join('|');
