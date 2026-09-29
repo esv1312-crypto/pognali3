@@ -384,9 +384,21 @@ function age(b){if(!b)return '';let d=new Date(b),n=new Date();let a=n.getFullYe
 function fmt(e){return new Date(e.date+'T12:00:00').toLocaleDateString(LOCALES[getLang()]||'ru-RU',{day:'numeric',month:'long'})+' · '+e.time}
 function localDateKey(d=new Date()){return [d.getFullYear(),String(d.getMonth()+1).padStart(2,'0'),String(d.getDate()).padStart(2,'0')].join('-')}
 function eventStart(e){const m=String(e.time||'00:00').match(/^(\d{1,2}):(\d{2})$/);if(!m)return new Date(e.date+'T00:00:00');return new Date(e.date+'T'+String(m[1]).padStart(2,'0')+':'+m[2]+':00')}
+const eventStateCache=new Map();
+let eventStateCacheMinute=-1;
 function eventState(e){
   if(e.status==='FINISHED')return 'FINISHED';
-  return eventStart(e)<=new Date()?'STARTED':'ACTIVE';
+  const now=Date.now(),minute=Math.floor(now/60000);
+  if(minute!==eventStateCacheMinute){
+    eventStateCache.clear();
+    eventStateCacheMinute=minute;
+  }
+  const id=Number(e.id);
+  const cached=eventStateCache.get(id);
+  if(cached&&cached.date===e.date&&cached.time===e.time)return cached.state;
+  const state=eventStart(e)<=new Date(now)?'STARTED':'ACTIVE';
+  if(Number.isFinite(id))eventStateCache.set(id,{date:e.date,time:e.time,state});
+  return state;
 }
 function isVisibleEvent(e){return eventState(e)!=='FINISHED'}
 function distanceKm(a,b,c,d){const R=6371,rad=Math.PI/180;const dLat=(c-a)*rad,dLng=(d-b)*rad;const x=Math.sin(dLat/2)**2+Math.cos(a*rad)*Math.cos(c*rad)*Math.sin(dLng/2)**2;return 2*R*Math.asin(Math.sqrt(x));}
@@ -851,8 +863,12 @@ function parseCustomAge(v){const m=String(v||'').match(/^(\d{1,2})[–-](\d{1,2}
 function toggleCustomAge(value,selected=''){const box=document.getElementById('ageCustom');if(!box)return;const open=value==='Свой диапазон';box.classList.toggle('open',open);if(open){const m=String(selected||'').match(/^(\d{1,2})[–-](\d{1,2})$/);if(m){document.getElementById('ageMin').value=m[1];document.getElementById('ageMax').value=m[2]}}}
 function renderCreate(editId=null){destroyPickerMap();let e=editId?db.events.find(x=>x.id===editId):null;document.getElementById('content').innerHTML=`<div class="section"><h2>${e?'Редактировать событие':'Создать событие'}</h2><div class="notice">Место можно указать обычным адресом/названием или просто поставить точку на карте. Координаты вручную вводить не нужно.</div><form onsubmit="submitEvent(event,${editId||'null'})"><div class="field"><label>Что делаем?</label><input id="etitle" required value="${esc(e?.title||'')}" placeholder="Например: футбол, прогулка, кино" oninput="suggestCategory()"></div><div class="field"><label>Категория</label><input type="hidden" id="ecat" value="${esc(e?.cat||'Общение')}"><div class="category-grid">${categoryOptions().map(([name,icon])=>`<button type="button" class="cat-choice ${name===(e?.cat||'Общение')?'active':''}" data-cat="${esc(name)}" onclick="selectCategory('${esc(name)}')"><span class="cat-emoji">${icon}</span><span class="cat-name">${esc(name)}</span></button>`).join('')}</div><div class="category-current">Выбрано: <b id="categoryCurrent">${esc(e?.cat||'Общение')}</b></div></div><div class="field"><label>Иконка события</label><div class="emoji-picker"><div class="row"><input id="eemoji" name="eventEmoji" autocomplete="off" inputmode="text" value="${esc(e?.emoji||'')}" maxlength="8" placeholder="😊" aria-label="Эмодзи события" style="font-size:28px;width:72px;text-align:center" oninput="sanitizeEmojiInput(this)"></div><div class="emoji-hint">Можно выбрать любой эмодзи с клавиатуры телефона. Если оставить пустым — приложение подберёт автоматически.</div></div></div><div class="row"><div class="field" style="flex:1"><label>Дата</label><input id="edate" type="date" required min="${localDateKey()}" value="${e?.date||''}"></div><div class="field" style="flex:1"><label>Время</label><input id="etime" type="time" required value="${e?.time||''}"></div></div><div class="field"><label>Место</label><div class="location-row"><input id="eplace" required value="${esc(e?.place||'')}" placeholder="Кафе, улица, парк, адрес" style="flex:1" oninput="invalidatePlaceText()"><button type="button" class="secondary" onclick="findPlace()">Найти</button></div><div class="meta" style="margin-top:6px">Можно написать, например, «Гагаринский парк» или «ул. Пушкина, 12», либо сразу поставить точку ниже.</div><div id="pickerMap" class="picker-map"></div><div class="actions" style="margin-top:8px"><button type="button" class="secondary" onclick="centerPickerOnMyLocation()">⌖ Моё местоположение</button><span id="pickedCoords" class="meta" style="align-self:center">${e?'Точка выбрана':'Поставь точку на карте'}</span></div></div><div class="field"><label>Сколько человек?</label><input id="elimit" type="number" min="1" max="100" value="${e?.limit||6}"></div><div class="field"><label>Возраст участников</label><select id="eage" class="age-select" onchange="toggleCustomAge(this.value, '${esc(e?.ageRange||'')}')">${ageOptions(e?.ageRange||'Любой возраст')}</select><div id="ageCustom" class="age-custom ${/^\d{1,2}–\d{1,2}$/.test(e?.ageRange||'')?'open':''}"><input id="ageMin" type="number" min="1" max="100" placeholder="От" value="${/^\d{1,2}–\d{1,2}$/.test(e?.ageRange||'')?(e.ageRange||'').split('–')[0]:''}"><input id="ageMax" type="number" min="1" max="100" placeholder="До" value="${/^\d{1,2}–\d{1,2}$/.test(e?.ageRange||'')?(e.ageRange||'').split('–')[1]:''}"><div class="meta">Укажи диапазон от 1 до 100 лет.</div></div><div class="meta" style="margin-top:6px">Не ограничивать возраст или указать подходящий диапазон.</div></div><div class="field"><label>Описание</label><textarea id="edesc" placeholder="Что важно знать участникам">${esc(e?.desc||'')}</textarea></div><div class="field"><label>Актуальное сообщение участникам <span style="color:#999;font-weight:400">(необязательно)</span></label><textarea id="eliveNote" maxlength="240" placeholder="Например: нужно ещё 2 человека, мы уже на месте">${esc(e?.liveNote||'')}</textarea><div class="meta" style="margin-top:6px">Это сообщение видно всем, кто откроет событие. Его можно менять во время события.</div></div><input type="hidden" id="elat" value="${e?.lat||''}"><input type="hidden" id="elng" value="${e?.lng||''}"><input type="hidden" id="ecountry" value="${esc(e?.country||'')}"><input type="hidden" id="ecity" value="${esc(e?.city||'')}"><button class="primary full">${e?'СОХРАНИТЬ':'ПОГНАЛИ'}</button>${e?`<button type="button" class="danger full" style="margin-top:8px" onclick="deleteEvent(${e.id})">Удалить событие</button>`:''}</form></div>`;initPickerMap(e?.lat||(userGeo?.lat||MAP_CENTER.lat),e?.lng||(userGeo?.lng||MAP_CENTER.lng),!!e);}
 let pickerMap=null,pickerMarker=null,pickerLookupToken=0;
+const eventIconCache=new Map();
 function eventIcon(cat,title='',custom=''){
   if(custom) return custom;
+  const cacheKey=String(cat||'')+'|'+String(title||'');
+  const cached=eventIconCache.get(cacheKey);
+  if(cached)return cached;
   const t=String(title||'').toLowerCase();
   // Сначала определяем конкретное занятие по названию события,
   // и только если не нашли — используем общую иконку категории.
@@ -881,8 +897,10 @@ function eventIcon(cat,title='',custom=''){
     [/прогул|парк|набережн|гулять/,'🚶'],
     [/знаком|общен|поболт|встрет/,'👋']
   ];
-  for(const [re,icon] of specific) if(re.test(t)) return icon;
-  return ({'Спорт':'🏅','Прогулка':'🚶','Кино':'🎬','Кафе/бар':'🍻','Кафе/еда':'☕','Путешествие':'🧳','Вечеринка':'🥳','Учёба':'📚','Общение':'👋','Игры':'🎮','Настольные игры':'🎲','Мафия':'🕵️','Музыка/концерт':'🎵','Природа/поход':'🥾','Творчество':'🎨','Фото':'📸','Авто':'🚗','Шопинг':'🛍️','Знакомства':'💬','Другое':'✨'})[cat]||'📍';
+  for(const [re,icon] of specific) if(re.test(t)){eventIconCache.set(cacheKey,icon);return icon;}
+  const icon=({'Спорт':'🏅','Прогулка':'🚶','Кино':'🎬','Кафе/бар':'🍻','Кафе/еда':'☕','Путешествие':'🧳','Вечеринка':'🥳','Учёба':'📚','Общение':'👋','Игры':'🎮','Настольные игры':'🎲','Мафия':'🕵️','Музыка/концерт':'🎵','Природа/поход':'🥾','Творчество':'🎨','Фото':'📸','Авто':'🚗','Шопинг':'🛍️','Знакомства':'💬','Другое':'✨'})[cat]||'📍';
+  eventIconCache.set(cacheKey,icon);
+  return icon;
 }
 function initPickerMap(lat,lng,hasPoint){
   destroyPickerMap();
