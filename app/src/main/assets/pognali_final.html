@@ -385,10 +385,14 @@ const visibleEventsCache=new Map();
 const visibleEventsByDateCache=new Map();
 const visibleAllEventsCache=new Map();
 const visibleMyEventsCache=new Map();
+// Geographic index used by the map renderer to avoid scanning every filtered
+// event on every pan/zoom. The index is rebuilt only when the filtered event
+// set can actually change (data/minute/filter/date/location changes).
+const visibleGeoIndexCache=new Map();
 let filterCacheRevision=-1;
 let filterCacheMinute=-1;
 function clearEventFilterCaches(){
-  filteredCache.clear();visibleEventsCache.clear();visibleEventsByDateCache.clear();visibleAllEventsCache.clear();visibleMyEventsCache.clear();
+  filteredCache.clear();visibleEventsCache.clear();visibleEventsByDateCache.clear();visibleAllEventsCache.clear();visibleMyEventsCache.clear();visibleGeoIndexCache.clear();
   filterCacheRevision=eventsRevision;
   filterCacheMinute=Math.floor(Date.now()/60000);
 }
@@ -749,16 +753,8 @@ function initMap(){
   let eventMarkerById=new Map();
   let clusterMarkers=[];
   let clusterMarkerByKey=new Map();
-  let lastClusterMode=null;
-  const clearClusterMarkers=()=>{
-    clusterMarkers.forEach(m=>{try{m.remove()}catch(e){}});
-    clusterMarkers=[];
-    clusterMarkerByKey.clear();
-  };
-  const clearEventMarkers=()=>{
-    eventMarkerById.forEach(m=>{try{m.remove()}catch(e){}});
-    eventMarkerById.clear();
-  };
+    // Marker collections are reused incrementally below; these old full-clear
+  // helpers are intentionally not kept because they would defeat that reuse.
   const renderMapMarkers=()=>{
     const center=map.getCenter(),zoom=map.getZoom();
     const markerRenderKey=[eventsRevision,Math.floor(Date.now()/60000),selectedFilter,selectedDate||'',zoom,center.lat,center.lng].join('|');
@@ -778,7 +774,6 @@ function initMap(){
     const geoWorld=screenCamera.w;
     const geoLonSpan=360*(viewportWidth+geoMarginPx*2)/geoWorld;
     const geoCenterLng=Number(center.lng);
-    const geoCenterLat=Number(center.lat);
     let geoMinLat=-90,geoMaxLat=90,geoMinLng=-180,geoMaxLng=180,geoWrap=false,geoFilterLng=geoLonSpan<360;
     if(geoFilterLng){
       const topLeft=map._fromScreen(0,-geoMarginPx);
@@ -795,7 +790,54 @@ function initMap(){
       }
     }
 
-    es.forEach(e=>{
+    let candidates=es;
+    if(geoFilterLng){
+      const indexKey=[eventsRevision,Math.floor(Date.now()/60000),selectedFilter,selectedDate||'',
+        userGeo&&Number.isFinite(+userGeo.lat)?Number(userGeo.lat).toFixed(4):'',
+        userGeo&&Number.isFinite(+userGeo.lng)?Number(userGeo.lng).toFixed(4):''].join('|');
+      let index=visibleGeoIndexCache.get(indexKey);
+      if(!index){
+        const cellDeg=4;
+        index=new Map();
+        for(let i=0;i<es.length;i++){
+          const e=es[i],lat=Number(e.lat),lng=Number(e.lng);
+          if(!Number.isFinite(lat)||!Number.isFinite(lng))continue;
+          const gx=Math.floor((lng+180)/cellDeg);
+          const gy=Math.floor((lat+90)/cellDeg);
+          const key=gx+':'+gy;
+          let bucket=index.get(key);
+          if(!bucket)index.set(key,bucket=[e]);else bucket.push(e);
+        }
+        visibleGeoIndexCache.set(indexKey,index);
+      }
+      const cellDeg=4;
+      const gy0=Math.max(0,Math.floor((geoMinLat+90)/cellDeg));
+      const gy1=Math.min(Math.floor(180/cellDeg)-1,Math.floor((geoMaxLat+90)/cellDeg));
+      const buckets=[];
+      const gx0=Math.floor((geoMinLng+180)/cellDeg);
+      const gx1=Math.floor((geoMaxLng+180)/cellDeg);
+      const maxGX=Math.floor(360/cellDeg)-1;
+      const collect=(from,to)=>{
+        for(let gy=gy0;gy<=gy1;gy++){
+          for(let gx=from;gx<=to;gx++){
+            const b=index.get(gx+':'+gy);
+            if(b)buckets.push(b);
+          }
+        }
+      };
+      if(geoWrap){
+        collect(Math.max(0,gx0),maxGX);
+        collect(0,Math.min(maxGX,gx1));
+      }else{
+        collect(Math.max(0,gx0),Math.min(maxGX,gx1));
+      }
+      if(buckets.length){
+        candidates=[];
+        for(const b of buckets)for(const e of b)candidates.push(e);
+      }else candidates=[];
+    }
+
+    candidates.forEach(e=>{
       const lat=Number(e.lat),lng=Number(e.lng);
       if(!Number.isFinite(lat)||!Number.isFinite(lng))return;
       if(lat<geoMinLat||lat>geoMaxLat)return;
