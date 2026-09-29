@@ -723,15 +723,20 @@ function initMap(){
       if(!m){
         const icon=L.divIcon({className:'',html,iconSize:[42,42],iconAnchor:[21,21],popupAnchor:[0,-22]});
         m=L.marker([lat,lng],{icon}).addTo(map);
+        m._pognaliLat=lat;m._pognaliLng=lng;
         eventMarkerById.set(id,m);
       }else{
-        m.setLatLng([lat,lng]);
+        if(m._pognaliLat!==lat||m._pognaliLng!==lng){
+          m.setLatLng([lat,lng]);
+          m._pognaliLat=lat;m._pognaliLng=lng;
+        }
         if(m._icon&&m._icon.innerHTML!==html){
           const icon=L.divIcon({className:'',html,iconSize:[42,42],iconAnchor:[21,21],popupAnchor:[0,-22]});
           m.options.icon=icon;m._icon.innerHTML=html;
         }
       }
-      m.bindPopup('<div class="eventmini"><h3>'+esc(e.title)+'</h3><div>'+esc(fmt(e))+'</div><div>'+esc(displayPlace(e))+'</div><div>'+e.people.length+'/'+e.limit+' '+T('Participants').toLowerCase()+'</div><button onclick="openEvent('+e.id+')">'+T('Open event')+'</button></div>');
+      const popupHtml='<div class="eventmini"><h3>'+esc(e.title)+'</h3><div>'+esc(fmt(e))+'</div><div>'+esc(displayPlace(e))+'</div><div>'+e.people.length+'/'+e.limit+' '+T('Participants').toLowerCase()+'</div><button onclick="openEvent('+e.id+')">'+T('Open event')+'</button></div>';
+      if(m._pognaliPopupHtml!==popupHtml){m.bindPopup(popupHtml);m._pognaliPopupHtml=popupHtml;}
     });
 
     clusterMarkers=clusterMarkers.filter(m=>{
