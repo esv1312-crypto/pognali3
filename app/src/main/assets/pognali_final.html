@@ -397,6 +397,7 @@ function seedDemoEvents(){
     created++;
   }
   save();
+  try{const mv=JSON.parse(localStorage.getItem(KEY+'_map_views')||'{}');mv['Мир']={lat:56.8389,lng:60.6057,zoom:11};mv['Рядом']={lat:56.8389,lng:60.6057,zoom:11};localStorage.setItem(KEY+'_map_views',JSON.stringify(mv))}catch(e){}
   localStorage.setItem('pognali_seed_v4_yekaterinburg_done','1');
 }
 seedDemoEvents();
