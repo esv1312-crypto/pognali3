@@ -519,7 +519,7 @@ function setFilter(x){
   }
   selectedDate=null;calendarOpen=false;selectedFilter=x;lastMapView=mapViews[x]||null;
   if(eventView==='list')renderList();else renderEvents();
-  if(x==='Рядом' && !userGeo) setTimeout(()=>requestUserLocation(true),80);
+  if(x==='Рядом' && (!userGeo || !Number.isFinite(+userGeo.lat) || !Number.isFinite(+userGeo.lng))) setTimeout(()=>requestUserLocation(true),80);
 }
 function toggleCalendar(){calendarOpen=!calendarOpen;if(calendarOpen&&selectedDate){const d=new Date(selectedDate+'T12:00:00');calendarMonth=new Date(d.getFullYear(),d.getMonth(),1)}if(eventView==='list')renderList();else renderEvents()}
 function moveCalendar(delta){calendarMonth=new Date(calendarMonth.getFullYear(),calendarMonth.getMonth()+delta,1);if(eventView==='list')renderList();else renderEvents()}
