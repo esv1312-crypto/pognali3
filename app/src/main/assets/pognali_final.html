@@ -1302,8 +1302,12 @@ Object.keys(PROFILE_MESSAGE_TRANSLATIONS).forEach(l=>Object.assign(UI_TRANSLATIO
 function navLabel(k){return T(k)}
 function applyStaticLanguage(){
  const nav=document.querySelectorAll('.bottomnav .nav');
- if(nav.length===4){nav[0].querySelector('span').textContent=translateText('События');nav[1].querySelector('span').textContent=translateText('Создать');nav[2].querySelector('span').textContent=translateText('Мои');nav[3].querySelector('span').textContent=translateText('Профиль');}
- const top=document.querySelector('.lang-btn,.language-btn'); if(top)top.textContent='🌐 '+getLang().toUpperCase()+' ▾';
+ if(nav.length===4){
+   const labels=['События','Создать','Мои','Профиль'];
+   nav.forEach((el,i)=>{const span=el.querySelector('span');const next=translateText(labels[i]);if(span&&span.textContent!==next)span.textContent=next;});
+ }
+ const top=document.querySelector('.lang-btn,.language-btn');
+ if(top){const next='🌐 '+getLang().toUpperCase()+' ▾';if(top.textContent!==next)top.textContent=next;}
 }
 
 const __pognaliSourceText=new WeakMap();
