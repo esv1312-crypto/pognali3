@@ -675,11 +675,12 @@ function initMap(){
     const margin=120;
     const cells=new Map();
     const visibleEventIds=new Set();
+    const screenCamera=map._screenCamera();
 
     es.forEach(e=>{
       const lat=Number(e.lat),lng=Number(e.lng);
       if(!Number.isFinite(lat)||!Number.isFinite(lng))return;
-      const p=map._screen(lat,lng);
+      const p=map._screenFromCamera(lat,lng,screenCamera);
       if(p.x<-margin||p.x>map._el.clientWidth+margin||p.y<-margin||p.y>map._el.clientHeight+margin)return;
       const cx=Math.floor(p.x/cellPx),cy=Math.floor(p.y/cellPx),key=cx+':'+cy;
       if(!cells.has(key))cells.set(key,{lat:0,lng:0,events:[]});
