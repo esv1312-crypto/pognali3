@@ -37,6 +37,9 @@ jobs:
         with:
           gradle-version: '9.7.1'
 
+      - name: Clean build outputs
+        run: gradle clean --stacktrace
+
       - name: Build debug APK
         run: gradle :app:assembleDebug --stacktrace
 
