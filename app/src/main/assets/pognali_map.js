@@ -81,7 +81,7 @@ const beginPinch=()=>{
   const ps=[...this._pointers.values()];if(ps.length<2)return;
   const a=ps[0],b=ps[1],mid=midpoint(a,b),d=Math.max(1,distance(a,b));
   const r=el.getBoundingClientRect();
-  this._gesture='pinch';this._pan=null;this._pinch={distance:d,mid,zoom:this._zoom,target:this._fromScreen(mid.x-r.left,mid.y-r.top)};this._gestureMoved=true;
+  this._gesture='pinch';this._pan=null;this._pinch={distance:d,mid,zoom:this._zoom,target:this._fromScreen(mid.x-r.left,mid.y-r.top)};this._gestureMoved=true;this.fire('usergesturestart');
 };
 el.addEventListener('pointerdown',e=>{
   if(e.target.closest('.pm-controls,.pm-marker,.pm-popup'))return;
@@ -142,7 +142,7 @@ el.addEventListener('pointercancel',e=>{
   if(this._pointers.size===1){
     const p=[...this._pointers.values()][0];beginPan(p);return;
   }
-  if(this._pointers.size===0){this._gesture='idle';this._pan=null;this._pinch=null;this._clearGestureTransform();this._render();this.fire('moveend')}
+  if(this._pointers.size===0){const wasGesture=this._gesture!=='idle';this._gesture='idle';this._pan=null;this._pinch=null;this._clearGestureTransform();this._render();if(wasGesture)this.fire('moveend')}
 });
 el.addEventListener('wheel',e=>{
   e.preventDefault();
