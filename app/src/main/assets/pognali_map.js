@@ -65,7 +65,9 @@ MapLite.prototype._tiles=function(){
       img.onerror=()=>{if(layer)layer.fire('tileerror',{tile:img,x:xx,y});};
       this._tileCache.set(key,img);this._tilesEl.appendChild(img);
     }
-    img.style.left=(this._el.clientWidth/2+x*TILE-c.x)+'px';img.style.top=(this._el.clientHeight/2+y*TILE-c.y)+'px';
+    const left=(this._el.clientWidth/2+x*TILE-c.x)+'px',top=(this._el.clientHeight/2+y*TILE-c.y)+'px';
+    if(img.style.left!==left)img.style.left=left;
+    if(img.style.top!==top)img.style.top=top;
     if(img.parentNode!==this._tilesEl)this._tilesEl.appendChild(img);
   }
   this._tileCache.forEach((img,key)=>{if(!needed.has(key)){img.remove();this._tileCache.delete(key)}});
