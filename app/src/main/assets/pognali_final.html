@@ -744,13 +744,15 @@ function initMap(){
       const lat=Number(e.lat),lng=Number(e.lng);
       let m=eventMarkerById.get(id);
       const isLive=eventState(e)==='STARTED',liveClass=isLive?' live':'';
+      const eventSignature=[e.title,e.cat,e.emoji,e.date,e.time,e.place,e.desc,e.ageRange,e.people.length,e.limit,isLive?'1':'0'].map(v=>String(v??'')).join('|');
       const html='<div class="event-marker-wrap'+liveClass+'"><div class="event-pin" title="'+esc(e.title)+'"><span>'+eventIcon(e.cat,e.title,e.emoji)+'</span></div>'+(eventLabel(e.title,e.cat)?'<div class="event-label">'+esc(eventLabel(e.title,e.cat))+'</div>':'')+'</div>';
       if(!m){
         const icon=L.divIcon({className:'',html,iconSize:[42,42],iconAnchor:[21,21],popupAnchor:[0,-22]});
         m=L.marker([lat,lng],{icon}).addTo(map);
         m._pognaliLat=lat;m._pognaliLng=lng;
+        m._pognaliEventSignature=eventSignature;
         eventMarkerById.set(id,m);
-      }else{
+      }else if(m._pognaliEventSignature!==eventSignature){
         if(m._pognaliLat!==lat||m._pognaliLng!==lng){
           m.setLatLng([lat,lng]);
           m._pognaliLat=lat;m._pognaliLng=lng;
@@ -759,6 +761,7 @@ function initMap(){
           const icon=L.divIcon({className:'',html,iconSize:[42,42],iconAnchor:[21,21],popupAnchor:[0,-22]});
           m.options.icon=icon;m._icon.innerHTML=html;
         }
+        m._pognaliEventSignature=eventSignature;
       }
       const popupHtml='<div class="eventmini"><h3>'+esc(e.title)+'</h3><div>'+esc(fmt(e))+'</div><div>'+esc(displayPlace(e))+'</div><div>'+e.people.length+'/'+e.limit+' '+T('Participants').toLowerCase()+'</div><button onclick="openEvent('+e.id+')">'+T('Open event')+'</button></div>';
       if(m._pognaliPopupHtml!==popupHtml){m.bindPopup(popupHtml);m._pognaliPopupHtml=popupHtml;}
