@@ -756,10 +756,38 @@ function initMap(){
     const cells=new Map();
     const screenCamera=map._screenCamera();
     const viewportWidth=map._el.clientWidth||360,viewportHeight=map._el.clientHeight||600;
+    // Cheap geographic prefilter before the more expensive screen projection.
+    // At very low zoom the viewport can cover the whole world, so skip the
+    // longitude filter instead of making antimeridian handling ambiguous.
+    const geoMarginPx=margin;
+    const geoWorld=screenCamera.w;
+    const geoLonSpan=360*(viewportWidth+geoMarginPx*2)/geoWorld;
+    const geoCenterLng=Number(center.lng);
+    const geoCenterLat=Number(center.lat);
+    let geoMinLat=-90,geoMaxLat=90,geoMinLng=-180,geoMaxLng=180,geoWrap=false,geoFilterLng=geoLonSpan<360;
+    if(geoFilterLng){
+      const topLeft=map._fromScreen(0,-geoMarginPx);
+      const bottomRight=map._fromScreen(viewportWidth,viewportHeight+geoMarginPx);
+      geoMinLat=Math.max(-90,Math.min(topLeft.lat,bottomRight.lat));
+      geoMaxLat=Math.min(90,Math.max(topLeft.lat,bottomRight.lat));
+      const halfLon=geoLonSpan/2;
+      geoMinLng=geoCenterLng-halfLon;
+      geoMaxLng=geoCenterLng+halfLon;
+      geoWrap=geoMinLng<-180||geoMaxLng>180;
+      if(geoWrap){
+        geoMinLng=((geoMinLng+180)%360+360)%360-180;
+        geoMaxLng=((geoMaxLng+180)%360+360)%360-180;
+      }
+    }
 
     es.forEach(e=>{
       const lat=Number(e.lat),lng=Number(e.lng);
       if(!Number.isFinite(lat)||!Number.isFinite(lng))return;
+      if(lat<geoMinLat||lat>geoMaxLat)return;
+      if(geoFilterLng){
+        const lngInBounds=geoWrap?(lng>=geoMinLng||lng<=geoMaxLng):(lng>=geoMinLng&&lng<=geoMaxLng);
+        if(!lngInBounds)return;
+      }
       const p=map._screenFromCamera(lat,lng,screenCamera);
       if(p.x<-margin||p.x>viewportWidth+margin||p.y<-margin||p.y>viewportHeight+margin)return;
       const cx=Math.floor(p.x/cellPx),cy=Math.floor(p.y/cellPx),key=cx+':'+cy;
