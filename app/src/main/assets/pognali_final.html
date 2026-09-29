@@ -409,49 +409,30 @@ function eventState(e){
 }
 function isVisibleEvent(e){return eventState(e)!=='FINISHED'}
 function distanceKm(a,b,c,d){const R=6371,rad=Math.PI/180;const dLat=(c-a)*rad,dLng=(d-b)*rad;const x=Math.sin(dLat/2)**2+Math.cos(a*rad)*Math.cos(c*rad)*Math.sin(dLng/2)**2;return 2*R*Math.asin(Math.sqrt(x));}
+function visibleEvents(date=''){
+  const minute=Math.floor(Date.now()/60000);
+  const key=[eventsRevision,minute,date].join('|');
+  const cached=visibleEventsCache.get(key);
+  if(cached)return cached;
+  let es=db.events.filter(isVisibleEvent);
+  if(date)es=es.filter(e=>e.date===date);
+  visibleEventsCache.set(key,es);
+  return es;
+}
 function filtered(filter=selectedFilter){
   const minute=Math.floor(Date.now()/60000);
-  if(minute!==filteredCacheMinute){filteredCache.clear();filteredCacheMinute=minute}
   const lat=userGeo&&Number.isFinite(+userGeo.lat)?Number(userGeo.lat).toFixed(4):'';
   const lng=userGeo&&Number.isFinite(+userGeo.lng)?Number(userGeo.lng).toFixed(4):'';
-  const key=[eventsRevision,minute,filter,selectedDate||'',lat,lng].join('|');
+  const date=selectedDate||'';
+  const key=[eventsRevision,minute,filter,date,lat,lng].join('|');
   const cached=filteredCache.get(key);
   if(cached)return cached;
-  const visibleKey=eventsRevision+'|'+minute;
-  let es=visibleEventsCache.get(visibleKey);
-  if(!es){
-    es=db.events.filter(isVisibleEvent);
-    visibleEventsCache.set(visibleKey,es);
-  }
-  if(selectedDate){
-    const dateKey=visibleKey+'|'+selectedDate;
-    let dateEvents=visibleEventsByDateCache.get(dateKey);
-    if(!dateEvents){
-      dateEvents=es.filter(e=>e.date===selectedDate);
-      visibleEventsByDateCache.set(dateKey,dateEvents);
-    }
-    es=dateEvents;
-  }
+  let es=visibleEvents(date);
   if(filter==='Рядом'){
     if(!userGeo){filteredCache.set(key,[]);return []}
-    const lat0=Number(userGeo.lat),lng0=Number(userGeo.lng);
-    const latDelta=NEARBY_RADIUS_KM/111.32;
-    const cosLat=Math.max(0.1,Math.cos(lat0*Math.PI/180));
-    const lngDelta=NEARBY_RADIUS_KM/(111.32*cosLat);
-    es=es.filter(e=>{
-      const lat=Number(e.lat),lng=Number(e.lng);
-      if(!Number.isFinite(lat)||!Number.isFinite(lng))return false;
-      if(Math.abs(lat-lat0)>latDelta||Math.abs(lng-lng0)>lngDelta)return false;
-      return distanceKm(lat0,lng0,lat,lng)<=NEARBY_RADIUS_KM;
-    });
+    es=es.filter(e=>Number.isFinite(+e.lat)&&Number.isFinite(+e.lng)&&distanceKm(userGeo.lat,userGeo.lng,+e.lat,+e.lng)<=NEARBY_RADIUS_KM);
   } else if(filter==='Мои'){
-    const myKey=visibleKey;
-    let myEvents=visibleMyEventsCache.get(myKey);
-    if(!myEvents){
-      myEvents=es.filter(e=>e.owner===2||e.people.includes(2));
-      visibleMyEventsCache.set(myKey,myEvents);
-    }
-    es=myEvents;
+    es=es.filter(e=>e.owner===2||e.people.includes(2));
   }
   filteredCache.set(key,es);
   return es;
