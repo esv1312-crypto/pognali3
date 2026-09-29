@@ -381,7 +381,9 @@ function mapRadiusKm(zoom){for(const x of MAP_RADIUS_LEVELS)if(zoom>=x.minZoom)r
 function mapScopeLabel(){if(selectedFilter==='Мир')return '🌍 Весь мир';if(selectedFilter==='Рядом')return userGeo?`📍 Рядом · ${NEARBY_RADIUS_KM} км`:'📍 Включи геолокацию';return '🙋 Мои события'}
 let eventsRevision=0;
 const filteredCache=new Map();
-function save(){eventsRevision++;filteredCache.clear();localStorage.setItem(KEY,JSON.stringify(db))}
+const visibleEventsCache=new Map();
+function clearEventFilterCaches(){filteredCache.clear();visibleEventsCache.clear()}
+function save(){eventsRevision++;clearEventFilterCaches();localStorage.setItem(KEY,JSON.stringify(db))}
 
 function age(b){if(!b)return '';let d=new Date(b),n=new Date();let a=n.getFullYear()-d.getFullYear();if(n<new Date(n.getFullYear(),d.getMonth(),d.getDate()))a--;return a}
 function fmt(e){return new Date(e.date+'T12:00:00').toLocaleDateString(LOCALES[getLang()]||'ru-RU',{day:'numeric',month:'long'})+' · '+e.time}
@@ -412,7 +414,12 @@ function filtered(filter=selectedFilter){
   const key=[eventsRevision,minute,filter,selectedDate||'',lat,lng].join('|');
   const cached=filteredCache.get(key);
   if(cached)return cached;
-  let es=db.events.filter(isVisibleEvent);
+  const visibleKey=eventsRevision+'|'+minute;
+  let es=visibleEventsCache.get(visibleKey);
+  if(!es){
+    es=db.events.filter(isVisibleEvent);
+    visibleEventsCache.set(visibleKey,es);
+  }
   if(selectedDate) es=es.filter(e=>e.date===selectedDate);
   if(filter==='Рядом'){
     if(!userGeo){filteredCache.set(key,[]);return []}
