@@ -372,7 +372,7 @@ function seedDemoEvents(){
 seedDemoEvents();
 db.events.forEach(e=>{if(!e.country&&e.city==='Симферополь')e.country='Россия';if(!e.city&&e.place) e.city=db.profile?.city||'';});
 save();
-let currentTab='events', map, markers=[]; let selectedFilter='Мир', eventView='map'; let selectedDate=null, calendarOpen=false, calendarMonth=new Date(new Date().getFullYear(),new Date().getMonth(),1); let lastMapView=null; let mapViews={Мир:null,Рядом:null,Мои:null}; try{mapViews={...mapViews,...(JSON.parse(localStorage.getItem(KEY+'_map_views')||'{}')||{})}}catch(e){} let userLocationMarker=null; let userLocationRequested=false; let userGeo=null; try{userGeo=JSON.parse(localStorage.getItem(KEY+'_user_geo')||'null')}catch(e){userGeo=null}
+let currentTab='events', map, markers=[]; let selectedFilter='Мир', eventView='map'; let selectedDate=null, calendarOpen=false, calendarMonth=new Date(new Date().getFullYear(),new Date().getMonth(),1); let lastMapView=null; let mapViews={Мир:null,Рядом:null,Мои:null}; try{mapViews={...mapViews,...(JSON.parse(localStorage.getItem(KEY+'_map_views')||'{}')||{})}}catch(e){} let userLocationMarker=null; let userLocationRequested=false; let userGeo=null; let userLocationWaiters=[]; try{userGeo=JSON.parse(localStorage.getItem(KEY+'_user_geo')||'null');if(userGeo&&(!Number.isFinite(+userGeo.lat)||!Number.isFinite(+userGeo.lng)))userGeo=null;else if(userGeo)userGeo={lat:+userGeo.lat,lng:+userGeo.lng}}catch(e){userGeo=null}
 const NEARBY_RADIUS_KM=200; const MAP_RADIUS_LEVELS=[{minZoom:13,km:25},{minZoom:11,km:50},{minZoom:9,km:150},{minZoom:7,km:600}];
 function mapRadiusKm(zoom){for(const x of MAP_RADIUS_LEVELS)if(zoom>=x.minZoom)return x.km;return null}
 function mapScopeLabel(){if(selectedFilter==='Мир')return '🌍 Весь мир';if(selectedFilter==='Рядом')return userGeo?`📍 Рядом · ${NEARBY_RADIUS_KM} км`:'📍 Включи геолокацию';return '🙋 Мои события'}
@@ -445,10 +445,22 @@ function drawUserLocation(lat,lng,center){
   }
 }
 function requestUserLocation(force=false,onReady=null){
-  if(userGeo && Number.isFinite(userGeo.lat) && Number.isFinite(userGeo.lng) && !force){
+  if(typeof onReady==='function' && userGeo && Number.isFinite(+userGeo.lat) && Number.isFinite(+userGeo.lng) && !force){
+    userGeo={lat:+userGeo.lat,lng:+userGeo.lng};
     if(map)drawUserLocation(userGeo.lat,userGeo.lng,false);
     if(pickerMap)drawPickerUserLocation(userGeo.lat,userGeo.lng);
-    if(typeof onReady==='function')onReady(userGeo);
+    onReady(userGeo);
+    const scope=document.getElementById('mapScope');
+    if(scope)scope.textContent=mapScopeLabel();
+    return;
+  }
+  if(typeof onReady==='function')userLocationWaiters.push(onReady);
+  if(userGeo && Number.isFinite(+userGeo.lat) && Number.isFinite(+userGeo.lng) && !force){
+    userGeo={lat:+userGeo.lat,lng:+userGeo.lng};
+    if(map)drawUserLocation(userGeo.lat,userGeo.lng,false);
+    if(pickerMap)drawPickerUserLocation(userGeo.lat,userGeo.lng);
+    const waiters=userLocationWaiters.splice(0);
+    waiters.forEach(cb=>{try{cb(userGeo)}catch(e){}});
     const scope=document.getElementById('mapScope');
     if(scope)scope.textContent=mapScopeLabel();
     return;
@@ -456,6 +468,7 @@ function requestUserLocation(force=false,onReady=null){
   if(userLocationRequested && !force) return;
   if(!navigator.geolocation){
     userLocationRequested=false;
+    userLocationWaiters.splice(0);
     const scope=document.getElementById('mapScope');
     if(scope)scope.textContent='📍 Включи геолокацию для событий рядом';
     return;
@@ -467,7 +480,8 @@ function requestUserLocation(force=false,onReady=null){
     try{localStorage.setItem(KEY+'_user_geo',JSON.stringify(userGeo))}catch(e){}
     if(map)drawUserLocation(userGeo.lat,userGeo.lng,false);
     if(pickerMap)drawPickerUserLocation(userGeo.lat,userGeo.lng);
-    if(typeof onReady==='function')onReady(userGeo);
+    const waiters=userLocationWaiters.splice(0);
+    waiters.forEach(cb=>{try{cb(userGeo)}catch(e){}});
     const scope=document.getElementById('mapScope');
     if(scope)scope.textContent=mapScopeLabel();
     if(selectedFilter==='Рядом'){
@@ -475,6 +489,7 @@ function requestUserLocation(force=false,onReady=null){
     }
   },()=>{
     userLocationRequested=false;
+    userLocationWaiters.splice(0);
     const scope=document.getElementById('mapScope');
     if(scope)scope.textContent='📍 Нажми ещё раз, чтобы определить местоположение';
     if(selectedFilter==='Рядом'){
@@ -698,7 +713,24 @@ function eventIcon(cat,title='',custom=''){
   for(const [re,icon] of specific) if(re.test(t)) return icon;
   return ({'Спорт':'🏅','Прогулка':'🚶','Кино':'🎬','Кафе/бар':'🍻','Кафе/еда':'☕','Путешествие':'🧳','Вечеринка':'🥳','Учёба':'📚','Общение':'👋','Игры':'🎮','Настольные игры':'🎲','Мафия':'🕵️','Музыка/концерт':'🎵','Природа/поход':'🥾','Творчество':'🎨','Фото':'📸','Авто':'🚗','Шопинг':'🛍️','Знакомства':'💬','Другое':'✨'})[cat]||'📍';
 }
-function initPickerMap(lat,lng,hasPoint){destroyPickerMap();const centerLat=Number.isFinite(+lat)?+lat:(userGeo?.lat||MAP_CENTER.lat),centerLng=Number.isFinite(+lng)?+lng:(userGeo?.lng||MAP_CENTER.lng);pickerMap=L.map('pickerMap').setView([centerLat,centerLng],userGeo&&!hasPoint?14:14);L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19,attribution:'© OpenStreetMap contributors'}).addTo(pickerMap);if(userGeo)drawPickerUserLocation(userGeo.lat,userGeo.lng);if(hasPoint)setPickerPoint(centerLat,centerLng,false);pickerMap.on('click',ev=>setPickerPoint(ev.latlng.lat,ev.latlng.lng,true));setTimeout(()=>pickerMap.invalidateSize(),100);if(!userGeo)requestUserLocation(false,geo=>{if(pickerMap){drawPickerUserLocation(geo.lat,geo.lng);if(!hasPoint)pickerMap.setView([geo.lat,geo.lng],14,{animate:false});}});}
+function initPickerMap(lat,lng,hasPoint){
+  destroyPickerMap();
+  const centerLat=Number.isFinite(+lat)?+lat:(userGeo?.lat||MAP_CENTER.lat);
+  const centerLng=Number.isFinite(+lng)?+lng:(userGeo?.lng||MAP_CENTER.lng);
+  pickerMap=L.map('pickerMap').setView([centerLat,centerLng],14);
+  L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19,attribution:'© OpenStreetMap contributors'}).addTo(pickerMap);
+  if(userGeo)drawPickerUserLocation(userGeo.lat,userGeo.lng);
+  if(hasPoint)setPickerPoint(centerLat,centerLng,false);
+  pickerMap.on('click',ev=>setPickerPoint(ev.latlng.lat,ev.latlng.lng,true));
+  setTimeout(()=>{if(pickerMap)pickerMap.invalidateSize()},100);
+  if(userGeo){
+    if(!hasPoint)pickerMap.setView([userGeo.lat,userGeo.lng],14,{animate:false});
+  }else{
+    requestUserLocation(false,geo=>{
+      if(pickerMap){drawPickerUserLocation(geo.lat,geo.lng);if(!hasPoint)pickerMap.setView([geo.lat,geo.lng],14,{animate:false});}
+    });
+  }
+}
 async function reverseGeocode(lat,lng){
   const fallback={place:'Точка на карте '+lat.toFixed(5)+', '+lng.toFixed(5),country:'',city:''};
   const parse=(data)=>{const a=data?.address||data?.properties||{};const country=a.country||a.country_name||'';const city=a.city||a.town||a.village||a.municipality||a.city_district||'';const venue=a.name||a.amenity||a.leisure||a.tourism||'';const road=a.road||a.street||a.pedestrian||a.path||a.cycleway||a.footway||'';const house=a.house_number?(', '+a.house_number):'';let detail=venue&&road&&venue!==road?venue+' · '+road+house:(venue||road)+house;let place=[country,city,detail].filter(Boolean).join(', ');if(!place&&data?.display_name)place=data.display_name.split(',').slice(0,4).join(', ').trim();return {place:place||fallback.place,country,city};};
