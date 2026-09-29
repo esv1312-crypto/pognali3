@@ -514,7 +514,36 @@ async function centerOnMyLocation(){
   requestUserLocation(true);
 }
 
-function renderEvents(){destroyMainMap();const nearbyEmpty=selectedFilter==='Рядом'&&!userGeo?'<div class="map-location-empty">📍 Определяем местоположение…</div>':'';document.getElementById('content').innerHTML=`<div class="mapwrap"><div id="map" class="map"></div><div class="filters">${renderFilters()}</div>${calendarOpen?calendarHTML():''}${nearbyEmpty}<button class="my-location-btn" onclick="centerOnMyLocation()" aria-label="Моё местоположение" title="Моё местоположение">⌖</button><div id="mapScope" class="map-scope">📍 Определяем город…</div><div class="live-map-hint">🟢 Идёт сейчас</div><div class="viewtoggle"><button id="mapbtn" class="active" onclick="switchView('map')">Карта</button><button id="listbtn" onclick="switchView('list')">Список</button></div></div>`;initMap()}
+function updateEventsMapChrome(){
+  const mapEl=document.getElementById('map'),wrap=mapEl?.closest('.mapwrap');
+  if(!wrap)return false;
+  const filters=wrap.querySelector('.filters');
+  if(filters)filters.innerHTML=renderFilters();
+  let cal=wrap.querySelector('.calendar-panel');
+  if(calendarOpen){
+    if(cal)cal.outerHTML=calendarHTML();else if(filters)filters.insertAdjacentHTML('afterend',calendarHTML());
+  }else if(cal)cal.remove();
+  let empty=wrap.querySelector('.map-location-empty');
+  if(selectedFilter==='Рядом'&&!userGeo){
+    if(!empty){const el=document.createElement('div');el.className='map-location-empty';el.textContent='📍 Определяем местоположение…';wrap.appendChild(el)}
+  }else if(empty)empty.remove();
+  const scope=wrap.querySelector('#mapScope');if(scope)scope.textContent=mapScopeLabel();
+  return true;
+}
+function renderEvents(){
+  eventView='map';
+  if(map&&document.getElementById('map')&&updateEventsMapChrome()){
+    if(typeof map._pognaliRenderMarkers==='function')map._pognaliRenderMarkers();
+    else refreshMainMapLayout(!!selectedDate);
+    if(selectedFilter==='Рядом'&&!userGeo)setTimeout(()=>requestUserLocation(true),80);
+    if(selectedDate)refreshMainMapLayout(true);
+    return;
+  }
+  destroyMainMap();
+  const nearbyEmpty=selectedFilter==='Рядом'&&!userGeo?'<div class="map-location-empty">📍 Определяем местоположение…</div>':'';
+  document.getElementById('content').innerHTML=`<div class="mapwrap"><div id="map" class="map"></div><div class="filters">${renderFilters()}</div>${calendarOpen?calendarHTML():''}${nearbyEmpty}<button class="my-location-btn" onclick="centerOnMyLocation()" aria-label="Моё местоположение" title="Моё местоположение">⌖</button><div id="mapScope" class="map-scope">📍 Определяем город…</div><div class="live-map-hint">🟢 Идёт сейчас</div><div class="viewtoggle"><button id="mapbtn" class="active" onclick="switchView('map')">Карта</button><button id="listbtn" onclick="switchView('list')">Список</button></div></div>`;
+  initMap();
+}
 function setFilter(x){
   if(map) {
     const c=map.getCenter();
@@ -540,7 +569,7 @@ function initMap(){
   }
   if(map){try{map.remove()}catch(e){}map=null;}
   if(userLocationMarker){try{userLocationMarker.remove()}catch(e){}userLocationMarker=null;}
-  const es=filtered();
+  let es=filtered();
   const worldMode=selectedFilter==='Мир';
   const savedView=selectedDate?null:(mapViews[selectedFilter]||lastMapView);
   const initialView=savedView ? [savedView.lat,savedView.lng] : (userGeo?[userGeo.lat,userGeo.lng]:[MAP_CENTER.lat,MAP_CENTER.lng]);
@@ -555,6 +584,7 @@ function initMap(){
   markers=[];
   let markerRenderToken=0;
   const renderMapMarkers=()=>{
+    es=filtered();
     const token=++markerRenderToken;
     markers.forEach(m=>{try{m.remove()}catch(e){}});
     markers=[];
@@ -595,6 +625,7 @@ function initMap(){
     });
   };
   map.on('zoomend',renderMapMarkers);
+  map._pognaliRenderMarkers=renderMapMarkers;
   renderMapMarkers();
   if(userGeo) drawUserLocation(userGeo.lat,userGeo.lng,false);
   else requestUserLocation();
