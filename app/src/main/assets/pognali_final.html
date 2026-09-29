@@ -644,10 +644,12 @@ function initMap(){
   let markerRenderToken=0;
   let eventMarkerById=new Map();
   let clusterMarkers=[];
+  let clusterMarkerByKey=new Map();
   let lastClusterMode=null;
   const clearClusterMarkers=()=>{
     clusterMarkers.forEach(m=>{try{m.remove()}catch(e){}});
     clusterMarkers=[];
+    clusterMarkerByKey.clear();
   };
   const clearEventMarkers=()=>{
     eventMarkerById.forEach(m=>{try{m.remove()}catch(e){}});
@@ -689,7 +691,7 @@ function initMap(){
         const emojiLine=icons.join(' ');
         const html='<div class="event-cluster event-cluster-rich" title="'+esc(count+' событий')+'"><div class="event-cluster-emojis">'+esc(emojiLine||'✨')+'</div><span>'+count+'</span></div>';
         const icon=L.divIcon({className:'',html,iconSize:[56,56],iconAnchor:[28,28]});
-        let m=clusterMarkers.find(x=>x._pognaliClusterKey===key);
+        let m=clusterMarkerByKey.get(key);
         if(!m){
           m=L.marker([lat,lng],{icon}).addTo(map);
           m._pognaliClusterKey=key;
@@ -701,6 +703,7 @@ function initMap(){
             if(center)map.setView([center.lat,center.lng],Math.min(19,z+2),{animate:true});
           });
           clusterMarkers.push(m);
+          clusterMarkerByKey.set(key,m);
         }else{
           m.setLatLng([lat,lng]);
           m._pognaliClusterCenter={lat,lng};
