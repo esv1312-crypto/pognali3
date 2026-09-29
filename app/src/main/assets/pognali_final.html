@@ -749,7 +749,8 @@ function initMap(){
 
     markers=clusterMarkers.concat(Array.from(eventMarkerById.values()));
   };
-  map.on('zoomend',renderMapMarkers);\n  map.on('moveend',renderMapMarkers);
+  map.on('zoomend',renderMapMarkers);
+  map.on('moveend',renderMapMarkers);
   map._pognaliRenderMarkers=renderMapMarkers;
   renderMapMarkers();
   if(userGeo) drawUserLocation(userGeo.lat,userGeo.lng,false);
