@@ -29,7 +29,7 @@ el.addEventListener('pointerup',e=>{const d=this._drag;if(!d||d.id!==e.pointerId
 el.addEventListener('pointercancel',()=>{if(this._drag){this._drag=null;this.fire('moveend')}});
 el.addEventListener('wheel',e=>{e.preventDefault();this.setZoom(this._zoom+(e.deltaY<0?1:-1),true)},{passive:false})};
 MapLite.prototype.fitBounds=function(b,opts){if(!b||!Number.isFinite(b.minLat)||!Number.isFinite(b.maxLat)||!Number.isFinite(b.minLng)||!Number.isFinite(b.maxLng))return this;const maxZoom=Math.min(opts?.maxZoom??13,19),pad=opts?.padding||[0,0],availW=Math.max(100,this._el.clientWidth-(pad[1]||0)*2),availH=Math.max(100,this._el.clientHeight-(pad[0]||0)*2),lat=(b.minLat+b.maxLat)/2,lng=(b.minLng+b.maxLng)/2;let z=0;for(let zz=maxZoom;zz>=1;zz--){const a=project(b.maxLat,b.minLng,zz),c=project(b.minLat,b.maxLng,zz);if(Math.abs(c.x-a.x)<=availW&&Math.abs(c.y-a.y)<=availH){z=zz;break}}return this.setView([lat,lng],z)};
-function TileLayer(u,o){E.call(this);this.url=u;this.options=o||{}}TileLayer.prototype=Object.create(E.prototype);TileLayer.prototype.addTo=function(m){m.addLayer(this);return this};TileLayer.prototype._addTo=function(){};TileLayer.prototype._remove=function(){};
+function TileLayer(u,o){E.call(this);this.url=u;this._url=u;this.options=o||{}}TileLayer.prototype=Object.create(E.prototype);TileLayer.prototype.addTo=function(m){m.addLayer(this);return this};TileLayer.prototype._addTo=function(){};TileLayer.prototype._remove=function(){};
 function DivIcon(o){this.options=o||{}}
 function CircleMarker(ll,o){E.call(this);this._lat=+ll[0];this._lng=+ll[1];this.options=o||{};this._map=null;this._icon=null;this._tooltip=''}
 CircleMarker.prototype=Object.create(E.prototype);CircleMarker.prototype.constructor=CircleMarker;
