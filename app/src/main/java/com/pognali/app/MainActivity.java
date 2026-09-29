@@ -41,6 +41,7 @@ public class MainActivity extends Activity {
         s.setDomStorageEnabled(true);
         s.setDatabaseEnabled(true);
         s.setGeolocationEnabled(true);
+        s.setUserAgentString("Pognali/1.0 (Android; com.pognali.app)");
         s.setAllowFileAccess(true);
         s.setAllowContentAccess(true);
         webView.setWebViewClient(new WebViewClient());
