@@ -5,7 +5,7 @@ const TILE=256,MAX_LAT=85.05112878,clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
 function project(lat,lng,z){lat=clamp(+lat,-MAX_LAT,MAX_LAT);const n=2**z,r=lat*Math.PI/180;return{x:(+lng+180)/360*n*TILE,y:(1-Math.asinh(Math.tan(r))/Math.PI)/2*n*TILE}}
 function unproject(x,y,z){const n=2**z,t=Math.PI*(1-2*y/TILE/n);return{lat:180/Math.PI*Math.atan(Math.sinh(t)),lng:x/TILE/n*360-180}}
 function E(){this._ev={}} E.prototype.on=function(n,f){(this._ev[n]||(this._ev[n]=[])).push(f);return this};E.prototype.fire=function(n,d){(this._ev[n]||[]).slice().forEach(f=>{try{f(d||{})}catch(_){}});return this};
-function MapLite(id){E.call(this);this._el=typeof id==='string'?document.getElementById(id):id;this._layers=[];this._tileLayer=null;this._center={lat:0,lng:0};this._zoom=2;this._removed=false;this._pointers=new Map();this._gesture='idle';this._pan=null;this._pinch=null;this._renderFrame=0;this._tileCache=new Map();if(!this._el)throw Error('Map container not found');this._el.classList.add('pognali-map');this._el.innerHTML='<div class="pm-tiles"></div><div class="pm-markers"></div><div class="pm-popup"></div><div class="pm-controls"><button type="button">+</button><button type="button">−</button></div><div class="pm-attrib">© OpenStreetMap contributors</div>';this._tilesEl=this._el.querySelector('.pm-tiles');this._markersEl=this._el.querySelector('.pm-markers');this._popupEl=this._el.querySelector('.pm-popup');this._el.querySelectorAll('.pm-controls button')[0].onclick=()=>this.setZoom(this._zoom+1,true);this._el.querySelectorAll('.pm-controls button')[1].onclick=()=>this.setZoom(this._zoom-1,true);this._bind();this._render()}
+function MapLite(id){E.call(this);this._el=typeof id==='string'?document.getElementById(id):id;this._layers=[];this._tileLayer=null;this._center={lat:0,lng:0};this._zoom=2;this._removed=false;this._pointers=new Map();this._gesture='idle';this._pan=null;this._pinch=null;this._gestureTx=0;this._gestureTy=0;this._gestureScale=1;this._renderFrame=0;this._tileCache=new Map();if(!this._el)throw Error('Map container not found');this._el.classList.add('pognali-map');this._el.innerHTML='<div class="pm-tiles"></div><div class="pm-markers"></div><div class="pm-popup"></div><div class="pm-controls"><button type="button">+</button><button type="button">−</button></div><div class="pm-attrib">© OpenStreetMap contributors</div>';this._tilesEl=this._el.querySelector('.pm-tiles');this._markersEl=this._el.querySelector('.pm-markers');this._popupEl=this._el.querySelector('.pm-popup');this._el.querySelectorAll('.pm-controls button')[0].onclick=()=>this.setZoom(this._zoom+1,true);this._el.querySelectorAll('.pm-controls button')[1].onclick=()=>this.setZoom(this._zoom-1,true);this._bind();this._render()}
 MapLite.prototype=Object.create(E.prototype);MapLite.prototype.constructor=MapLite;
 MapLite.prototype.setView=function(ll,z){this._center={lat:+ll[0],lng:+ll[1]};this._zoom=clamp(Number.isFinite(+z)?+z:0,0,19);this._render();return this};
 MapLite.prototype.getCenter=function(){return{lat:this._center.lat,lng:this._center.lng}};
@@ -76,7 +76,7 @@ MapLite.prototype._bind=function(){
 const el=this._el;
 const distance=(a,b)=>Math.hypot(a.x-b.x,a.y-b.y);
 const midpoint=(a,b)=>({x:(a.x+b.x)/2,y:(a.y+b.y)/2});
-const beginPan=(p)=>{this._gesture='pan';this._pan={id:p.id,x:p.x,y:p.y,cx:this._center.lng,cy:this._center.lat};this._pinch=null};
+const beginPan=(p,preserveTransform)=>{this._gesture='pan';this._pan={id:p.id,x:p.x,y:p.y,cx:this._center.lng,cy:this._center.lat,baseTx:preserveTransform?this._gestureTx:0,baseTy:preserveTransform?this._gestureTy:0,baseScale:preserveTransform?this._gestureScale:1};this._pinch=null};
 const beginPinch=()=>{
   const ps=[...this._pointers.values()];if(ps.length<2)return;
   const a=ps[0],b=ps[1],mid=midpoint(a,b),d=Math.max(1,distance(a,b));
@@ -108,7 +108,7 @@ el.addEventListener('pointermove',e=>{
     this._center=unproject(cx,cy,nz);
     const baseScale=2**(this._zoom-pinch.zoom);
     const tx=screenX*(1-baseScale),ty=screenY*(1-baseScale);
-    this._gestureTransform(tx,ty,baseScale);
+    this._gestureTx=tx;this._gestureTy=ty;this._gestureScale=baseScale;this._gestureTransform(tx,ty,baseScale);
     return;
   }
   if(this._pointers.size===1&&this._gesture==='pan'){
@@ -117,7 +117,7 @@ el.addEventListener('pointermove',e=>{
     if(Math.abs(dx)+Math.abs(dy)>4&&!this._gestureMoved){this._gestureMoved=true;this.fire('usergesturestart');}
     const p0=project(pan.cy,pan.cx,this._zoom);
     this._center=unproject(p0.x-dx,p0.y-dy,this._zoom);
-    this._gestureTransform(dx,dy,1);
+    this._gestureTx=pan.baseTx+dx;this._gestureTy=pan.baseTy+dy;this._gestureScale=pan.baseScale;this._gestureTransform(this._gestureTx,this._gestureTy,this._gestureScale);
   }
 });
 el.addEventListener('pointerup',e=>{
@@ -126,11 +126,11 @@ el.addEventListener('pointerup',e=>{
   if(this._pointers.size>=2){beginPinch();return}
   if(this._pointers.size===1){
     const p=[...this._pointers.values()][0];
-    if(this._gesture==='pinch')beginPan(p);
+    if(this._gesture==='pinch')beginPan(p,true);
     return;
   }
   const wasMoved=this._gestureMoved,wasPan=this._gesture==='pan'||this._gesture==='pinch';
-  this._gesture='idle';this._pan=null;this._pinch=null;
+  this._gesture='idle';this._pan=null;this._pinch=null;this._gestureTx=0;this._gestureTy=0;this._gestureScale=1;
   if(wasPan){this._clearGestureTransform();this._render();this.fire('moveend');}
   if(!wasMoved){
     const r=el.getBoundingClientRect();
@@ -142,7 +142,7 @@ el.addEventListener('pointercancel',e=>{
   if(this._pointers.size===1){
     const p=[...this._pointers.values()][0];beginPan(p);return;
   }
-  if(this._pointers.size===0){const wasGesture=this._gesture!=='idle';this._gesture='idle';this._pan=null;this._pinch=null;this._clearGestureTransform();this._render();if(wasGesture)this.fire('moveend')}
+  if(this._pointers.size===0){const wasGesture=this._gesture!=='idle';this._gesture='idle';this._pan=null;this._pinch=null;this._gestureTx=0;this._gestureTy=0;this._gestureScale=1;this._clearGestureTransform();this._render();if(wasGesture)this.fire('moveend')}
 });
 el.addEventListener('wheel',e=>{
   e.preventDefault();
