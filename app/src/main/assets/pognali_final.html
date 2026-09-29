@@ -919,7 +919,25 @@ async function setPickerPoint(lat,lng,lookupPlace=true){
   else if(pickerMarker){pickerMarker.bindPopup('📍 '+(placeEl.value.trim()||'Точка выбрана'));}
 }
 function useMyDemoLocation(){setPickerPoint(44.9521,34.1024);}
-async function findPlace(){let q=document.getElementById('eplace').value.trim();if(!q)return showToast('Сначала напиши название места или адрес.','error');let status=document.getElementById('pickedCoords');status.textContent='Ищу место…';try{let url='https://nominatim.openstreetmap.org/search?format=jsonv2&limit=1&accept-language='+encodeURIComponent((LOCALES[getLang()]||'ru-RU').slice(0,2))+'&q='+encodeURIComponent(q);let r=await fetch(url,{headers:{'Accept':'application/json'}});if(!r.ok)throw new Error('geocode '+r.status);let data=await r.json();if(!data.length){status.textContent='Не нашёл. Поставь точку на карте.';return}let lat=+data[0].lat,lng=+data[0].lon;setPickerPoint(lat,lng);if(!q||q.length<3)document.getElementById('eplace').value=data[0].display_name.split(',').slice(0,2).join(', ');}catch(err){status.textContent='Не удалось найти. Поставь точку на карте.';}}
+let lastGeocodeAt=0;
+async function findPlace(){
+  let q=document.getElementById('eplace').value.trim();
+  if(!q)return showToast('Сначала напиши название места или адрес.','error');
+  const now=Date.now();if(now-lastGeocodeAt<1000)return showToast('Подожди секунду перед следующим поиском.','info');
+  lastGeocodeAt=now;
+  const lookupToken=++pickerLookupToken;
+  let status=document.getElementById('pickedCoords');status.textContent='Ищу место…';
+  try{
+    let url='https://nominatim.openstreetmap.org/search?format=jsonv2&limit=1&accept-language='+encodeURIComponent((LOCALES[getLang()]||'ru-RU').slice(0,2))+'&q='+encodeURIComponent(q);
+    let r=await fetch(url,{headers:{'Accept':'application/json'}});if(!r.ok)throw new Error('geocode '+r.status);
+    let data=await r.json();
+    if(lookupToken!==pickerLookupToken||!document.getElementById('eplace'))return;
+    if(!data.length){status.textContent='Не нашёл. Поставь точку на карте.';return}
+    let lat=+data[0].lat,lng=+data[0].lon;if(!validCoordinates(lat,lng))throw new Error('invalid coordinates');
+    await setPickerPoint(lat,lng);
+    if(lookupToken===pickerLookupToken&&(!q||q.length<3))document.getElementById('eplace').value=String(data[0].display_name||'').split(',').slice(0,2).join(', ');
+  }catch(err){if(lookupToken===pickerLookupToken){const el=document.getElementById('pickedCoords');if(el)el.textContent='Не удалось найти. Поставь точку на карте.';}}
+}
 
 function deleteEvent(id){showConfirm('Удалить событие?','Событие будет удалено без возможности восстановления.',()=>{db.events=db.events.filter(e=>e.id!==id);delete db.chats[id];delete db.questions[id];save();go('mine');showToast('Событие удалено','info')},'Удалить')}
 function renderMine(){let own=db.events.filter(e=>e.owner===2&&isVisibleEvent(e)),joined=db.events.filter(e=>e.people.includes(2)&&e.owner!==2&&isVisibleEvent(e)),history=db.events.filter(e=>(e.owner===2||e.people.includes(2))&&!isVisibleEvent(e));document.getElementById('content').innerHTML=`<div class="mine-wrap"><div class="mine-head"><div><h2>Мои события</h2><div class="mine-sub">То, что ты создал и куда уже собираешься</div></div><span class="tag mine-total">${own.length+joined.length} активных</span></div><div class="mine-section"><div class="mine-section-title"><h3>✦ Я создал</h3><span>${own.length}</span></div>${own.map(e=>eventCardMine(e,true)).join('')||'<div class="empty"><b>Пока ничего не создал.</b><br>Придумай первое событие — пусть люди присоединятся.</div>'}</div><div class="mine-section"><div class="mine-section-title"><h3>🙋 Я иду</h3><span>${joined.length}</span></div>${joined.map(e=>eventCardMine(e,false)).join('')||'<div class="empty"><b>Пока никуда не записался.</b><br>Загляни на карту и найди, чем хочется заняться.</div>'}</div>${history.length?`<div class="mine-section"><div class="mine-section-title"><h3>🕘 Прошедшие</h3><span>${history.length}</span></div>${history.map(e=>eventCardMine(e,e.owner===2)).join('')}</div>`:''}</div>`}
