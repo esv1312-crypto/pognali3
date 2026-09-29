@@ -375,7 +375,7 @@ function seedDemoEvents(){
 seedDemoEvents();
 db.events.forEach(e=>{if(!e.country&&e.city==='Симферополь')e.country='Россия';if(!e.city&&e.place) e.city=db.profile?.city||'';});
 save();
-let currentTab='events', map, markers=[]; let mapSessionToken=0, mapLayoutTimers=[]; let selectedFilter='Мир', eventView='map'; let selectedDate=null, calendarOpen=false, calendarMonth=new Date(new Date().getFullYear(),new Date().getMonth(),1); let lastMapView=null; let mapViews={Мир:null,Рядом:null,Мои:null}; try{mapViews={...mapViews,...(JSON.parse(localStorage.getItem(KEY+'_map_views')||'{}')||{})}}catch(e){} let userLocationMarker=null; let userLocationRequested=false; let userLocationRequestToken=0; let userGeo=null; let userLocationWaiters=[]; try{userGeo=JSON.parse(localStorage.getItem(KEY+'_user_geo')||'null');if(userGeo&&(!Number.isFinite(+userGeo.lat)||!Number.isFinite(+userGeo.lng)))userGeo=null;else if(userGeo)userGeo={lat:+userGeo.lat,lng:+userGeo.lng}}catch(e){userGeo=null}
+let currentTab='events', map, markers=[]; let mapSessionToken=0, mapLayoutTimers=[]; let selectedFilter='Мир', eventView='map'; let selectedDate=null, calendarOpen=false, calendarMonth=new Date(new Date().getFullYear(),new Date().getMonth(),1); let lastMapView=null; let mapViews={Мир:null,Рядом:null,Мои:null}; let mapDateViews={}; try{mapDateViews=JSON.parse(localStorage.getItem(KEY+'_map_date_views')||'{}')||{}}catch(e){mapDateViews={}} try{mapViews={...mapViews,...(JSON.parse(localStorage.getItem(KEY+'_map_views')||'{}')||{})}}catch(e){} let userLocationMarker=null; let userLocationRequested=false; let userLocationRequestToken=0; let userGeo=null; let userLocationWaiters=[]; try{userGeo=JSON.parse(localStorage.getItem(KEY+'_user_geo')||'null');if(userGeo&&(!Number.isFinite(+userGeo.lat)||!Number.isFinite(+userGeo.lng)))userGeo=null;else if(userGeo)userGeo={lat:+userGeo.lat,lng:+userGeo.lng}}catch(e){userGeo=null}
 const NEARBY_RADIUS_KM=200; const MAP_RADIUS_LEVELS=[{minZoom:13,km:25},{minZoom:11,km:50},{minZoom:9,km:150},{minZoom:7,km:600}];
 function mapRadiusKm(zoom){for(const x of MAP_RADIUS_LEVELS)if(zoom>=x.minZoom)return x.km;return null}
 function mapScopeLabel(){if(selectedFilter==='Мир')return '🌍 Весь мир';if(selectedFilter==='Рядом')return userGeo?`📍 Рядом · ${NEARBY_RADIUS_KM} км`:'📍 Включи геолокацию';return '🙋 Мои события'}
@@ -426,14 +426,19 @@ function calendarHTML(){
 }
 function renderFilters(){return ['Мир','Рядом','Мои'].map(x=>`<button class="filter ${x===selectedFilter&&!selectedDate?'active':''}" onclick="setFilter('${x}')">${filterLabel(x)}</button>`).join('')+`<button class="filter date-filter ${selectedDate||calendarOpen?'active':''}" onclick="toggleCalendar()">📅 ${translateText('Календарь')}${selectedDate?`<span class="filter-count">${filtered().length}</span>`:''}</button>`}
 function saveMainMapView(){
-  if(!map||selectedDate)return null;
+  if(!map)return null;
   try{
     const c=map.getCenter();
     if(!c||!Number.isFinite(+c.lat)||!Number.isFinite(+c.lng))return null;
     const view={lat:+c.lat,lng:+c.lng,zoom:+map.getZoom()};
-    lastMapView=view;
-    mapViews[selectedFilter]=view;
-    localStorage.setItem(KEY+'_map_views',JSON.stringify(mapViews));
+    if(selectedDate){
+      mapDateViews[selectedDate]=view;
+      localStorage.setItem(KEY+'_map_date_views',JSON.stringify(mapDateViews));
+    }else{
+      lastMapView=view;
+      mapViews[selectedFilter]=view;
+      localStorage.setItem(KEY+'_map_views',JSON.stringify(mapViews));
+    }
     return view;
   }catch(e){return null}
 }
@@ -446,8 +451,16 @@ function destroyMainMap(){
 }
 function applyMainMapView(){
   if(!map)return;
-  if(selectedDate){refreshMainMapLayout(true);return;}
-  const saved=mapViews[selectedFilter]||lastMapView;
+  if(selectedDate){
+    const savedDate=mapDateViews[selectedDate];
+    if(savedDate&&Number.isFinite(+savedDate.lat)&&Number.isFinite(+savedDate.lng)&&Number.isFinite(+savedDate.zoom)){
+      map.setView([+savedDate.lat,+savedDate.lng],+savedDate.zoom);
+    }else{
+      refreshMainMapLayout(true);
+    }
+    return;
+  }
+  const saved=mapViews[selectedFilter];
   if(saved&&Number.isFinite(+saved.lat)&&Number.isFinite(+saved.lng)&&Number.isFinite(+saved.zoom)){
     map.setView([+saved.lat,+saved.lng],+saved.zoom);
     return;
@@ -603,8 +616,8 @@ function setFilter(x){
 }
 function toggleCalendar(){calendarOpen=!calendarOpen;if(calendarOpen&&selectedDate){const d=new Date(selectedDate+'T12:00:00');calendarMonth=new Date(d.getFullYear(),d.getMonth(),1)}if(eventView==='list')renderList();else renderEvents()}
 function moveCalendar(delta){calendarMonth=new Date(calendarMonth.getFullYear(),calendarMonth.getMonth()+delta,1);if(eventView==='list')renderList();else renderEvents()}
-function pickCalendarDate(key){selectedDate=key;calendarOpen=false;lastMapView=null;if(eventView==='list')renderList();else renderEvents()}
-function clearCalendarDate(){selectedDate=null;calendarOpen=false;lastMapView=mapViews[selectedFilter]||null;if(eventView==='list')renderList();else renderEvents()}
+function pickCalendarDate(key){if(map&&selectedDate)saveMainMapView();selectedDate=key;calendarOpen=false;lastMapView=null;if(eventView==='list')renderList();else renderEvents()}
+function clearCalendarDate(){if(map&&selectedDate)saveMainMapView();selectedDate=null;calendarOpen=false;lastMapView=mapViews[selectedFilter]||null;if(eventView==='list')renderList();else renderEvents()}
 function renderList(){destroyMainMap();eventView='list';let n=filtered().length;let title=selectedFilter==='Мои'?'Мои события':(selectedFilter==='Рядом'?'События рядом':'События по всему миру');let sub=selectedDate?`На выбранную дату ${n} ${n===1?'событие':'событий'}`:(selectedFilter==='Мир'?'Выбирай, присоединяйся или придумай своё':(n?`Сейчас по этому фильтру ${n} ${n===1?'событие':'события/событий'}`:'Пока здесь тихо — самое время что-нибудь придумать'));document.getElementById('content').innerHTML=`<div class="list"><div class="filters" style="position:static;display:flex">${renderFilters()}</div><div class="viewtoggle list-viewtoggle"><button id="mapbtn" onclick="switchView('map')">Карта</button><button id="listbtn" class="active" onclick="switchView('list')">Список</button></div>${calendarOpen?calendarHTML():''}<div class="list-intro"><div><h2>${title}</h2><p>${sub}</p></div><span class="list-intro-count">${n} ${n===1?'событие':'событий'}</span></div>${filtered().map(eventCard).join('')||'<div class="empty"><b>Пока здесь тихо.</b><br>Самое время придумать, чем заняться.</div>'}</div>`}
 function switchView(v){if(v==='list')renderList();else renderEvents()}
 function initMap(){
