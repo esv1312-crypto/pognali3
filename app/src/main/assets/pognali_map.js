@@ -20,7 +20,21 @@ MapLite.prototype.addLayer=function(l){if(l&&!this._layers.includes(l)){this._la
 MapLite.prototype.removeLayer=function(l){this._layers=this._layers.filter(x=>x!==l);l&&l._remove&&l._remove();this._render();return this};
 MapLite.prototype.remove=function(){this._removed=true;if(this._renderFrame){cancelAnimationFrame(this._renderFrame);this._renderFrame=0}this._pointers.clear();this._layers.slice().forEach(l=>l._remove&&l._remove());this._layers=[];this._tileLayer=null;this._clearTiles();this._ev={};if(this._el)this._el.innerHTML='';return this};
 MapLite.prototype._world=function(){return 2**this._zoom*TILE};
-MapLite.prototype._screen=function(lat,lng){const p=project(lat,lng,this._zoom),c=project(this._center.lat,this._center.lng,this._zoom),w=this._world();let dx=p.x-c.x;if(dx>w/2)dx-=w;if(dx<-w/2)dx+=w;return{x:this._el.clientWidth/2+dx,y:this._el.clientHeight/2+p.y-c.y}};
+MapLite.prototype._screenCamera=function(){
+  const w=this._world(),cw=this._el.clientWidth||360,ch=this._el.clientHeight||600;
+  const c=project(this._center.lat,this._center.lng,this._zoom);
+  return{w,cx:c.x,cy:c.y,halfW:cw/2,halfH:ch/2};
+};
+MapLite.prototype._screen=function(lat,lng){
+  const cam=this._screenCamera(),p=project(lat,lng,this._zoom);
+  let dx=p.x-cam.cx;if(dx>cam.w/2)dx-=cam.w;if(dx<-cam.w/2)dx+=cam.w;
+  return{x:cam.halfW+dx,y:cam.halfH+p.y-cam.cy};
+};
+MapLite.prototype._screenFromCamera=function(lat,lng,cam){
+  const p=project(lat,lng,this._zoom);
+  let dx=p.x-cam.cx;if(dx>cam.w/2)dx-=cam.w;if(dx<-cam.w/2)dx+=cam.w;
+  return{x:cam.halfW+dx,y:cam.halfH+p.y-cam.cy};
+};
 MapLite.prototype._fromScreen=function(x,y){const c=project(this._center.lat,this._center.lng,this._zoom),w=this._world();let wx=c.x+x-this._el.clientWidth/2,wy=c.y+y-this._el.clientHeight/2;wx=((wx%w)+w)%w;return unproject(wx,wy,this._zoom)};
 MapLite.prototype._render=function(){if(this._removed)return;this._tiles();this._layers.forEach(l=>l&&l._render&&l._render())};
 MapLite.prototype._scheduleRender=function(){if(this._removed||this._renderFrame)return;this._renderFrame=requestAnimationFrame(()=>{this._renderFrame=0;this._render()})};
