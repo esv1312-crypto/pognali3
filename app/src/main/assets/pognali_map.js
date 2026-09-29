@@ -5,12 +5,12 @@ const TILE=256,MAX_LAT=85.05112878,clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
 function project(lat,lng,z){lat=clamp(+lat,-MAX_LAT,MAX_LAT);const n=2**z,r=lat*Math.PI/180;return{x:(+lng+180)/360*n*TILE,y:(1-Math.asinh(Math.tan(r))/Math.PI)/2*n*TILE}}
 function unproject(x,y,z){const n=2**z,t=Math.PI*(1-2*y/TILE/n);return{lat:180/Math.PI*Math.atan(Math.sinh(t)),lng:x/TILE/n*360-180}}
 function E(){this._ev={}} E.prototype.on=function(n,f){(this._ev[n]||(this._ev[n]=[])).push(f);return this};E.prototype.fire=function(n,d){(this._ev[n]||[]).slice().forEach(f=>{try{f(d||{})}catch(_){}});return this};
-function MapLite(id){E.call(this);this._el=typeof id==='string'?document.getElementById(id):id;this._layers=[];this._tileLayer=null;this._center={lat:0,lng:0};this._zoom=2;this._removed=false;this._drag=null;this._tileCache=new Map();if(!this._el)throw Error('Map container not found');this._el.classList.add('pognali-map');this._el.innerHTML='<div class="pm-tiles"></div><div class="pm-markers"></div><div class="pm-popup"></div><div class="pm-controls"><button type="button">+</button><button type="button">−</button></div><div class="pm-attrib">© OpenStreetMap contributors</div>';this._tilesEl=this._el.querySelector('.pm-tiles');this._markersEl=this._el.querySelector('.pm-markers');this._popupEl=this._el.querySelector('.pm-popup');this._el.querySelectorAll('.pm-controls button')[0].onclick=()=>this.setZoom(this._zoom+1,true);this._el.querySelectorAll('.pm-controls button')[1].onclick=()=>this.setZoom(this._zoom-1,true);this._bind();this._render()}
+function MapLite(id){E.call(this);this._el=typeof id==='string'?document.getElementById(id):id;this._layers=[];this._tileLayer=null;this._center={lat:0,lng:0};this._zoom=2;this._removed=false;this._pointers=new Map();this._gesture='idle';this._pan=null;this._pinch=null;this._renderFrame=0;this._tileCache=new Map();if(!this._el)throw Error('Map container not found');this._el.classList.add('pognali-map');this._el.innerHTML='<div class="pm-tiles"></div><div class="pm-markers"></div><div class="pm-popup"></div><div class="pm-controls"><button type="button">+</button><button type="button">−</button></div><div class="pm-attrib">© OpenStreetMap contributors</div>';this._tilesEl=this._el.querySelector('.pm-tiles');this._markersEl=this._el.querySelector('.pm-markers');this._popupEl=this._el.querySelector('.pm-popup');this._el.querySelectorAll('.pm-controls button')[0].onclick=()=>this.setZoom(this._zoom+1,true);this._el.querySelectorAll('.pm-controls button')[1].onclick=()=>this.setZoom(this._zoom-1,true);this._bind();this._render()}
 MapLite.prototype=Object.create(E.prototype);MapLite.prototype.constructor=MapLite;
-MapLite.prototype.setView=function(ll,z){this._center={lat:+ll[0],lng:+ll[1]};this._zoom=clamp(Math.round(+z||0),0,19);this._render();return this};
+MapLite.prototype.setView=function(ll,z){this._center={lat:+ll[0],lng:+ll[1]};this._zoom=clamp(Number.isFinite(+z)?+z:0,0,19);this._render();return this};
 MapLite.prototype.getCenter=function(){return{lat:this._center.lat,lng:this._center.lng}};
 MapLite.prototype.getZoom=function(){return this._zoom};
-MapLite.prototype.setZoom=function(z,fire){this._zoom=clamp(Math.round(z),0,19);this._render();if(fire){this.fire('zoomend');this.fire('moveend')}return this};
+MapLite.prototype.setZoom=function(z,fire){const nz=clamp(+z,0,19);if(nz===this._zoom)return this;this._zoom=nz;this._render();if(fire){this.fire('zoomend');this.fire('moveend')}return this};
 MapLite.prototype.panTo=function(ll){this._center={lat:+ll[0],lng:+ll[1]};this._render();this.fire('moveend');return this};
 MapLite.prototype.invalidateSize=function(){this._render();return this};
 MapLite.prototype.createPane=function(name){this._panes=this._panes||{};if(!this._panes[name])this._panes[name]={style:{},name};return this._panes[name]};
@@ -18,11 +18,12 @@ MapLite.prototype.getPane=function(name){return this._panes&&this._panes[name]||
 MapLite.prototype._clearTiles=function(){this._tileCache.forEach(img=>{try{img.remove()}catch(_){}});this._tileCache.clear();};
 MapLite.prototype.addLayer=function(l){if(l&&!this._layers.includes(l)){this._layers.push(l);l._map=this;l._addTo&&l._addTo(this)}return this};
 MapLite.prototype.removeLayer=function(l){this._layers=this._layers.filter(x=>x!==l);l&&l._remove&&l._remove();this._render();return this};
-MapLite.prototype.remove=function(){this._removed=true;this._layers.slice().forEach(l=>l._remove&&l._remove());this._layers=[];this._tileLayer=null;this._clearTiles();this._ev={};if(this._el)this._el.innerHTML='';return this};
+MapLite.prototype.remove=function(){this._removed=true;if(this._renderFrame){cancelAnimationFrame(this._renderFrame);this._renderFrame=0}this._pointers.clear();this._layers.slice().forEach(l=>l._remove&&l._remove());this._layers=[];this._tileLayer=null;this._clearTiles();this._ev={};if(this._el)this._el.innerHTML='';return this};
 MapLite.prototype._world=function(){return 2**this._zoom*TILE};
 MapLite.prototype._screen=function(lat,lng){const p=project(lat,lng,this._zoom),c=project(this._center.lat,this._center.lng,this._zoom),w=this._world();let dx=p.x-c.x;if(dx>w/2)dx-=w;if(dx<-w/2)dx+=w;return{x:this._el.clientWidth/2+dx,y:this._el.clientHeight/2+p.y-c.y}};
 MapLite.prototype._fromScreen=function(x,y){const c=project(this._center.lat,this._center.lng,this._zoom),w=this._world();let wx=c.x+x-this._el.clientWidth/2,wy=c.y+y-this._el.clientHeight/2;wx=((wx%w)+w)%w;return unproject(wx,wy,this._zoom)};
 MapLite.prototype._render=function(){if(this._removed)return;this._tiles();this._layers.forEach(l=>l&&l._render&&l._render())};
+MapLite.prototype._scheduleRender=function(){if(this._removed||this._renderFrame)return;this._renderFrame=requestAnimationFrame(()=>{this._renderFrame=0;this._render()})};
 MapLite.prototype._tiles=function(){
   const w=this._el.clientWidth||360,h=this._el.clientHeight||600,z=this._zoom,n=2**z,c=project(this._center.lat,this._center.lng,z);
   const layer=this._tileLayer,template=layer?.url||layer?._url||'https://tile.openstreetmap.org/{z}/{x}/{y}.png',subs=layer?.options?.subdomains||'abc';
@@ -45,11 +46,84 @@ MapLite.prototype._tiles=function(){
   }
   this._tileCache.forEach((img,key)=>{if(!needed.has(key)){img.remove();this._tileCache.delete(key)}});
 };
-MapLite.prototype._bind=function(){const el=this._el;el.addEventListener('pointerdown',e=>{if(e.target.closest('.pm-controls,.pm-marker,.pm-popup'))return;this._drag={id:e.pointerId,x:e.clientX,y:e.clientY,px:e.clientX,py:e.clientY,cx:this._center.lng,cy:this._center.lat,moved:false};try{el.setPointerCapture(e.pointerId)}catch(_){}});
-el.addEventListener('pointermove',e=>{const d=this._drag;if(!d||d.id!==e.pointerId)return;const dx=e.clientX-d.x,dy=e.clientY-d.y;if(Math.abs(dx)+Math.abs(dy)>4)d.moved=true;const p=project(d.cy,d.cx,this._zoom);this._center=unproject(p.x-dx,p.y-dy,this._zoom);this._render()});
-el.addEventListener('pointerup',e=>{const d=this._drag;if(!d||d.id!==e.pointerId)return;this._drag=null;this.fire('moveend');if(!d.moved){const r=el.getBoundingClientRect();this.fire('click',{latlng:this._fromScreen(e.clientX-r.left,e.clientY-r.top),originalEvent:e})}});
-el.addEventListener('pointercancel',()=>{if(this._drag){this._drag=null;this.fire('moveend')}});
-el.addEventListener('wheel',e=>{e.preventDefault();this.setZoom(this._zoom+(e.deltaY<0?1:-1),true)},{passive:false})};
+MapLite.prototype._bind=function(){
+const el=this._el;
+const distance=(a,b)=>Math.hypot(a.x-b.x,a.y-b.y);
+const midpoint=(a,b)=>({x:(a.x+b.x)/2,y:(a.y+b.y)/2});
+const beginPan=(p)=>{this._gesture='pan';this._pan={id:p.id,x:p.x,y:p.y,cx:this._center.lng,cy:this._center.lat};this._pinch=null};
+const beginPinch=()=>{
+  const ps=[...this._pointers.values()];if(ps.length<2)return;
+  const a=ps[0],b=ps[1],mid=midpoint(a,b),d=Math.max(1,distance(a,b));
+  const r=el.getBoundingClientRect();
+  this._gesture='pinch';this._pan=null;this._pinch={distance:d,mid,zoom:this._zoom,target:this._fromScreen(mid.x-r.left,mid.y-r.top)};this._gestureMoved=true;
+};
+el.addEventListener('pointerdown',e=>{
+  if(e.target.closest('.pm-controls,.pm-marker,.pm-popup'))return;
+  this._pointers.set(e.pointerId,{id:e.pointerId,x:e.clientX,y:e.clientY});
+  try{el.setPointerCapture(e.pointerId)}catch(_){}
+  if(this._pointers.size===1){this._gestureMoved=false;beginPan(this._pointers.get(e.pointerId))}
+  else if(this._pointers.size===2)beginPinch();
+  else this._gestureMoved=true;
+});
+el.addEventListener('pointermove',e=>{
+  const p=this._pointers.get(e.pointerId);if(!p)return;
+  p.x=e.clientX;p.y=e.clientY;
+  const r=el.getBoundingClientRect();
+  if(this._pointers.size>=2&&this._gesture==='pinch'){
+    const ps=[...this._pointers.values()],a=ps[0],b=ps[1],mid=midpoint(a,b),d=Math.max(1,distance(a,b));
+    const pinch=this._pinch;if(!pinch)return;
+    if(d>pinch.distance*1.01||d<pinch.distance*.99)this._gestureMoved=true;
+    const nz=clamp(pinch.zoom+Math.log2(d/pinch.distance),0,19);
+    this._zoom=nz;
+    const target=pinch.target,screenX=mid.x-r.left,screenY=mid.y-r.top;
+    const tp=project(target.lat,target.lng,nz),w=this._world();
+    let cx=tp.x-screenX+el.clientWidth/2,cy=tp.y-screenY+el.clientHeight/2;
+    cx=((cx%w)+w)%w;
+    this._center=unproject(cx,cy,nz);
+    this._scheduleRender();
+    return;
+  }
+  if(this._pointers.size===1&&this._gesture==='pan'){
+    const pan=this._pan;if(!pan)return;
+    const dx=e.clientX-pan.x,dy=e.clientY-pan.y;
+    if(Math.abs(dx)+Math.abs(dy)>4)this._gestureMoved=true;
+    const p0=project(pan.cy,pan.cx,this._zoom);
+    this._center=unproject(p0.x-dx,p0.y-dy,this._zoom);
+    this._scheduleRender();
+  }
+});
+el.addEventListener('pointerup',e=>{
+  if(!this._pointers.has(e.pointerId))return;
+  this._pointers.delete(e.pointerId);
+  if(this._pointers.size>=2){beginPinch();return}
+  if(this._pointers.size===1){
+    const p=[...this._pointers.values()][0];
+    if(this._gesture==='pinch')beginPan(p);
+    return;
+  }
+  const wasMoved=this._gestureMoved,wasPan=this._gesture==='pan'||this._gesture==='pinch';
+  this._gesture='idle';this._pan=null;this._pinch=null;
+  if(wasPan)this.fire('moveend');
+  if(!wasMoved){
+    const r=el.getBoundingClientRect();
+    this.fire('click',{latlng:this._fromScreen(e.clientX-r.left,e.clientY-r.top),originalEvent:e});
+  }
+});
+el.addEventListener('pointercancel',e=>{
+  if(this._pointers.has(e.pointerId))this._pointers.delete(e.pointerId);
+  if(this._pointers.size===1){
+    const p=[...this._pointers.values()][0];beginPan(p);return;
+  }
+  if(this._pointers.size===0){this._gesture='idle';this._pan=null;this._pinch=null;this.fire('moveend')}
+});
+el.addEventListener('wheel',e=>{
+  e.preventDefault();
+  const r=el.getBoundingClientRect(),x=e.clientX-r.left,y=e.clientY-r.top,target=this._fromScreen(x,y);
+  const nz=clamp(this._zoom+(e.deltaY<0?1:-1),0,19);if(nz===this._zoom)return;
+  this._zoom=nz;const tp=project(target.lat,target.lng,nz),w=this._world();
+  let cx=tp.x-x+el.clientWidth/2,cy=tp.y-y+el.clientHeight/2;cx=((cx%w)+w)%w;this._center=unproject(cx,cy,nz);
+  this._render();this.fire('zoomend');this.fire('moveend');
+},{passive:false})};
 MapLite.prototype.fitBounds=function(b,opts){if(!b||!Number.isFinite(b.minLat)||!Number.isFinite(b.maxLat)||!Number.isFinite(b.minLng)||!Number.isFinite(b.maxLng))return this;const maxZoom=Math.min(opts?.maxZoom??13,19),pad=opts?.padding||[0,0],availW=Math.max(100,this._el.clientWidth-(pad[1]||0)*2),availH=Math.max(100,this._el.clientHeight-(pad[0]||0)*2),lat=(b.minLat+b.maxLat)/2,lng=(b.minLng+b.maxLng)/2;let z=0;for(let zz=maxZoom;zz>=1;zz--){const a=project(b.maxLat,b.minLng,zz),c=project(b.minLat,b.maxLng,zz);if(Math.abs(c.x-a.x)<=availW&&Math.abs(c.y-a.y)<=availH){z=zz;break}}return this.setView([lat,lng],z)};
 function TileLayer(u,o){E.call(this);this.url=u;this._url=u;this.options=o||{}}
 TileLayer.prototype=Object.create(E.prototype);
