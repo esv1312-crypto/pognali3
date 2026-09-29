@@ -95,7 +95,7 @@ public class MainActivity extends Activity {
                 }
             }
         });
-        webView.loadUrl("https://appassets.androidplatform.net/assets/pognali_final.html");
+        webView.loadUrl("https://appassets.androidplatform.net/assets/pognali_final.html?v=2");
     }
 
     private void runJs(String js) {
