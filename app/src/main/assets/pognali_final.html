@@ -796,9 +796,9 @@ function initMap(){
         activeClusterKeys.add(key);
         const emojiLine=[...cell.icons].join(' ');
         const html='<div class="event-cluster event-cluster-rich" title="'+esc(count+' событий')+'"><div class="event-cluster-emojis">'+esc(emojiLine||'✨')+'</div><span>'+count+'</span></div>';
-        const icon=L.divIcon({className:'',html,iconSize:[56,56],iconAnchor:[28,28]});
         let m=clusterMarkerByKey.get(key);
         if(!m){
+          const icon=L.divIcon({className:'',html,iconSize:[56,56],iconAnchor:[28,28]});
           m=L.marker([lat,lng],{icon}).addTo(map);
           m._pognaliClusterKey=key;
           m._pognaliLat=lat;m._pognaliLng=lng;
@@ -820,6 +820,7 @@ function initMap(){
           m._pognaliClusterCenter={lat,lng};
           m._pognaliClusterZoom=zoom;
           if(m._pognaliClusterHtml!==html){
+            const icon=L.divIcon({className:'',html,iconSize:[56,56],iconAnchor:[28,28]});
             m.options.icon=icon;
             if(m._icon)m._icon.innerHTML=html;
             m._pognaliClusterHtml=html;
