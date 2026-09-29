@@ -409,13 +409,29 @@ function eventState(e){
 }
 function isVisibleEvent(e){return eventState(e)!=='FINISHED'}
 function distanceKm(a,b,c,d){const R=6371,rad=Math.PI/180;const dLat=(c-a)*rad,dLng=(d-b)*rad;const x=Math.sin(dLat/2)**2+Math.cos(a*rad)*Math.cos(c*rad)*Math.sin(dLng/2)**2;return 2*R*Math.asin(Math.sqrt(x));}
+function visibleEventsByDate(){
+  const minute=Math.floor(Date.now()/60000);
+  const cacheKey=eventsRevision+'|'+minute;
+  const cached=visibleEventsByDateCache.get(cacheKey);
+  if(cached)return cached;
+  const byDate=new Map();
+  db.events.forEach(e=>{
+    if(!isVisibleEvent(e))return;
+    const date=String(e.date||'');
+    if(!byDate.has(date))byDate.set(date,[]);
+    byDate.get(date).push(e);
+  });
+  visibleEventsByDateCache.clear();
+  visibleEventsByDateCache.set(cacheKey,byDate);
+  return byDate;
+}
 function visibleEvents(date=''){
   const minute=Math.floor(Date.now()/60000);
   const key=[eventsRevision,minute,date].join('|');
   const cached=visibleEventsCache.get(key);
   if(cached)return cached;
-  let es=db.events.filter(isVisibleEvent);
-  if(date)es=es.filter(e=>e.date===date);
+  const byDate=visibleEventsByDate();
+  const es=date?(byDate.get(date)||[]):Array.from(byDate.values()).flat();
   visibleEventsCache.set(key,es);
   return es;
 }
@@ -464,7 +480,9 @@ function calendarHTML(){
   const y=calendarMonth.getFullYear(), m=calendarMonth.getMonth();
   const first=new Date(y,m,1), days=new Date(y,m+1,0).getDate();
   const start=(first.getDay()+6)%7;
-  const counts={}; db.events.filter(isVisibleEvent).forEach(e=>{if(e.date&&e.date.startsWith(`${y}-${String(m+1).padStart(2,'0')}-`))counts[e.date]=(counts[e.date]||0)+1});
+  const counts={};
+  const monthPrefix=`${y}-${String(m+1).padStart(2,'0')}-`;
+  visibleEventsByDate().forEach((list,date)=>{if(date.startsWith(monthPrefix))counts[date]=list.length});
   let cells='';
   for(let i=0;i<start;i++)cells+='<div class="cal-day empty-day"></div>';
   for(let day=1;day<=days;day++){const key=`${y}-${String(m+1).padStart(2,'0')}-${String(day).padStart(2,'0')}`;const c=counts[key]||0;const active=selectedDate===key?' active':'';const aria=c?` aria-label="${day} — ${c} ${c===1?translateText('событие'):(c<5?translateText('события'):translateText('событий'))}"`:'';cells+=`<button class="cal-day${active}${c?' has-events':''}"${aria} onclick="pickCalendarDate('${key}')"><span>${day}</span>${c?`<small>${c}</small>`:''}</button>`}
