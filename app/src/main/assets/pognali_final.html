@@ -398,7 +398,15 @@ function filtered(filter=selectedFilter){
   }
   return es;
 }
-function go(tab){currentTab=tab;document.querySelectorAll('.nav').forEach(x=>x.classList.toggle('active',x.dataset.tab===tab)); if(tab==='events'){if(eventView==='list')renderList();else renderEvents()} if(tab==='create')renderCreate(); if(tab==='mine')renderMine(); if(tab==='profile')renderProfile()}
+function go(tab){
+  if(tab!=='events'&&map)destroyMainMap();
+  currentTab=tab;
+  document.querySelectorAll('.nav').forEach(x=>x.classList.toggle('active',x.dataset.tab===tab));
+  if(tab==='events'){if(eventView==='list')renderList();else renderEvents()}
+  if(tab==='create')renderCreate();
+  if(tab==='mine')renderMine();
+  if(tab==='profile')renderProfile();
+}
 function filterLabel(x){let icons={Мир:'🌍',Рядом:'📍',Мои:'🙋'};let count=filtered(x).length;return `<span class="filter-icon">${icons[x]||'•'}</span>${translateText(x)}<span class="filter-count">${count}</span>`}
 function calendarLabel(){if(!selectedDate)return 'Дата';const d=new Date(selectedDate+'T12:00:00');return '📅 '+d.toLocaleDateString(LOCALES[getLang()]||'ru-RU',{day:'numeric',month:'short'}).replace('.','')}
 function monthTitle(){return calendarMonth.toLocaleDateString(LOCALES[getLang()]||'ru-RU',{month:'long',year:'numeric'}).replace(/^./,c=>c.toUpperCase())}
@@ -414,7 +422,38 @@ function calendarHTML(){
   return `<div class="calendar-panel"><div class="calendar-head"><button onclick="moveCalendar(-1)">‹</button><b>${monthTitle()}</b><button onclick="moveCalendar(1)">›</button></div><div class="calendar-week">${wd.map(x=>`<span>${x}</span>`).join('')}</div><div class="calendar-grid">${cells}</div><div class="calendar-foot"><button onclick="clearCalendarDate()">${translateText('Все даты')}</button></div></div>`;
 }
 function renderFilters(){return ['Мир','Рядом','Мои'].map(x=>`<button class="filter ${x===selectedFilter&&!selectedDate?'active':''}" onclick="setFilter('${x}')">${filterLabel(x)}</button>`).join('')+`<button class="filter date-filter ${selectedDate||calendarOpen?'active':''}" onclick="toggleCalendar()">📅 ${translateText('Календарь')}${selectedDate?`<span class="filter-count">${filtered().length}</span>`:''}</button>`}
-function destroyMainMap(){if(map){try{map.remove()}catch(e){}map=null;}markers=[];userLocationMarker=null;}
+function saveMainMapView(){
+  if(!map||selectedDate)return null;
+  try{
+    const c=map.getCenter();
+    if(!c||!Number.isFinite(+c.lat)||!Number.isFinite(+c.lng))return null;
+    const view={lat:+c.lat,lng:+c.lng,zoom:+map.getZoom()};
+    lastMapView=view;
+    mapViews[selectedFilter]=view;
+    localStorage.setItem(KEY+'_map_views',JSON.stringify(mapViews));
+    return view;
+  }catch(e){return null}
+}
+function destroyMainMap(){
+  saveMainMapView();
+  if(map){try{map.remove()}catch(e){}map=null;}
+  markers=[];userLocationMarker=null;
+}
+function applyMainMapView(){
+  if(!map)return;
+  if(selectedDate){refreshMainMapLayout(true);return;}
+  const saved=mapViews[selectedFilter]||lastMapView;
+  if(saved&&Number.isFinite(+saved.lat)&&Number.isFinite(+saved.lng)&&Number.isFinite(+saved.zoom)){
+    map.setView([+saved.lat,+saved.lng],+saved.zoom);
+    return;
+  }
+  if(selectedFilter==='Мир'){map.setView([MAP_CENTER.lat,MAP_CENTER.lng],2);return;}
+  if(userGeo&&Number.isFinite(+userGeo.lat)&&Number.isFinite(+userGeo.lng)){
+    map.setView([userGeo.lat,userGeo.lng],selectedFilter==='Рядом'?12:9);
+  }else{
+    map.setView([MAP_CENTER.lat,MAP_CENTER.lng],9);
+  }
+}
 function destroyPickerMap(){if(pickerMap){try{pickerMap.remove()}catch(e){}pickerMap=null;}pickerMarker=null;pickerUserLocationMarker=null;}
 function refreshMainMapLayout(fitToEvents=false){if(!map)return;const targetMap=map;const run=()=>{if(!targetMap||map!==targetMap)return;try{targetMap.invalidateSize({pan:false,animate:false});if(fitToEvents){const points=filtered().map(e=>[Number(e.lat),Number(e.lng)]).filter(([lat,lng])=>Number.isFinite(lat)&&Number.isFinite(lng));if(points.length===1)targetMap.setView(points[0],13,{animate:false});else if(points.length>1)targetMap.fitBounds(L.latLngBounds(points),{padding:[42,72],maxZoom:13,animate:false})}}catch(e){}};requestAnimationFrame(run);setTimeout(run,120);setTimeout(run,320)}
 
@@ -533,6 +572,7 @@ function updateEventsMapChrome(){
 function renderEvents(){
   eventView='map';
   if(map&&document.getElementById('map')&&updateEventsMapChrome()){
+    applyMainMapView();
     if(typeof map._pognaliRenderMarkers==='function')map._pognaliRenderMarkers();
     else refreshMainMapLayout(!!selectedDate);
     if(selectedFilter==='Рядом'&&!userGeo)setTimeout(()=>requestUserLocation(true),80);
