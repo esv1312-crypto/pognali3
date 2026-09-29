@@ -5,7 +5,7 @@ const TILE=256,MAX_LAT=85.05112878,clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
 function project(lat,lng,z){lat=clamp(+lat,-MAX_LAT,MAX_LAT);const n=2**z,r=lat*Math.PI/180;return{x:(+lng+180)/360*n*TILE,y:(1-Math.asinh(Math.tan(r))/Math.PI)/2*n*TILE}}
 function unproject(x,y,z){const n=2**z,t=Math.PI*(1-2*y/TILE/n);return{lat:180/Math.PI*Math.atan(Math.sinh(t)),lng:x/TILE/n*360-180}}
 function E(){this._ev={}} E.prototype.on=function(n,f){(this._ev[n]||(this._ev[n]=[])).push(f);return this};E.prototype.fire=function(n,d){(this._ev[n]||[]).slice().forEach(f=>{try{f(d||{})}catch(_){}});return this};
-function MapLite(id){E.call(this);this._el=typeof id==='string'?document.getElementById(id):id;this._layers=[];this._center={lat:0,lng:0};this._zoom=2;this._removed=false;this._drag=null;this._tileCache=new Map();if(!this._el)throw Error('Map container not found');this._el.classList.add('pognali-map');this._el.innerHTML='<div class="pm-tiles"></div><div class="pm-markers"></div><div class="pm-popup"></div><div class="pm-controls"><button type="button">+</button><button type="button">−</button></div><div class="pm-attrib">© OpenStreetMap contributors</div>';this._tilesEl=this._el.querySelector('.pm-tiles');this._markersEl=this._el.querySelector('.pm-markers');this._popupEl=this._el.querySelector('.pm-popup');this._el.querySelectorAll('.pm-controls button')[0].onclick=()=>this.setZoom(this._zoom+1,true);this._el.querySelectorAll('.pm-controls button')[1].onclick=()=>this.setZoom(this._zoom-1,true);this._bind();this._render()}
+function MapLite(id){E.call(this);this._el=typeof id==='string'?document.getElementById(id):id;this._layers=[];this._tileLayer=null;this._center={lat:0,lng:0};this._zoom=2;this._removed=false;this._drag=null;this._tileCache=new Map();if(!this._el)throw Error('Map container not found');this._el.classList.add('pognali-map');this._el.innerHTML='<div class="pm-tiles"></div><div class="pm-markers"></div><div class="pm-popup"></div><div class="pm-controls"><button type="button">+</button><button type="button">−</button></div><div class="pm-attrib">© OpenStreetMap contributors</div>';this._tilesEl=this._el.querySelector('.pm-tiles');this._markersEl=this._el.querySelector('.pm-markers');this._popupEl=this._el.querySelector('.pm-popup');this._el.querySelectorAll('.pm-controls button')[0].onclick=()=>this.setZoom(this._zoom+1,true);this._el.querySelectorAll('.pm-controls button')[1].onclick=()=>this.setZoom(this._zoom-1,true);this._bind();this._render()}
 MapLite.prototype=Object.create(E.prototype);MapLite.prototype.constructor=MapLite;
 MapLite.prototype.setView=function(ll,z){this._center={lat:+ll[0],lng:+ll[1]};this._zoom=clamp(Math.round(+z||0),0,19);this._render();return this};
 MapLite.prototype.getCenter=function(){return{lat:this._center.lat,lng:this._center.lng}};
@@ -15,21 +15,47 @@ MapLite.prototype.panTo=function(ll){this._center={lat:+ll[0],lng:+ll[1]};this._
 MapLite.prototype.invalidateSize=function(){this._render();return this};
 MapLite.prototype.createPane=function(name){this._panes=this._panes||{};if(!this._panes[name])this._panes[name]={style:{},name};return this._panes[name]};
 MapLite.prototype.getPane=function(name){return this._panes&&this._panes[name]||null};
+MapLite.prototype._clearTiles=function(){this._tileCache.forEach(img=>{try{img.remove()}catch(_){}});this._tileCache.clear();};
 MapLite.prototype.addLayer=function(l){if(l&&!this._layers.includes(l)){this._layers.push(l);l._map=this;l._addTo&&l._addTo(this)}return this};
 MapLite.prototype.removeLayer=function(l){this._layers=this._layers.filter(x=>x!==l);l&&l._remove&&l._remove();this._render();return this};
-MapLite.prototype.remove=function(){this._removed=true;this._layers.slice().forEach(l=>l._remove&&l._remove());this._layers=[];this._ev={};if(this._el)this._el.innerHTML='';return this};
+MapLite.prototype.remove=function(){this._removed=true;this._layers.slice().forEach(l=>l._remove&&l._remove());this._layers=[];this._tileLayer=null;this._clearTiles();this._ev={};if(this._el)this._el.innerHTML='';return this};
 MapLite.prototype._world=function(){return 2**this._zoom*TILE};
 MapLite.prototype._screen=function(lat,lng){const p=project(lat,lng,this._zoom),c=project(this._center.lat,this._center.lng,this._zoom),w=this._world();let dx=p.x-c.x;if(dx>w/2)dx-=w;if(dx<-w/2)dx+=w;return{x:this._el.clientWidth/2+dx,y:this._el.clientHeight/2+p.y-c.y}};
 MapLite.prototype._fromScreen=function(x,y){const c=project(this._center.lat,this._center.lng,this._zoom),w=this._world();let wx=c.x+x-this._el.clientWidth/2,wy=c.y+y-this._el.clientHeight/2;wx=((wx%w)+w)%w;return unproject(wx,wy,this._zoom)};
 MapLite.prototype._render=function(){if(this._removed)return;this._tiles();this._layers.forEach(l=>l&&l._render&&l._render())};
-MapLite.prototype._tiles=function(){const w=this._el.clientWidth||360,h=this._el.clientHeight||600,z=this._zoom,n=2**z,c=project(this._center.lat,this._center.lng,z),x0=Math.floor((c.x-w/2)/TILE)-1,x1=Math.floor((c.x+w/2)/TILE)+1,y0=Math.floor((c.y-h/2)/TILE)-1,y1=Math.floor((c.y+h/2)/TILE)+1,needed=new Set();for(let x=x0;x<=x1;x++)for(let y=y0;y<=y1;y++){if(y<0||y>=n)continue;const xx=((x%n)+n)%n,key=z+'/'+xx+'/'+y;needed.add(key);let img=this._tileCache.get(key);if(!img){img=document.createElement('img');img.className='pm-tile';img.width=256;img.height=256;img.draggable=false;img.dataset.tileKey=key;img.src='https://tile.openstreetmap.org/'+z+'/'+xx+'/'+y+'.png';img.onerror=()=>{if(img.dataset.fallback)return;img.dataset.fallback=1;img.src='https://'+['a','b','c','d'][(xx+y)&3]+'.basemaps.cartocdn.com/light_all/'+z+'/'+xx+'/'+y+'.png'};this._tileCache.set(key,img);this._tilesEl.appendChild(img)}img.style.left=(this._el.clientWidth/2+x*TILE-c.x)+'px';img.style.top=(this._el.clientHeight/2+y*TILE-c.y)+'px';if(img.parentNode!==this._tilesEl)this._tilesEl.appendChild(img)}this._tileCache.forEach((img,key)=>{if(!needed.has(key)){img.remove();this._tileCache.delete(key)}})};
+MapLite.prototype._tiles=function(){
+  const w=this._el.clientWidth||360,h=this._el.clientHeight||600,z=this._zoom,n=2**z,c=project(this._center.lat,this._center.lng,z);
+  const layer=this._tileLayer,template=layer?.url||layer?._url||'https://tile.openstreetmap.org/{z}/{x}/{y}.png',subs=layer?.options?.subdomains||'abc';
+  const subList=Array.isArray(subs)?subs:String(subs||'abc').split('');
+  const x0=Math.floor((c.x-w/2)/TILE)-1,x1=Math.floor((c.x+w/2)/TILE)+1,y0=Math.floor((c.y-h/2)/TILE)-1,y1=Math.floor((c.y+h/2)/TILE)+1,needed=new Set();
+  for(let x=x0;x<=x1;x++)for(let y=y0;y<=y1;y++){
+    if(y<0||y>=n)continue;
+    const xx=((x%n)+n)%n,key=template+'|'+z+'/'+xx+'/'+y;needed.add(key);
+    let img=this._tileCache.get(key);
+    if(!img){
+      img=document.createElement('img');img.className='pm-tile';img.width=256;img.height=256;img.draggable=false;img.dataset.tileKey=key;
+      let src=template.replace(/\{z\}/g,z).replace(/\{x\}/g,xx).replace(/\{y\}/g,y);
+      src=src.replace(/\{s\}/g,subList[(Math.abs(x)+Math.abs(y))%Math.max(1,subList.length)]||'a').replace(/\{r\}/g,'');
+      img.src=src;
+      img.onerror=()=>{if(layer)layer.fire('tileerror',{tile:img,x:xx,y});};
+      this._tileCache.set(key,img);this._tilesEl.appendChild(img);
+    }
+    img.style.left=(this._el.clientWidth/2+x*TILE-c.x)+'px';img.style.top=(this._el.clientHeight/2+y*TILE-c.y)+'px';
+    if(img.parentNode!==this._tilesEl)this._tilesEl.appendChild(img);
+  }
+  this._tileCache.forEach((img,key)=>{if(!needed.has(key)){img.remove();this._tileCache.delete(key)}});
+};
 MapLite.prototype._bind=function(){const el=this._el;el.addEventListener('pointerdown',e=>{if(e.target.closest('.pm-controls,.pm-marker,.pm-popup'))return;this._drag={id:e.pointerId,x:e.clientX,y:e.clientY,px:e.clientX,py:e.clientY,cx:this._center.lng,cy:this._center.lat,moved:false};try{el.setPointerCapture(e.pointerId)}catch(_){}});
 el.addEventListener('pointermove',e=>{const d=this._drag;if(!d||d.id!==e.pointerId)return;const dx=e.clientX-d.x,dy=e.clientY-d.y;if(Math.abs(dx)+Math.abs(dy)>4)d.moved=true;const p=project(d.cy,d.cx,this._zoom);this._center=unproject(p.x-dx,p.y-dy,this._zoom);this._render()});
 el.addEventListener('pointerup',e=>{const d=this._drag;if(!d||d.id!==e.pointerId)return;this._drag=null;this.fire('moveend');if(!d.moved){const r=el.getBoundingClientRect();this.fire('click',{latlng:this._fromScreen(e.clientX-r.left,e.clientY-r.top),originalEvent:e})}});
 el.addEventListener('pointercancel',()=>{if(this._drag){this._drag=null;this.fire('moveend')}});
 el.addEventListener('wheel',e=>{e.preventDefault();this.setZoom(this._zoom+(e.deltaY<0?1:-1),true)},{passive:false})};
 MapLite.prototype.fitBounds=function(b,opts){if(!b||!Number.isFinite(b.minLat)||!Number.isFinite(b.maxLat)||!Number.isFinite(b.minLng)||!Number.isFinite(b.maxLng))return this;const maxZoom=Math.min(opts?.maxZoom??13,19),pad=opts?.padding||[0,0],availW=Math.max(100,this._el.clientWidth-(pad[1]||0)*2),availH=Math.max(100,this._el.clientHeight-(pad[0]||0)*2),lat=(b.minLat+b.maxLat)/2,lng=(b.minLng+b.maxLng)/2;let z=0;for(let zz=maxZoom;zz>=1;zz--){const a=project(b.maxLat,b.minLng,zz),c=project(b.minLat,b.maxLng,zz);if(Math.abs(c.x-a.x)<=availW&&Math.abs(c.y-a.y)<=availH){z=zz;break}}return this.setView([lat,lng],z)};
-function TileLayer(u,o){E.call(this);this.url=u;this._url=u;this.options=o||{}}TileLayer.prototype=Object.create(E.prototype);TileLayer.prototype.addTo=function(m){m.addLayer(this);return this};TileLayer.prototype._addTo=function(){};TileLayer.prototype._remove=function(){};
+function TileLayer(u,o){E.call(this);this.url=u;this._url=u;this.options=o||{}}
+TileLayer.prototype=Object.create(E.prototype);
+TileLayer.prototype.addTo=function(m){m.addLayer(this);return this};
+TileLayer.prototype._addTo=function(m){if(m._tileLayer&&m._tileLayer!==this)m._tileLayer._remove&&m._tileLayer._remove();m._tileLayer=this;m._clearTiles();m._render()};
+TileLayer.prototype._remove=function(){if(this._map&&this._map._tileLayer===this){this._map._tileLayer=null;this._map._clearTiles()}};
 function DivIcon(o){this.options=o||{}}
 function CircleMarker(ll,o){E.call(this);this._lat=+ll[0];this._lng=+ll[1];this.options=o||{};this._map=null;this._icon=null;this._tooltip=''}
 CircleMarker.prototype=Object.create(E.prototype);CircleMarker.prototype.constructor=CircleMarker;
