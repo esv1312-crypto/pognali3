@@ -1334,11 +1334,11 @@ function localizeUI(){
    if(n.nodeValue!==next)n.nodeValue=next;
  });
  root.querySelectorAll('input,textarea').forEach(e=>{
-   if(e.placeholder){if(!e.dataset.i18nSource)e.dataset.i18nSource=e.placeholder;e.placeholder=translateText(e.dataset.i18nSource)}
-   if(e.getAttribute('aria-label')){if(!e.dataset.i18nAria)e.dataset.i18nAria=e.getAttribute('aria-label');e.setAttribute('aria-label',translateText(e.dataset.i18nAria))}
-   if(e.title){if(!e.dataset.i18nTitle)e.dataset.i18nTitle=e.title;e.title=translateText(e.dataset.i18nTitle)}
+   if(e.placeholder){if(!e.dataset.i18nSource)e.dataset.i18nSource=e.placeholder;const next=translateText(e.dataset.i18nSource);if(e.placeholder!==next)e.placeholder=next}
+   if(e.getAttribute('aria-label')){if(!e.dataset.i18nAria)e.dataset.i18nAria=e.getAttribute('aria-label');const next=translateText(e.dataset.i18nAria);if(e.getAttribute('aria-label')!==next)e.setAttribute('aria-label',next)}
+   if(e.title){if(!e.dataset.i18nTitle)e.dataset.i18nTitle=e.title;const next=translateText(e.dataset.i18nTitle);if(e.title!==next)e.title=next}
  });
- root.querySelectorAll('button[title]').forEach(e=>{if(!e.dataset.i18nTitle)e.dataset.i18nTitle=e.title;e.title=translateText(e.dataset.i18nTitle)});
+ root.querySelectorAll('button[title]').forEach(e=>{if(!e.dataset.i18nTitle)e.dataset.i18nTitle=e.title;const next=translateText(e.dataset.i18nTitle);if(e.title!==next)e.title=next});
  applyStaticLanguage(); updateLangLabel();
 }
 
