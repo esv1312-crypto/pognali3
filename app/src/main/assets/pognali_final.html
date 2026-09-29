@@ -372,7 +372,7 @@ function seedDemoEvents(){
 seedDemoEvents();
 db.events.forEach(e=>{if(!e.country&&e.city==='Симферополь')e.country='Россия';if(!e.city&&e.place) e.city=db.profile?.city||'';});
 save();
-let currentTab='events', map, markers=[]; let selectedFilter='Мир', eventView='map'; let selectedDate=null, calendarOpen=false, calendarMonth=new Date(new Date().getFullYear(),new Date().getMonth(),1); let lastMapView=null; let mapViews={Мир:null,Рядом:null,Мои:null}; try{mapViews={...mapViews,...(JSON.parse(localStorage.getItem(KEY+'_map_views')||'{}')||{})}}catch(e){} let userLocationMarker=null; let userLocationRequested=false; let userGeo=null; let userLocationWaiters=[]; try{userGeo=JSON.parse(localStorage.getItem(KEY+'_user_geo')||'null');if(userGeo&&(!Number.isFinite(+userGeo.lat)||!Number.isFinite(+userGeo.lng)))userGeo=null;else if(userGeo)userGeo={lat:+userGeo.lat,lng:+userGeo.lng}}catch(e){userGeo=null}
+let currentTab='events', map, markers=[]; let selectedFilter='Мир', eventView='map'; let selectedDate=null, calendarOpen=false, calendarMonth=new Date(new Date().getFullYear(),new Date().getMonth(),1); let lastMapView=null; let mapViews={Мир:null,Рядом:null,Мои:null}; try{mapViews={...mapViews,...(JSON.parse(localStorage.getItem(KEY+'_map_views')||'{}')||{})}}catch(e){} let userLocationMarker=null; let userLocationRequested=false; let userLocationRequestToken=0; let userGeo=null; let userLocationWaiters=[]; try{userGeo=JSON.parse(localStorage.getItem(KEY+'_user_geo')||'null');if(userGeo&&(!Number.isFinite(+userGeo.lat)||!Number.isFinite(+userGeo.lng)))userGeo=null;else if(userGeo)userGeo={lat:+userGeo.lat,lng:+userGeo.lng}}catch(e){userGeo=null}
 const NEARBY_RADIUS_KM=200; const MAP_RADIUS_LEVELS=[{minZoom:13,km:25},{minZoom:11,km:50},{minZoom:9,km:150},{minZoom:7,km:600}];
 function mapRadiusKm(zoom){for(const x of MAP_RADIUS_LEVELS)if(zoom>=x.minZoom)return x.km;return null}
 function mapScopeLabel(){if(selectedFilter==='Мир')return '🌍 Весь мир';if(selectedFilter==='Рядом')return userGeo?`📍 Рядом · ${NEARBY_RADIUS_KM} км`:'📍 Включи геолокацию';return '🙋 Мои события'}
@@ -467,7 +467,7 @@ function requestUserLocation(force=false,onReady=null){
     if(scope)scope.textContent=mapScopeLabel();
     return;
   }
-  if(userLocationRequested && !force) return;
+  if(userLocationRequested) return;
   if(!navigator.geolocation){
     userLocationRequested=false;
     userLocationWaiters.splice(0);
@@ -476,7 +476,9 @@ function requestUserLocation(force=false,onReady=null){
     return;
   }
   userLocationRequested=true;
+  const requestToken=++userLocationRequestToken;
   navigator.geolocation.getCurrentPosition(pos=>{
+    if(requestToken!==userLocationRequestToken){userLocationRequested=false;return;}
     userGeo={lat:pos.coords.latitude,lng:pos.coords.longitude};
     userLocationRequested=false;
     try{localStorage.setItem(KEY+'_user_geo',JSON.stringify(userGeo))}catch(e){}
@@ -486,15 +488,16 @@ function requestUserLocation(force=false,onReady=null){
     waiters.forEach(cb=>{try{cb(userGeo)}catch(e){}});
     const scope=document.getElementById('mapScope');
     if(scope)scope.textContent=mapScopeLabel();
-    if(selectedFilter==='Рядом'){
+    if(selectedFilter==='Рядом' && currentTab==='events'){
       if(eventView==='list')renderList();else renderEvents();
     }
   },()=>{
+    if(requestToken!==userLocationRequestToken){userLocationRequested=false;return;}
     userLocationRequested=false;
     userLocationWaiters.splice(0);
     const scope=document.getElementById('mapScope');
     if(scope)scope.textContent='📍 Нажми ещё раз, чтобы определить местоположение';
-    if(selectedFilter==='Рядом'){
+    if(selectedFilter==='Рядом' && currentTab==='events'){
       const empty=document.querySelector('.map-location-empty');
       if(empty)empty.textContent='📍 Нажми кнопку местоположения, чтобы показать события рядом';
     }
@@ -511,7 +514,7 @@ async function centerOnMyLocation(){
   requestUserLocation(true);
 }
 
-function renderEvents(){destroyMainMap();const nearbyEmpty=selectedFilter==='Рядом'&&!userGeo?'<div class="map-location-empty">📍 Определяем местоположение…</div>':'';document.getElementById('content').innerHTML=`<div class="mapwrap"><div id="map" class="map"></div><div class="filters">${renderFilters()}</div>${calendarOpen?calendarHTML():''}${nearbyEmpty}<button class="my-location-btn" onclick="centerOnMyLocation()" aria-label="Моё местоположение" title="Моё местоположение">⌖</button><div id="mapScope" class="map-scope">📍 Определяем город…</div><div class="live-map-hint">🟢 Идёт сейчас</div><div class="viewtoggle"><button id="mapbtn" class="active" onclick="switchView('map')">Карта</button><button id="listbtn" onclick="switchView('list')">Список</button></div></div>`;initMap();if(selectedFilter==='Рядом'&&!userGeo)setTimeout(()=>requestUserLocation(true),60)}
+function renderEvents(){destroyMainMap();const nearbyEmpty=selectedFilter==='Рядом'&&!userGeo?'<div class="map-location-empty">📍 Определяем местоположение…</div>':'';document.getElementById('content').innerHTML=`<div class="mapwrap"><div id="map" class="map"></div><div class="filters">${renderFilters()}</div>${calendarOpen?calendarHTML():''}${nearbyEmpty}<button class="my-location-btn" onclick="centerOnMyLocation()" aria-label="Моё местоположение" title="Моё местоположение">⌖</button><div id="mapScope" class="map-scope">📍 Определяем город…</div><div class="live-map-hint">🟢 Идёт сейчас</div><div class="viewtoggle"><button id="mapbtn" class="active" onclick="switchView('map')">Карта</button><button id="listbtn" onclick="switchView('list')">Список</button></div></div>`;initMap()}
 function setFilter(x){
   if(map) {
     const c=map.getCenter();
