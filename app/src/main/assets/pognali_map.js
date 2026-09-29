@@ -13,6 +13,8 @@ MapLite.prototype.getZoom=function(){return this._zoom};
 MapLite.prototype.setZoom=function(z,fire){this._zoom=clamp(Math.round(z),0,19);this._render();if(fire){this.fire('zoomend');this.fire('moveend')}return this};
 MapLite.prototype.panTo=function(ll){this._center={lat:+ll[0],lng:+ll[1]};this._render();this.fire('moveend');return this};
 MapLite.prototype.invalidateSize=function(){this._render();return this};
+MapLite.prototype.createPane=function(name){this._panes=this._panes||{};if(!this._panes[name])this._panes[name]={style:{},name};return this._panes[name]};
+MapLite.prototype.getPane=function(name){return this._panes&&this._panes[name]||null};
 MapLite.prototype.addLayer=function(l){if(l&&!this._layers.includes(l)){this._layers.push(l);l._map=this;l._addTo&&l._addTo(this)}return this};
 MapLite.prototype.removeLayer=function(l){this._layers=this._layers.filter(x=>x!==l);l&&l._remove&&l._remove();this._render();return this};
 MapLite.prototype.remove=function(){this._removed=true;this._layers.slice().forEach(l=>l._remove&&l._remove());this._layers=[];this._ev={};if(this._el)this._el.innerHTML='';return this};
