@@ -372,7 +372,7 @@ function seedDemoEvents(){
 seedDemoEvents();
 db.events.forEach(e=>{if(!e.country&&e.city==='Симферополь')e.country='Россия';if(!e.city&&e.place) e.city=db.profile?.city||'';});
 save();
-let currentTab='events', map, markers=[]; let selectedFilter='Мир', eventView='map'; let selectedDate=null, calendarOpen=false, calendarMonth=new Date(2026,8,1); let lastMapView=null; let mapViews={Мир:null,Рядом:null,Мои:null}; try{mapViews={...mapViews,...(JSON.parse(localStorage.getItem(KEY+'_map_views')||'{}')||{})}}catch(e){} let userLocationMarker=null; let userLocationRequested=false; let userGeo=null;
+let currentTab='events', map, markers=[]; let selectedFilter='Мир', eventView='map'; let selectedDate=null, calendarOpen=false, calendarMonth=new Date(new Date().getFullYear(),new Date().getMonth(),1); let lastMapView=null; let mapViews={Мир:null,Рядом:null,Мои:null}; try{mapViews={...mapViews,...(JSON.parse(localStorage.getItem(KEY+'_map_views')||'{}')||{})}}catch(e){} let userLocationMarker=null; let userLocationRequested=false; let userGeo=null; try{userGeo=JSON.parse(localStorage.getItem(KEY+'_user_geo')||'null')}catch(e){userGeo=null}
 const NEARBY_RADIUS_KM=200; const MAP_RADIUS_LEVELS=[{minZoom:13,km:25},{minZoom:11,km:50},{minZoom:9,km:150},{minZoom:7,km:600}];
 function mapRadiusKm(zoom){for(const x of MAP_RADIUS_LEVELS)if(zoom>=x.minZoom)return x.km;return null}
 function mapScopeLabel(){if(selectedFilter==='Мир')return '🌍 Весь мир';if(selectedFilter==='Рядом')return userGeo?`📍 Рядом · ${NEARBY_RADIUS_KM} км`:'📍 Включи геолокацию';return '🙋 Мои события'}
@@ -421,8 +421,9 @@ function refreshMainMapLayout(fitToEvents=false){if(!map)return;const targetMap=
 function drawUserLocation(lat,lng,center){
   if(!map || !Number.isFinite(lat) || !Number.isFinite(lng)) return;
   if(userLocationMarker){
-    try{userLocationMarker.setLatLng([lat,lng]);}catch(e){}
-  }else{
+    try{userLocationMarker.setLatLng([lat,lng]);}catch(e){userLocationMarker=null;}
+  }
+  if(!userLocationMarker){
     userLocationMarker=L.circleMarker([lat,lng],{
       radius:8,color:'#fff',weight:3,fillColor:'#2477ff',fillOpacity:1
     }).addTo(map).bindTooltip('Вы здесь',{direction:'top',offset:[0,-8]});
@@ -431,30 +432,44 @@ function drawUserLocation(lat,lng,center){
     const z=selectedFilter==='Рядом'?12:13;
     lastMapView={lat,lng,zoom:z};
     mapViews[selectedFilter]=lastMapView;
+    try{localStorage.setItem(KEY+'_map_views',JSON.stringify(mapViews))}catch(e){}
     map.setView([lat,lng],z,{animate:false});
   }
 }
-function requestUserLocation(){
-  if(userLocationRequested) return;
-  userLocationRequested=true;
+function requestUserLocation(force=false){
+  if(userGeo && Number.isFinite(userGeo.lat) && Number.isFinite(userGeo.lng) && !force){
+    if(map)drawUserLocation(userGeo.lat,userGeo.lng,false);
+    const scope=document.getElementById('mapScope');
+    if(scope)scope.textContent=mapScopeLabel();
+    return;
+  }
+  if(userLocationRequested && !force) return;
   if(!navigator.geolocation){
+    userLocationRequested=false;
     const scope=document.getElementById('mapScope');
     if(scope)scope.textContent='📍 Включи геолокацию для событий рядом';
     return;
   }
+  userLocationRequested=true;
   navigator.geolocation.getCurrentPosition(pos=>{
     userGeo={lat:pos.coords.latitude,lng:pos.coords.longitude};
-    if(map) drawUserLocation(userGeo.lat,userGeo.lng,false);
+    userLocationRequested=false;
+    try{localStorage.setItem(KEY+'_user_geo',JSON.stringify(userGeo))}catch(e){}
+    if(map)drawUserLocation(userGeo.lat,userGeo.lng,false);
     const scope=document.getElementById('mapScope');
     if(scope)scope.textContent=mapScopeLabel();
     if(selectedFilter==='Рядом'){
-      renderEvents();
+      if(eventView==='list')renderList();else renderEvents();
     }
   },()=>{
     userLocationRequested=false;
     const scope=document.getElementById('mapScope');
-    if(scope)scope.textContent='📍 Включи геолокацию для событий рядом';
-  },{enableHighAccuracy:false,timeout:10000,maximumAge:300000});
+    if(scope)scope.textContent='📍 Нажми ещё раз, чтобы определить местоположение';
+    if(selectedFilter==='Рядом'){
+      const empty=document.querySelector('.map-location-empty');
+      if(empty)empty.textContent='📍 Нажми кнопку местоположения, чтобы показать события рядом';
+    }
+  },{enableHighAccuracy:true,timeout:12000,maximumAge:300000});
 }
 async function centerOnMyLocation(){
   if(!map)return;
@@ -462,31 +477,22 @@ async function centerOnMyLocation(){
     drawUserLocation(userGeo.lat,userGeo.lng,true);
     const scope=document.getElementById('mapScope');
     if(scope)scope.textContent=mapScopeLabel();
-    if(selectedFilter==='Рядом') renderEvents();
     return;
   }
-  if(navigator.geolocation){
-    try{
-      const pos=await new Promise((resolve,reject)=>
-        navigator.geolocation.getCurrentPosition(resolve,reject,{
-          enableHighAccuracy:true,timeout:10000,maximumAge:300000
-        })
-      );
-      userGeo={lat:pos.coords.latitude,lng:pos.coords.longitude};
-      userLocationRequested=true;
-      renderEvents();
-      return;
-    }catch(e){userLocationRequested=false;}
-  }
-  const scope=document.getElementById('mapScope');
-  if(scope)scope.textContent='📍 Не удалось определить местоположение';
+  requestUserLocation(true);
 }
 
-function renderEvents(){destroyMainMap();document.getElementById('content').innerHTML=`<div class="mapwrap"><div id="map" class="map"></div><div class="filters">${renderFilters()}</div>${calendarOpen?calendarHTML():''}<button class="my-location-btn" onclick="centerOnMyLocation()" aria-label="Моё местоположение" title="Моё местоположение">⌖</button><div id="mapScope" class="map-scope">📍 Определяем город…</div><div class="live-map-hint">🟢 Идёт сейчас</div><div class="viewtoggle"><button id="mapbtn" class="active" onclick="switchView('map')">Карта</button><button id="listbtn" onclick="switchView('list')">Список</button></div></div>`;initMap()}
+function renderEvents(){destroyMainMap();const nearbyEmpty=selectedFilter==='Рядом'&&!userGeo?'<div class="map-location-empty">📍 Определяем местоположение…</div>':'';document.getElementById('content').innerHTML=`<div class="mapwrap"><div id="map" class="map"></div><div class="filters">${renderFilters()}</div>${calendarOpen?calendarHTML():''}${nearbyEmpty}<button class="my-location-btn" onclick="centerOnMyLocation()" aria-label="Моё местоположение" title="Моё местоположение">⌖</button><div id="mapScope" class="map-scope">📍 Определяем город…</div><div class="live-map-hint">🟢 Идёт сейчас</div><div class="viewtoggle"><button id="mapbtn" class="active" onclick="switchView('map')">Карта</button><button id="listbtn" onclick="switchView('list')">Список</button></div></div>`;initMap();if(selectedFilter==='Рядом'&&!userGeo)setTimeout(()=>requestUserLocation(true),60)}
 function setFilter(x){
-  if(map) { const c=map.getCenter(); lastMapView={lat:c.lat,lng:c.lng,zoom:map.getZoom()}; mapViews[selectedFilter]=lastMapView; }
+  if(map) {
+    const c=map.getCenter();
+    lastMapView={lat:c.lat,lng:c.lng,zoom:map.getZoom()};
+    mapViews[selectedFilter]=lastMapView;
+    try{localStorage.setItem(KEY+'_map_views',JSON.stringify(mapViews))}catch(e){}
+  }
   selectedDate=null;calendarOpen=false;selectedFilter=x;lastMapView=mapViews[x]||null;
-  if(eventView==='list')renderList();else renderEvents()
+  if(eventView==='list')renderList();else renderEvents();
+  if(x==='Рядом' && !userGeo) setTimeout(()=>requestUserLocation(true),80);
 }
 function toggleCalendar(){calendarOpen=!calendarOpen;if(calendarOpen&&selectedDate){const d=new Date(selectedDate+'T12:00:00');calendarMonth=new Date(d.getFullYear(),d.getMonth(),1)}if(eventView==='list')renderList();else renderEvents()}
 function moveCalendar(delta){calendarMonth=new Date(calendarMonth.getFullYear(),calendarMonth.getMonth()+delta,1);if(eventView==='list')renderList();else renderEvents()}
@@ -506,7 +512,7 @@ function initMap(){
   const worldMode=selectedFilter==='Мир';
   const savedView=selectedDate?null:(mapViews[selectedFilter]||lastMapView);
   const initialView=savedView ? [savedView.lat,savedView.lng] : (userGeo?[userGeo.lat,userGeo.lng]:[MAP_CENTER.lat,MAP_CENTER.lng]);
-  const initialZoom=savedView ? savedView.zoom : (worldMode?2:9);
+  const initialZoom=savedView ? savedView.zoom : (selectedDate?12:(worldMode?2:9));
   map=L.map('map').setView(initialView,initialZoom);
   const tileLayer=L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19,subdomains:'abc',attribution:'© OpenStreetMap contributors'}).addTo(map);
   let tileErrors=0,tileFallbackUsed=false;
@@ -560,7 +566,7 @@ function initMap(){
   renderMapMarkers();
   if(userGeo) drawUserLocation(userGeo.lat,userGeo.lng,false);
   else requestUserLocation();
-  refreshMainMapLayout(false);
+  refreshMainMapLayout(!!selectedDate);
 }
 function eventLabel(title,cat){
   const t=String(title||'').trim();
