@@ -65,8 +65,13 @@ MapLite.prototype._tiles=function(){
       img.onload=()=>{if(layer)layer.fire('tileload',{tile:img,x:xx,y,url:src});};
       img.onerror=()=>{
         if(layer)layer.fire('tileerror',{tile:img,x:xx,y,url:src});
+        try{console.error('[MAP TILE ERROR] '+src)}catch(_){}
+        try{if(window.PognaliDiagnostics)PognaliDiagnostics.log('MAP TILE ERROR url='+src+' z='+z+' x='+xx+' y='+y)}catch(_){}
         const box=this._el.querySelector('.pm-tile-error');
-        if(box){box.textContent='Не удалось загрузить карту. Тайл: '+src;box.style.display='block';}
+        if(box){
+          box.innerHTML='Не удалось загрузить карту.<br><small style="word-break:break-all">Тайл: '+String(src).replace(/&/g,'&amp;').replace(/</g,'&lt;')+'</small><br><button type="button" style="margin-top:6px;padding:6px 9px;border-radius:8px;background:#17191d;color:#fff;font-size:11px" onclick="window.PognaliDiagnostics&&PognaliDiagnostics.saveDiagnostics()">Сохранить лог</button>';
+          box.style.display='block';
+        }
       };
       this._tileCache.set(key,img);this._tilesEl.appendChild(img);
     }
