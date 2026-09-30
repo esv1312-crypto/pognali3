@@ -1,0 +1,7 @@
+services:
+  - type: web
+    name: pognali-mcp
+    runtime: docker
+    dockerfilePath: ./chatgpt/mcp/Dockerfile
+    dockerContext: .
+    healthCheckPath: /mcp
