@@ -76,4 +76,4 @@ jobs:
           path: test-results/
           if-no-files-found: warn
           retention-days: 14
-# QA trigger: rerun hardened emulator simulation
+# QA trigger: rerun hardened emulator simulation v2
