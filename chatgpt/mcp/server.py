@@ -39,4 +39,11 @@ def send_message(event_id: str, user_id: str, text: str) -> dict:
     return core.send_message(event_id, user_id, text)
 
 if __name__ == "__main__":
-    mcp.run(transport="streamable-http", stateless_http=True, json_response=True)
+    mcp.run(
+        transport="streamable-http",
+        host="0.0.0.0",
+        port=8000,
+        streamable_http_path="/mcp",
+        stateless_http=True,
+        json_response=True,
+    )
