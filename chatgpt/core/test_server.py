@@ -5,6 +5,7 @@ import sys
 import time
 import urllib.error
 import urllib.request
+from urllib.parse import urlencode
 
 HOST = "127.0.0.1"
 PORT = 8080
@@ -40,7 +41,7 @@ try:
     else:
         raise AssertionError("Core API did not become healthy")
 
-    status, body = request("GET", "/events?city=Екатеринбург&date=2026-10-01")
+    status, body = request("GET", "/events?" + urlencode({"city": "Екатеринбург", "date": "2026-10-01"}))
     assert status == 200
     assert any(e["id"] == "demo-football-1" for e in body["events"])
 
