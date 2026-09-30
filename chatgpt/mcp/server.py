@@ -1,4 +1,11 @@
 """Pognali MCP server exposed through the official Python SDK."""
+import sys
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parents[2]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
 from mcp.server.mcpserver import MCPServer
 from chatgpt.mcp import adapter as core
 
