@@ -68,8 +68,11 @@ jobs:
             mkdir -p test-results/screenshots test-results
             adb install -r app/build/outputs/apk/debug/app-debug.apk
             # API 35 may reject direct adb push into shared storage.
-            # Stage the fixture in adb's writable temp area first.
+            # Stage the fixture in adb's writable temp area, then copy it from
+            # the emulator shell into shared Downloads for DocumentsUI.
             adb push qa-profile.png /data/local/tmp/qa-profile.png >/dev/null
+            adb shell mkdir -p /sdcard/Download
+            adb shell cp /data/local/tmp/qa-profile.png /sdcard/Download/qa-profile.png
 
             REPORT="test-results/test-report.txt"
             : > "$REPORT"
@@ -181,6 +184,9 @@ jobs:
 
             log "FULL HUMAN-STYLE SIMULATION"
             log "Commit: $GITHUB_SHA"
+            log "STEP 00 | APK installed; beginning emulator-driven user simulation"
+            log "STEP 00.1 | Profile photo fixture staged"
+
             log "Started: $(date -u +"%Y-%m-%dT%H:%M:%SZ")"
 
             # 01. Launch / permissions / initial screen
