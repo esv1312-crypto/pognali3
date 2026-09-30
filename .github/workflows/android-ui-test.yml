@@ -44,8 +44,13 @@ jobs:
       - name: Create profile photo fixture
         run: |
           python3 - <<'PY'
-          from PIL import Image
-          Image.new("RGB",(256,256),(120,120,120)).save("qa-profile.jpg","JPEG")
+          import struct, zlib
+          w = h = 256
+          raw = b''.join(b'\x00' + bytes((120,120,120))*w for _ in range(h))
+          def chunk(kind, data):
+              return struct.pack(">I", len(data)) + kind + data + struct.pack(">I", zlib.crc32(kind + data) & 0xffffffff)
+          png = b'\x89PNG\r\n\x1a\n' + chunk(b'IHDR', struct.pack(">IIBBBBB", w,h,8,2,0,0,0)) + chunk(b'IDAT', zlib.compress(raw, 9)) + chunk(b'IEND', b'')
+          open("qa-profile.png","wb").write(png)
           PY
 
       - name: Run full human-style Android simulation
@@ -61,7 +66,7 @@ jobs:
             set -e
             mkdir -p test-results/screenshots test-results
             adb install -r app/build/outputs/apk/debug/app-debug.apk
-            adb push qa-profile.jpg /sdcard/Download/qa-profile.jpg >/dev/null
+            adb push qa-profile.png /sdcard/Download/qa-profile.png >/dev/null
 
             REPORT="test-results/test-report.txt"
             : > "$REPORT"
@@ -491,7 +496,7 @@ jobs:
                 tap_if "Downloads" || true
                 sleep 1
                 dump_ui
-                tap_if "qa-profile.jpg" || true
+                tap_if "qa-profile.png" || true
                 sleep 1
                 pass "Profile photo picker interaction"
               else
