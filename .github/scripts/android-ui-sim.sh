@@ -18,17 +18,35 @@ log(){ echo "$*" | tee -a "$REPORT"; }
 pass(){ PASS=$((PASS+1)); log "PASS | $*"; }
 fail(){ FAIL=$((FAIL+1)); log "FAIL | $*"; }
 skip(){ SKIP=$((SKIP+1)); log "SKIP | $*"; }
+heartbeat(){ log "HEARTBEAT | $* | $(date -u +"%Y-%m-%dT%H:%M:%SZ")"; }
 
 shot(){
   adb exec-out screencap -p > "test-results/screenshots/$1.png"
   log "SHOT | $1.png"
 }
 
-dump_ui(){
-  adb shell uiautomator dump /sdcard/window.xml >/dev/null 2>&1 || true
-  adb shell cat /sdcard/window.xml 2>/dev/null || true
+UI_XML="/data/local/tmp/window.xml"
+
+recover_system_ui(){
+  if adb shell uiautomator dump "$UI_XML" >/dev/null 2>&1 && adb shell cat "$UI_XML" 2>/dev/null | grep -Fqi "System UI isn't responding"; then
+    log "ENV | System UI ANR detected; tapping Wait"
+    adb shell input tap 540 1090 >/dev/null 2>&1 || true
+    sleep 3
+    if adb shell uiautomator dump "$UI_XML" >/dev/null 2>&1 && adb shell cat "$UI_XML" 2>/dev/null | grep -Fqi "System UI isn't responding"; then
+      log "ENV | System UI ANR persists; restarting System UI"
+      adb shell am force-stop com.android.systemui >/dev/null 2>&1 || true
+      sleep 4
+    else
+      log "ENV | System UI recovered"
+    fi
+  fi
 }
 
+dump_ui(){
+  recover_system_ui || true
+  adb shell uiautomator dump "$UI_XML" >/dev/null 2>&1 || true
+  adb shell cat "$UI_XML" 2>/dev/null || true
+}
 tap_text(){
   NEEDLE="$1"
   python3 - "$NEEDLE" <<'PY'
@@ -117,6 +135,7 @@ close_modal(){
 }
 
 log "FULL HUMAN-STYLE SIMULATION"
+heartbeat "simulation started"
 log "Commit: $GITHUB_SHA"
 log "STEP 00 | APK installed; beginning emulator-driven user simulation"
 log "STEP 00.1 | Profile photo fixture staged in /data/local/tmp"
