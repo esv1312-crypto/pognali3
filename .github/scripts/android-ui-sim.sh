@@ -52,7 +52,7 @@ tap_text(){
   python3 - "$NEEDLE" <<'PY'
 import subprocess,sys,xml.etree.ElementTree as ET,re
 needle=sys.argv[1]
-xml=subprocess.check_output(["adb","shell","cat","/sdcard/window.xml"],text=True,errors="ignore")
+xml=subprocess.check_output(["adb","shell","cat","/data/local/tmp/window.xml"],text=True,errors="ignore")
 root=ET.fromstring(xml)
 for n in root.iter():
     text=(n.attrib.get("text") or "")
@@ -90,7 +90,7 @@ tap_field(){
   python3 - "$NEEDLE" <<'PY'
 import subprocess,sys,xml.etree.ElementTree as ET,re
 needle=sys.argv[1]
-xml=subprocess.check_output(["adb","shell","cat","/sdcard/window.xml"],text=True,errors="ignore")
+xml=subprocess.check_output(["adb","shell","cat","/data/local/tmp/window.xml"],text=True,errors="ignore")
 root=ET.fromstring(xml)
 nodes=list(root.iter())
 for idx,n in enumerate(nodes):
@@ -184,7 +184,7 @@ if tap_if "Дата"; then
   # Tap a visible calendar day button if available.
   if python3 - <<'PY'
 import subprocess,xml.etree.ElementTree as ET,re
-x=subprocess.check_output(["adb","shell","cat","/sdcard/window.xml"],text=True,errors="ignore")
+x=subprocess.check_output(["adb","shell","cat","/data/local/tmp/window.xml"],text=True,errors="ignore")
 r=ET.fromstring(x)
 for n in r.iter():
     t=n.attrib.get("text","").strip()
