@@ -1,0 +1,91 @@
+name: Android Emulator Environment Health Check
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  emulator-health:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+        with:
+          packages: 'platform-tools'
+
+      - name: Start clean emulator and verify Android environment
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 34
+          target: google_apis
+          arch: x86_64
+          profile: pixel_2
+          emulator-boot-timeout: 1200
+          cores: 2
+          ram-size: 4096M
+          emulator-options: -no-window -no-audio -no-boot-anim -no-snapshot -gpu swiftshader_indirect
+          disable-animations: true
+          script: |
+            set -u
+            mkdir -p test-results/emulator-health
+            REPORT=test-results/emulator-health/report.txt
+            : > "$REPORT"
+            log(){ echo "$*" | tee -a "$REPORT"; }
+
+            log "HEALTH | started $(date -u +'%Y-%m-%dT%H:%M:%SZ')"
+            adb wait-for-device
+            log "HEALTH | adb device connected"
+            log "BOOT | sys.boot_completed=$(adb shell getprop sys.boot_completed | tr -d '\r')"
+            log "BOOT | bootanim=$(adb shell getprop init.svc.bootanim | tr -d '\r')"
+            log "PROC | system_server=$(adb shell pidof system_server | tr -d '\r')"
+            log "PROC | systemui=$(adb shell pidof com.android.systemui | tr -d '\r')"
+
+            failures=0
+            for i in $(seq 1 12); do
+              stamp=$(date -u +'%Y-%m-%dT%H:%M:%SZ')
+              boot=$(adb shell getprop sys.boot_completed | tr -d '\r')
+              ss=$(adb shell pidof system_server | tr -d '\r')
+              su=$(adb shell pidof com.android.systemui | tr -d '\r')
+              timeout=$(adb shell settings get system screen_off_timeout | tr -d '\r')
+              ping=$(adb shell echo ok | tr -d '\r')
+              log "HEARTBEAT $i | $stamp | boot=$boot system_server=$ss systemui=$su adb_echo=$ping timeout=$timeout"
+
+              if [ "$boot" != "1" ] || [ -z "$ss" ] || [ -z "$su" ] || [ "$ping" != "ok" ]; then
+                failures=$((failures+1))
+                log "WARN | unstable heartbeat $i"
+              fi
+
+              adb shell uiautomator dump /data/local/tmp/health-window.xml >/dev/null 2>&1 || true
+              adb shell cat /data/local/tmp/health-window.xml 2>/dev/null | grep -Fqi "isn't responding" && log "ANR | system dialog detected" || true
+              sleep 3
+            done
+
+            adb shell dumpsys activity top > test-results/emulator-health/activity-top.txt 2>&1 || true
+            adb shell dumpsys window > test-results/emulator-health/window.txt 2>&1 || true
+            adb shell dumpsys meminfo system_server > test-results/emulator-health/system-server-mem.txt 2>&1 || true
+            adb shell getprop > test-results/emulator-health/getprop.txt 2>&1 || true
+
+            adb exec-out screencap -p > test-results/emulator-health/final.png || true
+            log "HEALTH | finished $(date -u +'%Y-%m-%dT%H:%M:%SZ') | unstable_heartbeats=$failures"
+
+            if [ "$failures" -gt 0 ]; then
+              exit 1
+            fi
+
+      - name: Upload emulator health evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: emulator-health-${{ github.run_number }}
+          path: test-results/emulator-health/
+          retention-days: 14
