@@ -1,26 +1,24 @@
 name: Activate Pognali ChatGPT UI on update
 
 on:
+  workflow_dispatch:
   push:
     branches:
       - chatgpt-mvp-skeleton
     paths:
-      - chatgpt/mcp/apps_server.b64
+      - chatgpt/mcp/server.py
+      - chatgpt/app/pognali-events.html
       - .github/workflows/activate-chatgpt-app-ui-push.yml
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
-  activate:
+  validate:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Activate MCP Apps server
-        run: |
-          base64 -d chatgpt/mcp/apps_server.b64 > chatgpt/mcp/server.py
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add chatgpt/mcp/server.py
-          git commit -m "Activate MCP Apps event UI" || exit 0
-          git push
+      - name: Install MCP SDK
+        run: python3 -m pip install -r chatgpt/mcp/requirements.txt
+      - name: Validate MCP Apps server imports
+        run: python3 -c "from chatgpt.mcp.server import mcp; print(mcp)"
