@@ -1,4 +1,5 @@
-"""Pognali MCP server exposed through the official Python SDK."""
+"""Pognali MCP Apps server."""
+
 import sys
 from pathlib import Path
 
@@ -7,27 +8,43 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from mcp.server.mcpserver import MCPServer
+from mcp.server.apps import Apps
+
 from chatgpt.mcp import adapter as core
 
+UI_URI = "ui://pognali/events-v1.html"
+UI_FILE = ROOT / "chatgpt" / "app" / "pognali-events.html"
+
+apps = Apps()
 mcp = MCPServer(
     "Pognali",
     instructions="Find, join, create and discuss real-world Pognali events.",
+    extensions=[apps],
 )
 
-@mcp.tool()
+apps.add_html_resource(
+    UI_URI,
+    UI_FILE.read_text(encoding="utf-8"),
+    name="Pognali events",
+    title="Погнали ⚡",
+    description="События Погнали для выхода в реальную жизнь.",
+    prefers_border=True,
+)
+
+@mcp.tool(
+    resource_uri=UI_URI,
+    description="Find Pognali events for a date, optionally filtered by city, category and age.",
+)
 def search_events(city: str | None = None, event_date: str | None = None,
                   category: str | None = None, user_age: int | None = None) -> dict:
-    """Find Pognali events for a date, optionally filtered by city, category and age."""
     return core.search_events(city, event_date, category, user_age)
 
 @mcp.tool()
 def get_event(event_id: str) -> dict:
-    """Get the full current card for one Pognali event."""
     return core.get_event(event_id)
 
 @mcp.tool()
 def join_event(event_id: str, user_id: str, user_age: int) -> dict:
-    """Join an event after checking capacity, age range, expiry and duplicates."""
     return core.join_event(event_id, user_id, user_age)
 
 @mcp.tool()
@@ -35,14 +52,12 @@ def create_event(title: str, event_date: str, time: str, place: dict,
                  max_participants: int, min_age: int, max_age: int,
                  category: str = "other", emoji: str = "📍",
                  description: str = "", creator_id: str = "chatgpt-user") -> dict:
-    """Create a real-world event with capacity and age constraints."""
     return core.create_event(title, event_date, time, place, max_participants,
                              min_age, max_age, category, emoji, description,
                              creator_id)
 
 @mcp.tool()
 def send_message(event_id: str, user_id: str, text: str) -> dict:
-    """Send a message to an event chat."""
     return core.send_message(event_id, user_id, text)
 
 if __name__ == "__main__":
