@@ -208,10 +208,10 @@ body{min-height:100dvh;overscroll-behavior:none}
   .cal-day small{font-size:8px;padding:2px 3px}
 }
 </style>
-</head>
+<style>.brand-lockup{display:flex;flex-direction:column;align-items:flex-start;gap:3px;line-height:1}.brand-tagline{font-family:"Trebuchet MS",Inter,system-ui,-apple-system,sans-serif;font-size:10px;font-weight:850;letter-spacing:.2px;color:#6b7078;padding-left:5px;white-space:nowrap;line-height:1.05}</style></head>
 <body>
 <div class="app">
-<header class="top"><button class="logo-btn" type="button" onclick="go('events')" aria-label="Врывайся — открыть события"><span class="logo-emoji">⚡</span><span class="logo-word">ВРЫВАЙСЯ</span><span class="logo-sticker">✦</span></button><div class="life-tagline">Жизнь начинается здесь <b>→</b></div><div class="spacer"></div><button class="pill lang-btn" onclick="openLanguage()" aria-label="Выбрать язык">🌐 <span id="langLabel">RU</span> ▾</button></header>
+<header class="top"><div class="brand-lockup"><button class="logo-btn" type="button" onclick="go('events')" aria-label="Врывайся — открыть события"><span class="logo-emoji">⚡</span><span class="logo-word">ВРЫВАЙСЯ</span><span class="logo-sticker">✦</span></button><div class="brand-tagline">Жизнь начинается здесь</div></div><div class="life-tagline">Жизнь начинается здесь <b>→</b></div><div class="spacer"></div><button class="pill lang-btn" onclick="openLanguage()" aria-label="Выбрать язык">🌐 <span id="langLabel">RU</span> ▾</button></header>
 <main class="content" id="content"></main>
 <nav class="bottomnav"> <button class="nav active" data-tab="events" onclick="go('events')"><b>🗺️</b><span>События</span></button> <button class="nav create-nav" data-tab="create" onclick="go('create')"><b>＋</b><span>Создать</span></button> <button class="nav" data-tab="mine" onclick="go('mine')"><b>🙋</b><span>Мои</span></button> <button class="nav" data-tab="profile" onclick="go('profile')"><b>👤</b><span>Профиль</span></button> </nav></div>
 <div class="modal" id="modal"><div class="sheet" id="sheet"></div></div>
