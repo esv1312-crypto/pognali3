@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Погнали</title>
+<style>
+:root{color-scheme:light dark;font-family:system-ui,-apple-system,sans-serif}
+body{margin:0;padding:16px;background:transparent;color:CanvasText}
+.wrap{display:grid;gap:12px}
+h2{margin:0;font-size:22px}
+.sub{opacity:.7;font-size:14px}
+.card{border:1px solid color-mix(in srgb,CanvasText 14%,transparent);border-radius:18px;padding:14px;display:grid;gap:8px}
+.row{display:flex;justify-content:space-between;gap:12px;align-items:center}
+.title{font-weight:750;font-size:18px}
+.meta{font-size:14px;opacity:.8}
+.desc{font-size:14px;line-height:1.35}
+button{border:0;border-radius:12px;padding:11px 14px;font:inherit;font-weight:700;cursor:pointer;background:#111;color:#fff}
+@media(prefers-color-scheme:dark){button{background:#fff;color:#111}}
+.empty{padding:20px 8px;text-align:center;opacity:.75}
+</style>
+</head>
+<body>
+<main class="wrap">
+  <div>
+    <h2>Ну что, погнали?</h2>
+    <div class="sub">Сегодня рядом с тобой</div>
+  </div>
+  <section id="events" class="wrap" aria-live="polite">
+    <div class="empty">Жду события от Погнали…</div>
+  </section>
+</main>
+<script>
+(function(){
+  const root=document.getElementById("events");
+  function esc(v){return String(v??"").replace(/[&<>"]/g,s=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[s]));}
+  function render(data){
+    const items=Array.isArray(data?.events)?data.events:[];
+    if(!items.length){root.innerHTML='<div class="empty">Сегодня рядом пока ничего нет.</div>';return;}
+    root.innerHTML=items.map(e=>{
+      const age=e.age_range||{min:e.min_age,max:e.max_age};
+      return '<article class="card">'+
+        '<div class="row"><div class="title">'+esc(e.emoji||"📍")+' '+esc(e.title)+'</div><strong>'+esc(e.participant_count)+' / '+esc(e.max_participants)+'</strong></div>'+
+        '<div class="meta">Сегодня · '+esc(e.time)+' · 📍 '+esc(e.place?.name||e.place?.city||"Место уточняется")+'</div>'+
+        '<div class="meta">🎂 '+esc(age.min)+'–'+esc(age.max)+' лет</div>'+
+        '<div class="desc">'+esc(e.description||"")+'</div>'+
+        '<div><button type="button" data-id="'+esc(e.id)+'">ПОЙТИ</button></div>'+
+      '</article>';
+    }).join("");
+  }
+  window.pognaliRender=render;
+})();
+</script>
+</body>
+</html>
