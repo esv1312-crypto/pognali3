@@ -1,8 +1,4 @@
-"""Black-box tests for the minimal Pognali Core API.
-
-The tests start the server on a local ephemeral port and verify the full
-create -> search -> get -> join -> message lifecycle plus validation errors.
-"""
+"""Black-box tests for the minimal Pognali Core API."""
 import json
 import subprocess
 import sys
@@ -11,7 +7,7 @@ import urllib.error
 import urllib.request
 
 HOST = "127.0.0.1"
-PORT = 18080
+PORT = 8080
 BASE = f"http://{HOST}:{PORT}"
 
 def request(method, path, payload=None):
