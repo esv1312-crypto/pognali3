@@ -66,7 +66,8 @@ jobs:
             set -e
             mkdir -p test-results/screenshots test-results
             adb install -r app/build/outputs/apk/debug/app-debug.apk
-            adb push qa-profile.png /sdcard/Download/qa-profile.png >/dev/null
+            adb shell mkdir -p /sdcard/Download
+          adb push qa-profile.png /sdcard/Download/qa-profile.png >/dev/null
 
             REPORT="test-results/test-report.txt"
             : > "$REPORT"
