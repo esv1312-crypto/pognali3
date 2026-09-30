@@ -1,0 +1,133 @@
+name: Android UI Smoke + Visual Test
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  ui-test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '17'
+          cache: gradle
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+        with:
+          packages: 'platform-tools'
+
+      - name: Install Android SDK platform
+        run: sdkmanager "platforms;android-35" "build-tools;35.0.0"
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '9.7.1'
+
+      - name: Build debug APK
+        run: gradle :app:assembleDebug --stacktrace
+
+      - name: Run Android UI smoke test
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 35
+          target: google_apis
+          arch: x86_64
+          profile: Pixel_6
+          emulator-options: -no-window -no-audio -no-boot-anim -gpu swiftshader_indirect
+          disable-animations: true
+          script: |
+            set -e
+            mkdir -p test-results/screenshots
+            adb install -r app/build/outputs/apk/debug/app-debug.apk
+
+            report="test-results/test-report.txt"
+            : > "$report"
+
+            echo "UI smoke test for commit $GITHUB_SHA" | tee -a "$report"
+            echo "Started: $(date -u +"%Y-%m-%dT%H:%M:%SZ")" | tee -a "$report"
+
+            screenshot() {
+              adb exec-out screencap -p > "test-results/screenshots/$1.png"
+              echo "SCREENSHOT $1.png" | tee -a "$report"
+            }
+
+            wait_for_text() {
+              local needle="$1"
+              local timeout="${2:-20}"
+              for i in $(seq 1 "$timeout"); do
+                if adb shell uiautomator dump /sdcard/window.xml >/dev/null 2>&1; then
+                  if adb shell cat /sdcard/window.xml | grep -Fq "$needle"; then
+                    return 0
+                  fi
+                fi
+                sleep 1
+              done
+              return 1
+            }
+
+            tap_bottom_nav() {
+              local x="$1"
+              local y=730
+              adb shell input tap "$x" "$y"
+              sleep 1
+            }
+
+            echo "STEP launch" | tee -a "$report"
+            sleep 3
+            screenshot "01_launch"
+
+            echo "STEP events" | tee -a "$report"
+            if wait_for_text "События" 10; then
+              echo "PASS events navigation visible" | tee -a "$report"
+            else
+              echo "FAIL events navigation not visible" | tee -a "$report"
+              exit 1
+            fi
+            screenshot "02_events"
+
+            echo "STEP calendar" | tee -a "$report"
+            adb shell input tap 115 105
+            sleep 1
+            screenshot "03_calendar"
+
+            echo "STEP create" | tee -a "$report"
+            tap_bottom_nav 210
+            sleep 1
+            screenshot "04_create"
+
+            echo "STEP mine" | tee -a "$report"
+            tap_bottom_nav 315
+            sleep 1
+            screenshot "05_mine"
+
+            echo "STEP profile" | tee -a "$report"
+            tap_bottom_nav 420
+            sleep 1
+            screenshot "06_profile"
+
+            echo "PASS smoke navigation completed" | tee -a "$report"
+            echo "Finished: $(date -u +"%Y-%m-%dT%H:%M:%SZ")" | tee -a "$report"
+
+      - name: Upload UI screenshots and report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: visual-test-run-${{ github.run_number }}
+          path: test-results/
+          if-no-files-found: warn
+          retention-days: 14
