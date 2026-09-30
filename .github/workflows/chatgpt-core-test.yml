@@ -13,7 +13,7 @@ on:
 jobs:
   core-test:
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 10
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -23,5 +23,11 @@ jobs:
         with:
           python-version: "3.12"
 
+      - name: Install MCP SDK
+        run: python3 -m pip install -r chatgpt/mcp/requirements.txt
+
       - name: Run Core API tests
         run: python3 chatgpt/core/test_server.py
+
+      - name: Verify MCP server imports
+        run: python3 -c "from chatgpt.mcp.server import mcp; print(mcp)"
