@@ -37,8 +37,8 @@ jobs:
           disable-animations: true
           script: |
             set -u
-            mkdir -p test-results/emulator-health
-            REPORT=test-results/emulator-health/report.txt
+            mkdir -p "$GITHUB_WORKSPACE/test-results/emulator-health"
+            REPORT="$GITHUB_WORKSPACE/test-results/emulator-health/report.txt"
             : > "$REPORT"
             log(){ echo "$*" | tee -a "$REPORT"; }
 
@@ -70,17 +70,13 @@ jobs:
               sleep 3
             done
 
-            adb shell dumpsys activity top > test-results/emulator-health/activity-top.txt 2>&1 || true
-            adb shell dumpsys window > test-results/emulator-health/window.txt 2>&1 || true
-            adb shell dumpsys meminfo system_server > test-results/emulator-health/system-server-mem.txt 2>&1 || true
-            adb shell getprop > test-results/emulator-health/getprop.txt 2>&1 || true
-
-            adb exec-out screencap -p > test-results/emulator-health/final.png || true
+            adb shell dumpsys activity top > "$GITHUB_WORKSPACE/test-results/emulator-health/activity-top.txt" 2>&1 || true
+            adb shell dumpsys window > "$GITHUB_WORKSPACE/test-results/emulator-health/window.txt" 2>&1 || true
+            adb shell dumpsys meminfo system_server > "$GITHUB_WORKSPACE/test-results/emulator-health/system-server-mem.txt" 2>&1 || true
+            adb shell getprop > "$GITHUB_WORKSPACE/test-results/emulator-health/getprop.txt" 2>&1 || true
+            adb exec-out screencap -p > "$GITHUB_WORKSPACE/test-results/emulator-health/final.png" || true
             log "HEALTH | finished $(date -u +'%Y-%m-%dT%H:%M:%SZ') | unstable_heartbeats=$failures"
-
-            if [ "$failures" -gt 0 ]; then
-              exit 1
-            fi
+            if [ "$failures" -gt 0 ]; then exit 1; fi
 
       - name: Upload emulator health evidence
         if: always()
