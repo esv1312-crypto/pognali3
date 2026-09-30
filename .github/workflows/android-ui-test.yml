@@ -41,6 +41,13 @@ jobs:
       - name: Build debug APK
         run: gradle :app:assembleDebug --stacktrace
 
+      - name: Create profile photo fixture
+        run: |
+          python3 - <<'PY'
+          from PIL import Image
+          Image.new("RGB",(256,256),(120,120,120)).save("qa-profile.jpg","JPEG")
+          PY
+
       - name: Run full human-style Android simulation
         uses: reactivecircus/android-emulator-runner@v2
         with:
@@ -54,6 +61,7 @@ jobs:
             set -e
             mkdir -p test-results/screenshots test-results
             adb install -r app/build/outputs/apk/debug/app-debug.apk
+            adb push qa-profile.jpg /sdcard/Download/qa-profile.jpg >/dev/null
 
             REPORT="test-results/test-report.txt"
             : > "$REPORT"
@@ -112,6 +120,28 @@ jobs:
               dump_ui
               if tap_text "$1"; then sleep 1; return 0; fi
               return 1
+            }
+
+            tap_field(){
+              NEEDLE="$1"
+              python3 - "$NEEDLE" <<'PY'
+            import subprocess,sys,xml.etree.ElementTree as ET,re
+            needle=sys.argv[1]
+            xml=subprocess.check_output(["adb","shell","cat","/sdcard/window.xml"],text=True,errors="ignore")
+            root=ET.fromstring(xml)
+            nodes=list(root.iter())
+            for idx,n in enumerate(nodes):
+                text=(n.attrib.get("text") or "")
+                if needle.lower() in text.lower():
+                    b=n.attrib.get("bounds",""); m=re.match(r"\\[(\\d+),(\\d+)\\]\\[(\\d+),(\\d+)\\]",b)
+                    if m:
+                        x=(int(m.group(1))+int(m.group(3)))//2; y=(int(m.group(2))+int(m.group(4)))//2
+                        subprocess.check_call(["adb","shell","input","tap",str(x),str(y+45)])
+                        print(f"FIELD {text} @ {x},{y+45}")
+                        raise SystemExit(0)
+            raise SystemExit(1)
+            PY
+              sleep .5
             }
 
             type_ascii(){
@@ -300,7 +330,7 @@ jobs:
               shot "13_create_empty"
 
               dump_ui
-              if tap_if "Что делаем?"; then
+              if tap_field "Что делаем?"; then
                 type_ascii "QA meetup"
                 pass "Event title entered"
               else fail "Event title input"; fi
@@ -309,7 +339,7 @@ jobs:
               if tap_if "Спорт"; then pass "Category selected"; else skip "Sport category button"; fi
 
               dump_ui
-              if tap_if "Иконка события"; then
+              if tap_field "Иконка события"; then
                 type_ascii "😀"
                 pass "Custom emoji input exercised"
               else
@@ -321,7 +351,7 @@ jobs:
 
               # Date picker: open it and accept the currently offered date.
               dump_ui
-              if tap_if "Дата"; then
+              if tap_field "Дата"; then
                 sleep 1
                 dump_ui
                 if tap_if "OK"; then pass "Date picker accepted"; else skip "Date picker OK not exposed"; fi
@@ -329,7 +359,7 @@ jobs:
 
               # Time picker
               dump_ui
-              if tap_if "Время"; then
+              if tap_field "Время"; then
                 sleep 1
                 dump_ui
                 if tap_if "OK"; then pass "Time picker accepted"; else skip "Time picker OK not exposed"; fi
@@ -337,7 +367,7 @@ jobs:
 
               # Place search
               dump_ui
-              if tap_if "Место"; then
+              if tap_field "Место"; then
                 type_ascii "Gagarin Park"
                 dump_ui
                 if tap_if "Найти"; then pass "Place search executed"; else skip "Place search button"; fi
@@ -356,7 +386,7 @@ jobs:
 
               # Participant limit
               dump_ui
-              if tap_if "Сколько человек?"; then
+              if tap_field "Сколько человек?"; then
                 adb shell input text "8"
                 pass "Participant limit edited"
               else skip "Participant limit input"; fi
@@ -380,14 +410,14 @@ jobs:
 
               # Description
               dump_ui
-              if tap_if "Описание"; then
+              if tap_field "Описание"; then
                 type_ascii "QA description for full Android simulation"
                 pass "Description entered"
               else skip "Description input"; fi
 
               # Live participant message
               dump_ui
-              if tap_if "Актуальное сообщение участникам"; then
+              if tap_field "Актуальное сообщение участникам"; then
                 type_ascii "QA live update: we are meeting here."
                 pass "Live participant message entered"
               else skip "Live message input"; fi
@@ -469,26 +499,26 @@ jobs:
               fi
 
               dump_ui
-              if tap_if "Имя"; then
+              if tap_field "Имя"; then
                 clear_and_type "QA User"
                 pass "Profile name edited"
               else skip "Profile name input"; fi
 
               dump_ui
-              if tap_if "Дата рождения"; then
+              if tap_field "Дата рождения"; then
                 sleep .5
                 dump_ui
                 tap_if "OK" && pass "Profile birth-date picker exercised" || skip "Birth-date OK"
               else skip "Birth-date input"; fi
 
               dump_ui
-              if tap_if "Город"; then
+              if tap_field "Город"; then
                 clear_and_type "Warsaw"
                 pass "Profile city edited"
               else skip "Profile city input"; fi
 
               dump_ui
-              if tap_if "О себе"; then
+              if tap_field "О себе"; then
                 clear_and_type "QA profile bio"
                 pass "Profile bio edited"
               else skip "Profile bio input"; fi
@@ -552,14 +582,6 @@ jobs:
               exit 1
             fi
 
-      - name: Create test fixture image
-        if: always()
-        run: |
-          python3 - <<'PY'
-          from PIL import Image
-          Image.new("RGB",(256,256),(120,120,120)).save("qa-profile.jpg","JPEG")
-          PY
-          # Fixture is copied before emulator execution by a separate retry-safe step below.
 
       - name: Upload visual test artifacts
         if: always()
