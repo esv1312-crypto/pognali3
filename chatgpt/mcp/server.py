@@ -1,6 +1,6 @@
 """Pognali MCP server exposed through the official Python SDK."""
 from mcp.server.mcpserver import MCPServer
-from chatgpt.mcp import server as core
+from chatgpt.mcp import adapter as core
 
 mcp = MCPServer(
     "Pognali",
