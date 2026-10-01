@@ -18,17 +18,17 @@ async def main():
             {"city": "Екатеринбург", "event_date": "2026-10-01"},
         )
         assert not result.is_error
-        assert result.structured_content is not None
-        payload = result.structured_content
-        if isinstance(payload, dict) and isinstance(payload.get("result"), dict):
-            payload = payload["result"]
-        events = payload["events"]
+        import json
+        assert result.content
+        payload = json.loads(result.content[0].text)
+        events = payload.get("events", payload.get("result", {}).get("events", []))
         assert any(event["id"] == "demo-football-1" for event in events)
 
         detail = await client.call_tool("get_event", {"event_id": "demo-football-1"})
         assert not detail.is_error
-        detail_payload = detail.structured_content
-        if isinstance(detail_payload, dict) and isinstance(detail_payload.get("result"), dict):
+        assert detail.content
+        detail_payload = json.loads(detail.content[0].text)
+        if isinstance(detail_payload.get("result"), dict):
             detail_payload = detail_payload["result"]
         assert detail_payload["id"] == "demo-football-1"
 
