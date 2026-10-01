@@ -8,3 +8,5 @@ create_event = service.create_event
 send_message = service.send_message
 get_messages = service.get_messages
 prepare_invite = service.prepare_invite
+create_invite = service.create_invite
+get_user_invites = service.get_user_invites
