@@ -1,5 +1,37 @@
 set -e
-mkdir -p test-results/screenshots test-results
+mkdir -p test-results/screenshots test-results test-results/video
+
+# Black-box recorder: capture the emulator screen in short chunks while the simulation runs.
+# This gives us a post-run video trail and keeps the stdout telemetry live in GitHub Actions.
+RECORDER_PID=""
+start_recorder(){
+  (
+    i=0
+    while true; do
+      file=$(printf "test-results/video/emulator-%03d.mp4" "$i")
+      adb shell screenrecord --bit-rate 2000000 --size 720x1280 --time-limit 170 /sdcard/pognali-recording.mp4 >/dev/null 2>&1 || true
+      adb pull /sdcard/pognali-recording.mp4 "$file" >/dev/null 2>&1 || true
+      adb shell rm -f /sdcard/pognali-recording.mp4 >/dev/null 2>&1 || true
+      [ -s "$file" ] || rm -f "$file"
+      i=$((i+1))
+      sleep 1
+    done
+  ) &
+  RECORDER_PID=$!
+  echo "RECORDER | started pid=$RECORDER_PID"
+}
+stop_recorder(){
+  if [ -n "$RECORDER_PID" ]; then
+    kill "$RECORDER_PID" >/dev/null 2>&1 || true
+    wait "$RECORDER_PID" 2>/dev/null || true
+    adb shell pkill -f screenrecord >/dev/null 2>&1 || true
+    adb pull /sdcard/pognali-recording.mp4 test-results/video/emulator-final.mp4 >/dev/null 2>&1 || true
+    adb shell rm -f /sdcard/pognali-recording.mp4 >/dev/null 2>&1 || true
+    echo "RECORDER | stopped"
+  fi
+}
+trap stop_recorder EXIT
+start_recorder
 adb install -r app/build/outputs/apk/debug/app-debug.apk
 # API 35 blocks shell writes to shared /sdcard storage.
 # Keep the fixture in adb's writable temp area so it never blocks
