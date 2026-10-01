@@ -106,12 +106,35 @@ button[disabled]{opacity:.55;cursor:default}
     }
   }
 
-  async function gather(eventId){
+  async function gather(eventId, button){
     try{
-      if(typeof openai?.sendFollowUpMessage==="function"){
-        await openai.sendFollowUpMessage({prompt:"Хочу собрать компанию для события "+eventId+". Помоги пригласить людей и подготовить сообщение в чат события."});
+      if(typeof openai?.callTool==="function"){
+        const result=await openai.callTool("prepare_invite",{
+          event_id:eventId,
+          user_id:"chatgpt-user"
+        });
+        const payload=payloadFrom(result);
+        if(payload?.invite_text){
+          const card=button.closest(".card");
+          const status=card?.querySelector(".status");
+          if(status) status.textContent="Приглашение готово — его можно отправить друзьям.";
+          const box=card?.querySelector(".message-box");
+          const input=card?.querySelector(".message-input");
+          if(input) input.value=payload.invite_text;
+          if(box) box.hidden=false;
+          button.textContent="ПРИГЛАШЕНИЕ ГОТОВО ✓";
+          return;
+        }
       }
-    }catch(err){}
+      if(typeof openai?.sendFollowUpMessage==="function"){
+        await openai.sendFollowUpMessage({prompt:"Подготовь приглашение для события "+eventId+" по данным события, без выдумывания деталей."});
+      }
+    }catch(err){
+      const status=button.closest(".card")?.querySelector(".status");
+      if(status) status.textContent="Не удалось подготовить приглашение.";
+      button.disabled=false;
+      button.textContent="СОБРАТЬ КОМПАНИЮ";
+    }
   }
 
   function payloadFrom(result){
@@ -231,7 +254,7 @@ button[disabled]{opacity:.55;cursor:default}
       button.addEventListener("click",()=>{
         button.disabled=true;
         button.textContent="СОБИРАЕМ…";
-        gather(button.dataset.gather);
+        gather(button.dataset.gather,button);
       });
     });
   }
