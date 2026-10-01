@@ -79,6 +79,17 @@ def get_messages(event_id: str, limit: int = 50) -> dict:
     return core.get_messages(event_id, limit)
 
 
+@apps.tool(
+    resource_uri=UI_URI,
+    description=(
+        "Prepare a short invitation for a Pognali event so the creator can share it "
+        "with friends or use it to gather a company. Do not invent event details."
+    ),
+)
+def prepare_invite(event_id: str, user_id: str = "chatgpt-user") -> dict:
+    return core.prepare_invite(event_id, user_id)
+
+
 @mcp.tool()
 def send_message(event_id: str, user_id: str, text: str) -> dict:
     return core.send_message(event_id, user_id, text)
