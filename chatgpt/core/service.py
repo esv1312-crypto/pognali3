@@ -191,6 +191,33 @@ def get_user_invites(user_id):
     return {"invites": [dict(i) for i in INVITES if i["recipient_user_id"] == user_id.strip()]}
 
 
+def accept_invite(invite_id, user_id, user_age):
+    invite = next((i for i in INVITES if i["id"] == invite_id), None)
+    if not invite:
+        return {"error": "INVITE_NOT_FOUND"}
+    if invite["recipient_user_id"] != user_id:
+        return {"error": "NOT_AUTHORIZED"}
+    if invite["status"] != "pending":
+        return {"error": "INVITE_NOT_PENDING"}
+    joined = join_event(invite["event_id"], user_id, user_age)
+    if joined.get("error"):
+        return joined
+    invite["status"] = "accepted"
+    return {"invite_id": invite_id, "status": "accepted", **joined}
+
+
+def decline_invite(invite_id, user_id):
+    invite = next((i for i in INVITES if i["id"] == invite_id), None)
+    if not invite:
+        return {"error": "INVITE_NOT_FOUND"}
+    if invite["recipient_user_id"] != user_id:
+        return {"error": "NOT_AUTHORIZED"}
+    if invite["status"] != "pending":
+        return {"error": "INVITE_NOT_PENDING"}
+    invite["status"] = "declined"
+    return {"invite_id": invite_id, "status": "declined"}
+
+
 def prepare_invite(event_id, user_id="chatgpt-user"):
     event = next((e for e in EVENTS if e["id"] == event_id), None)
     if not event:
