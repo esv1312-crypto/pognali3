@@ -77,3 +77,4 @@ jobs:
           if-no-files-found: warn
           retention-days: 14
 # QA trigger: run emulator simulation on chatgpt-mvp-skeleton
+# Recorder: live stdout telemetry + post-run emulator MP4 chunks
