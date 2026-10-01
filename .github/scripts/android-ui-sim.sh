@@ -4,6 +4,22 @@ mkdir -p test-results/screenshots test-results test-results/video
 # Black-box recorder: capture the emulator screen in short chunks while the simulation runs.
 # This gives us a post-run video trail and keeps the stdout telemetry live in GitHub Actions.
 RECORDER_PID=""
+LIVE_PID=""
+start_live_stream(){
+  if [ -z "${LIVE_URL:-}" ]; then echo "LIVE | disabled (LIVE_URL not set)"; return; fi
+  (
+    echo "LIVE | starting emulator screen stream to $LIVE_URL"
+    while true; do
+      adb exec-out screencap -p 2>/dev/null | curl --silent --show-error --max-time 5 -X POST -H "X-Live-Token: $LIVE_TOKEN" --data-binary @- "$LIVE_URL/frame" >/dev/null 2>&1 || true
+      sleep 0.5
+    done
+  ) &
+  LIVE_PID=$!
+  echo "LIVE | started pid=$LIVE_PID"
+}
+stop_live_stream(){
+  if [ -n "$LIVE_PID" ]; then kill "$LIVE_PID" >/dev/null 2>&1 || true; wait "$LIVE_PID" 2>/dev/null || true; echo "LIVE | stopped"; fi
+}
 start_recorder(){
   (
     i=0
@@ -30,8 +46,9 @@ stop_recorder(){
     echo "RECORDER | stopped"
   fi
 }
-trap stop_recorder EXIT
+trap 'stop_live_stream; stop_recorder' EXIT
 start_recorder
+start_live_stream
 adb install -r app/build/outputs/apk/debug/app-debug.apk
 # API 35 blocks shell writes to shared /sdcard storage.
 # Keep the fixture in adb's writable temp area so it never blocks
