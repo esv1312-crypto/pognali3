@@ -51,6 +51,20 @@ class Handler(BaseHTTPRequestHandler):
                 service.search_events(city, event_date, category, user_age),
             )
 
+        if parsed.path.startswith("/events/") and parsed.path.endswith("/messages"):
+            event_id = parsed.path.split("/")[2]
+            qs = parse_qs(parsed.query)
+            limit_raw = qs.get("limit", ["50"])[0]
+            try:
+                limit = int(limit_raw)
+            except ValueError:
+                limit = 0
+            result = service.get_messages(event_id, limit)
+            if result.get("error"):
+                status = 404 if result["error"] == "EVENT_NOT_FOUND" else 400
+                return self.send_json(status, result)
+            return self.send_json(200, result)
+
         if parsed.path.startswith("/events/"):
             event_id = parsed.path.split("/")[2]
             result = service.get_event(event_id)
@@ -110,6 +124,8 @@ class Handler(BaseHTTPRequestHandler):
                 status = 404 if result["error"] == "EVENT_NOT_FOUND" else 400
                 return self.send_json(status, result)
             return self.send_json(201, result)
+
+        return self.send_json(404, {"error": "NOT_FOUND"})
 
         return self.send_json(404, {"error": "NOT_FOUND"})
 
