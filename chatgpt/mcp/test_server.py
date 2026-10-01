@@ -1,4 +1,7 @@
-import sys\nfrom pathlib import Path\nsys.path.insert(0, str(Path(__file__).resolve().parents[2]))\n"""In-process smoke test for the ChatGPT-facing MCP server."""
+import sys
+from pathlib import Path
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+"""In-process smoke test for the ChatGPT-facing MCP server."""
 import asyncio
 from mcp import Client
 from chatgpt.mcp.server import mcp
