@@ -132,6 +132,28 @@ try:
     )
     assert status == 200 and body["participant_count"] == 1
 
+    status, body = request("POST", "/events", {
+        "title": "Без времени",
+        "date": "2026-10-03",
+        "time": "вечером",
+        "place": {"name": "Место", "city": "Екатеринбург"},
+        "max_participants": 5,
+        "min_age": 18,
+        "max_age": 40,
+    })
+    assert status == 400 and body["error"] == "VALIDATION_ERROR"
+
+    status, body = request("POST", "/events", {
+        "title": "Без лимита",
+        "date": "2026-10-03",
+        "time": "19:00",
+        "place": {"name": "Место", "city": "Екатеринбург"},
+        "max_participants": 0,
+        "min_age": 18,
+        "max_age": 40,
+    })
+    assert status == 400 and body["error"] == "VALIDATION_ERROR"
+
     status, body = request("GET", "/events/not-found")
     assert status == 404 and body["error"] == "EVENT_NOT_FOUND"
 
