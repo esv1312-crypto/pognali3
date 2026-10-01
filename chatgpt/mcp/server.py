@@ -107,6 +107,19 @@ def get_user_invites(user_id: str) -> dict:
     return core.get_user_invites(user_id)
 
 
+@mcp.tool()
+def accept_invite(invite_id: str, user_id: str, user_age: int) -> dict:
+    """Accept an incoming Pognali invitation and join its event."""
+    return core.accept_invite(invite_id, user_id, user_age)
+
+
+@mcp.tool()
+def decline_invite(invite_id: str, user_id: str) -> dict:
+    """Decline an incoming Pognali invitation."""
+    return core.decline_invite(invite_id, user_id)
+
+
+
 if __name__ == "__main__":
     mcp.run(
         transport="streamable-http",
