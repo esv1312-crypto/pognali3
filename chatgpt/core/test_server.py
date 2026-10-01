@@ -219,7 +219,7 @@ try:
     )
     assert status == 200
     assert body["status"] == "accepted"
-    assert body["joined"]["participant_count"] == 9
+    assert body["participant_count"] == 9
 
     status, body = request(
         "POST",
