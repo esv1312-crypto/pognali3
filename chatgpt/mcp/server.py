@@ -1,5 +1,6 @@
 """Pognali MCP Apps server."""
 
+import os
 import sys
 from pathlib import Path
 
