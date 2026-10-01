@@ -18,7 +18,11 @@ UI_FILE = ROOT / "chatgpt" / "app" / "pognali-events.html"
 apps = Apps()
 mcp = MCPServer(
     "Pognali",
-    instructions="Find, join, create and discuss real-world Pognali events.",
+    instructions=(
+        "Find, join, create and discuss real-world Pognali events. "
+        "For creation requests expressed in natural language, collect only "
+        "missing mandatory fields before calling create_event."
+    ),
     extensions=[apps],
 )
 
@@ -31,6 +35,7 @@ apps.add_html_resource(
     prefers_border=True,
 )
 
+
 @apps.tool(
     resource_uri=UI_URI,
     description="Find Pognali events for a date, optionally filtered by city, category and age.",
@@ -39,13 +44,16 @@ def search_events(city: str | None = None, event_date: str | None = None,
                   category: str | None = None, user_age: int | None = None) -> dict:
     return core.search_events(city, event_date, category, user_age)
 
+
 @mcp.tool()
 def get_event(event_id: str) -> dict:
     return core.get_event(event_id)
 
+
 @mcp.tool()
 def join_event(event_id: str, user_id: str, user_age: int) -> dict:
     return core.join_event(event_id, user_id, user_age)
+
 
 @mcp.tool()
 def create_event(title: str, event_date: str, time: str, place: dict,
@@ -56,9 +64,11 @@ def create_event(title: str, event_date: str, time: str, place: dict,
                              min_age, max_age, category, emoji, description,
                              creator_id)
 
+
 @mcp.tool()
 def send_message(event_id: str, user_id: str, text: str) -> dict:
     return core.send_message(event_id, user_id, text)
+
 
 if __name__ == "__main__":
     mcp.run(
