@@ -55,7 +55,15 @@ def join_event(event_id: str, user_id: str, user_age: int) -> dict:
     return core.join_event(event_id, user_id, user_age)
 
 
-@mcp.tool()
+@apps.tool(
+    resource_uri=UI_URI,
+    description=(
+        "Create a Pognali event. Required: title, date (YYYY-MM-DD), time (HH:MM), "
+        "place, max participants, minimum age and maximum age. When the user gives "
+        "a natural-language creation request, ask only for missing required fields "
+        "before calling this tool. Do not invent missing date, time, place or limits."
+    ),
+)
 def create_event(title: str, event_date: str, time: str, place: dict,
                  max_participants: int, min_age: int, max_age: int,
                  category: str = "other", emoji: str = "📍",
