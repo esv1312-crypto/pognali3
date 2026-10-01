@@ -15,9 +15,13 @@ h2{margin:0;font-size:22px}
 .title{font-weight:750;font-size:18px}
 .meta{font-size:14px;opacity:.8}
 .desc{font-size:14px;line-height:1.35}
+.actions{display:flex;gap:8px;align-items:center}
 button{border:0;border-radius:12px;padding:11px 14px;font:inherit;font-weight:700;cursor:pointer;background:#111;color:#fff}
+button[disabled]{opacity:.55;cursor:default}
+.age{width:76px;border:1px solid color-mix(in srgb,CanvasText 18%,transparent);border-radius:10px;padding:10px;font:inherit;background:transparent;color:inherit}
 @media(prefers-color-scheme:dark){button{background:#fff;color:#111}}
 .empty{padding:20px 8px;text-align:center;opacity:.75}
+.status{font-size:13px;opacity:.75}
 </style>
 </head>
 <body>
@@ -33,28 +37,91 @@ button{border:0;border-radius:12px;padding:11px 14px;font:inherit;font-weight:70
 <script>
 (function(){
   const root=document.getElementById("events");
-  function esc(v){return String(v??"").replace(/[&<>"]/g,s=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[s]));}
+  const openai=typeof window!=="undefined"?window.openai:undefined;
+  const inputAge=Number(openai?.toolInput?.user_age);
+  const userAge=Number.isInteger(inputAge)&&inputAge>0?inputAge:null;
+
+  function esc(v){
+    return String(v??"").replace(/[&<>"]/g,s=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[s]));
+  }
+
+  async function join(eventId, button, ageField){
+    const age=userAge||Number(ageField?.value);
+    if(!Number.isInteger(age)||age<0||age>120){
+      if(ageField){ageField.focus();ageField.setCustomValidity("Укажи возраст");ageField.reportValidity();}
+      return;
+    }
+    button.disabled=true;
+    button.textContent="Входим…";
+    try{
+      if(typeof openai?.callTool!=="function"){
+        if(typeof openai?.sendFollowUpMessage==="function"){
+          await openai.sendFollowUpMessage({prompt:"Я хочу присоединиться к событию "+eventId+". Мой возраст: "+age});
+        }else{
+          throw new Error("Host tool bridge unavailable");
+        }
+        return;
+      }
+      const result=await openai.callTool("join_event",{
+        event_id:eventId,
+        user_id:"chatgpt-user",
+        user_age:age
+      });
+      const payload=result?.structuredContent||result?.structured_content||result;
+      if(payload?.joined){
+        button.textContent="ПОШЛИ! ✓";
+        const card=button.closest(".card");
+        const count=card?.querySelector("[data-count]");
+        if(count) count.textContent=payload.participant_count+" / "+payload.max_participants;
+        const status=card?.querySelector(".status");
+        if(status) status.textContent="Ты присоединился. Погнали!";
+      }else{
+        button.disabled=false;
+        button.textContent="ПОЙТИ";
+        const status=button.closest(".card")?.querySelector(".status");
+        if(status) status.textContent="Не удалось присоединиться: "+(payload?.error||"неизвестная ошибка");
+      }
+    }catch(err){
+      button.disabled=false;
+      button.textContent="ПОЙТИ";
+      const status=button.closest(".card")?.querySelector(".status");
+      if(status) status.textContent="Не удалось выполнить действие. Попробуй ещё раз.";
+    }
+  }
+
   function render(data){
     const items=Array.isArray(data?.events)?data.events:[];
     if(!items.length){root.innerHTML='<div class="empty">Сегодня рядом пока ничего нет.</div>';return;}
     root.innerHTML=items.map(e=>{
       const age=e.age_range||{min:e.min_age,max:e.max_age};
+      const ageControl=userAge
+        ? ""
+        : '<input class="age" type="number" min="0" max="120" inputmode="numeric" placeholder="Возраст" aria-label="Возраст">';
       return '<article class="card">'+
-        '<div class="row"><div class="title">'+esc(e.emoji||"📍")+' '+esc(e.title)+'</div><strong>'+esc(e.participant_count)+' / '+esc(e.max_participants)+'</strong></div>'+
+        '<div class="row"><div class="title">'+esc(e.emoji||"📍")+' '+esc(e.title)+'</div><strong data-count>'+esc(e.participant_count)+' / '+esc(e.max_participants)+'</strong></div>'+
         '<div class="meta">Сегодня · '+esc(e.time)+' · 📍 '+esc(e.place?.name||e.place?.city||"Место уточняется")+'</div>'+
         '<div class="meta">🎂 '+esc(age.min)+'–'+esc(age.max)+' лет</div>'+
         '<div class="desc">'+esc(e.description||"")+'</div>'+
-        '<div><button type="button" data-id="'+esc(e.id)+'">ПОЙТИ</button></div>'+
+        '<div class="actions">'+ageControl+'<button type="button" data-id="'+esc(e.id)+'">ПОЙТИ</button></div>'+
+        '<div class="status" aria-live="polite"></div>'+
       '</article>';
     }).join("");
+
+    root.querySelectorAll("button[data-id]").forEach(button=>{
+      button.addEventListener("click",()=>{
+        const card=button.closest(".card");
+        join(button.dataset.id,button,card?.querySelector(".age"));
+      });
+    });
   }
+
   window.pognaliRender=render;
-  window.addEventListener("message", function(event){
+  window.addEventListener("message",function(event){
     const result=event.data?.result;
     if(result?.structuredContent) render(result.structuredContent);
     else if(result?.structured_content) render(result.structured_content);
     else if(result?.content?.[0]?.text){
-      try { render(JSON.parse(result.content[0].text)); } catch(e) {}
+      try{render(JSON.parse(result.content[0].text));}catch(e){}
     }
   });
 })();
