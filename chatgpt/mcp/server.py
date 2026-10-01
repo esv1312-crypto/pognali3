@@ -31,7 +31,7 @@ apps.add_html_resource(
     prefers_border=True,
 )
 
-@mcp.tool(
+@apps.tool(
     resource_uri=UI_URI,
     description="Find Pognali events for a date, optionally filtered by city, category and age.",
 )
