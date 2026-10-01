@@ -126,6 +126,20 @@ def send_message(event_id, user_id, text):
         return {"error": "VALIDATION_ERROR"}
     if not isinstance(text, str) or not text.strip():
         return {"error": "VALIDATION_ERROR"}
-    message = {"user_id": user_id.strip(), "text": text.strip()}
+    message = {
+        "id": "message-" + str(sum(len(items) for items in MESSAGES.values()) + 1),
+        "event_id": event_id,
+        "user_id": user_id.strip(),
+        "text": text.strip(),
+    }
     MESSAGES.setdefault(event_id, []).append(message)
     return message
+
+
+def get_messages(event_id, limit=50):
+    if not any(e["id"] == event_id for e in EVENTS):
+        return {"error": "EVENT_NOT_FOUND"}
+    if not isinstance(limit, int) or limit < 1:
+        return {"error": "VALIDATION_ERROR"}
+    messages = MESSAGES.get(event_id, [])
+    return {"event_id": event_id, "messages": messages[-limit:]}
