@@ -77,7 +77,8 @@ button[disabled]{opacity:.55;cursor:default}
       });
       const payload=result?.structuredContent||result?.structured_content||result;
       if(payload?.joined){
-        button.textContent="ПОШЛИ! ✓";
+        button.textContent="ТЫ ИДЁШЬ ✓";
+        button.dataset.joined="true";
         const card=button.closest(".card");
         const count=card?.querySelector("[data-count]");
         if(count) count.textContent=payload.participant_count+" / "+payload.max_participants;
