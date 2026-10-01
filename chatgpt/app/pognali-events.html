@@ -46,6 +46,7 @@ button[disabled]{opacity:.55;cursor:default}
     <div class="sub">Создай свою движуху — соберём людей и пойдём.</div>
     <button type="button" id="create-event">СОЗДАТЬ СВОЙ МИР</button>
   </section>
+  <section id="invites" class="wrap" aria-live="polite"></section>
   <section id="events" class="wrap" aria-live="polite">
     <div class="empty">Жду события от Погнали…</div>
   </section>
@@ -53,6 +54,7 @@ button[disabled]{opacity:.55;cursor:default}
 <script>
 (function(){
   const root=document.getElementById("events");
+  const invitesRoot=document.getElementById("invites");
   const openai=typeof window!=="undefined"?window.openai:undefined;
   const inputAge=Number(openai?.toolInput?.user_age);
   const userAge=Number.isInteger(inputAge)&&inputAge>0?inputAge:null;
@@ -199,6 +201,73 @@ button[disabled]{opacity:.55;cursor:default}
     }
   }
 
+  async function loadInvites(){
+    if(!invitesRoot||typeof openai?.callTool!=="function") return;
+    try{
+      const result=await openai.callTool("get_user_invites",{user_id:"chatgpt-user"});
+      const payload=payloadFrom(result);
+      const invites=Array.isArray(payload?.invites)?payload.invites.filter(i=>i.status==="pending"):[];
+      if(!invites.length){invitesRoot.innerHTML="";return;}
+      invitesRoot.innerHTML='<section class="create-cta"><strong>💌 Тебя зовут</strong>'+
+        invites.map(i=>'<div class="card" data-invite-card="'+esc(i.id)+'">'+
+          '<div class="title">'+esc(i.invite_text)+'</div>'+
+          '<div class="actions">'+
+          '<button type="button" class="accept-invite" data-invite="'+esc(i.id)+'">ПОЙТИ</button>'+
+          '<button type="button" class="decline-invite" data-invite="'+esc(i.id)+'">НЕ ИДУ</button>'+
+          '</div><div class="status" aria-live="polite"></div></div>').join("")+
+        '</section>';
+      invitesRoot.querySelectorAll(".accept-invite").forEach(button=>{
+        button.addEventListener("click",()=>respondInvite(button,true));
+      });
+      invitesRoot.querySelectorAll(".decline-invite").forEach(button=>{
+        button.addEventListener("click",()=>respondInvite(button,false));
+      });
+    }catch(err){}
+  }
+
+  async function respondInvite(button, accept){
+    const card=button.closest("[data-invite-card]");
+    button.disabled=true;
+    const other=card?.querySelector(accept?".decline-invite":".accept-invite");
+    if(other) other.disabled=true;
+    button.textContent=accept?"ВХОЖУ…":"ОТКЛОНЯЕМ…";
+    try{
+      if(typeof openai?.callTool!=="function") throw new Error("Host tool bridge unavailable");
+      if(accept){
+        const age=userAge;
+        if(!Number.isInteger(age)){
+          throw new Error("AGE_REQUIRED");
+        }
+        const result=await openai.callTool("accept_invite",{
+          invite_id:button.dataset.invite,
+          user_id:"chatgpt-user",
+          user_age:age
+        });
+        const payload=payloadFrom(result);
+        if(payload?.error) throw new Error(payload.error);
+        button.textContent="ТЫ ИДЁШЬ ✓";
+        card?.querySelector(".status")?.replaceChildren(document.createTextNode("Ты присоединился. Погнали!"));
+      }else{
+        const result=await openai.callTool("decline_invite",{
+          invite_id:button.dataset.invite,
+          user_id:"chatgpt-user"
+        });
+        const payload=payloadFrom(result);
+        if(payload?.error) throw new Error(payload.error);
+        card?.remove();
+        if(!invitesRoot.querySelector("[data-invite-card]")) invitesRoot.innerHTML="";
+        return;
+      }
+      setTimeout(()=>card?.remove(),900);
+    }catch(err){
+      button.disabled=false;
+      if(other) other.disabled=false;
+      button.textContent=accept?"ПОЙТИ":"НЕ ИДУ";
+      const status=card?.querySelector(".status");
+      if(status) status.textContent=err.message==="AGE_REQUIRED"?"Нужно указать возраст в профиле.":"Не удалось обработать приглашение. Попробуй ещё раз.";
+    }
+  }
+
   function render(data){
     const created=data?.id&&!Array.isArray(data?.events)?data:null;
     const items=Array.isArray(data?.events)?data.events:(created?[created]:[]);
@@ -268,6 +337,7 @@ button[disabled]{opacity:.55;cursor:default}
   });
 
   window.pognaliRender=render;
+  loadInvites();
   window.addEventListener("message",function(event){
     const result=event.data?.result;
     if(result?.structuredContent) render(result.structuredContent);
