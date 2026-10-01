@@ -22,7 +22,7 @@ async def main():
     async with Client(mcp, raise_exceptions=True) as client:
         tools = await client.list_tools()
         names = {tool.name for tool in tools.tools}
-        expected = {"search_events", "get_event", "join_event", "create_event", "get_messages", "prepare_invite", "create_invite", "get_user_invites", "send_message"}
+        expected = {"search_events", "get_event", "join_event", "create_event", "get_messages", "prepare_invite", "create_invite", "get_user_invites", "accept_invite", "decline_invite", "send_message"}
         assert expected <= names, (expected, names)
 
         result = await client.call_tool(
@@ -95,6 +95,14 @@ async def main():
         received_payload = payload_of(received)
         assert len(received_payload["invites"]) == 1
         assert received_payload["invites"][0]["event_id"] == "demo-football-1"
+
+        accepted = await client.call_tool(
+            "accept_invite",
+            {"invite_id": invite_sent_payload["id"], "user_id": "friend-1", "user_age": 30},
+        )
+        accepted_payload = payload_of(accepted)
+        assert accepted_payload["status"] == "accepted"
+        assert accepted_payload["joined"] is True
 
         created = await client.call_tool(
             "create_event",
