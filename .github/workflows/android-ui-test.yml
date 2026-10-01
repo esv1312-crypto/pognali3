@@ -12,6 +12,9 @@ permissions:
 jobs:
   ui-test:
     runs-on: ubuntu-latest
+    env:
+      LIVE_URL: https://pognali-emulator-live.onrender.com
+      LIVE_TOKEN: XjxBKzfj6jd8st75NbOr6I9DKEhOpPDK
     timeout-minutes: 45
 
     steps:
