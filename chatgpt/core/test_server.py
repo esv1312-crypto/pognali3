@@ -119,6 +119,21 @@ try:
     )
     assert status == 400 and body["error"] == "VALIDATION_ERROR"
 
+    status, body = request(
+        "GET",
+        "/events/demo-football-1/messages?limit=10",
+    )
+    assert status == 200
+    assert body["event_id"] == "demo-football-1"
+    assert body["messages"][-1]["text"] == "Встречаемся у входа"
+    assert body["messages"][-1]["event_id"] == "demo-football-1"
+
+    status, body = request(
+        "GET",
+        "/events/demo-football-1/messages?limit=0",
+    )
+    assert status == 400 and body["error"] == "VALIDATION_ERROR"
+
     status, body = request("POST", "/events", {
         "title": "Настольные игры",
         "emoji": "🎲",
