@@ -143,3 +143,19 @@ def get_messages(event_id, limit=50):
         return {"error": "VALIDATION_ERROR"}
     messages = MESSAGES.get(event_id, [])
     return {"event_id": event_id, "messages": messages[-limit:]}
+
+
+def prepare_invite(event_id, user_id="chatgpt-user"):
+    event = next((e for e in EVENTS if e["id"] == event_id), None)
+    if not event:
+        return {"error": "EVENT_NOT_FOUND"}
+    if not isinstance(user_id, str) or not user_id.strip():
+        return {"error": "VALIDATION_ERROR"}
+    remaining = max(event["max_participants"] - event["participant_count"], 0)
+    place = event["place"].get("name") or event["place"].get("city") or "место уточняется"
+    text = (
+        f"{event['emoji']} {event['title']} — {event['date']} в {event['time']}, "
+        f"{place}. Уже идут {event['participant_count']} из {event['max_participants']}. "
+        f"Свободных мест: {remaining}. Погнали?"
+    )
+    return {"event_id": event_id, "invite_text": text, "remaining_slots": remaining}
