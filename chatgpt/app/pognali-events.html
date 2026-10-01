@@ -30,6 +30,9 @@ button[disabled]{opacity:.55;cursor:default}
 @media(prefers-color-scheme:dark){button{background:#fff;color:#111}}
 .empty{padding:20px 8px;text-align:center;opacity:.75}
 .status{font-size:13px;opacity:.75}
+.create-cta{border:1px dashed color-mix(in srgb,CanvasText 25%,transparent);border-radius:16px;padding:14px;display:grid;gap:8px}
+.create-cta strong{font-size:16px}
+.create-cta button{justify-self:start}
 </style>
 </head>
 <body>
@@ -38,6 +41,11 @@ button[disabled]{opacity:.55;cursor:default}
     <h2>Ну что, погнали?</h2>
     <div class="sub">Сегодня рядом с тобой</div>
   </div>
+  <section class="create-cta">
+    <strong>🔥 Не нашёл своё?</strong>
+    <div class="sub">Создай свою движуху — соберём людей и пойдём.</div>
+    <button type="button" id="create-event">СОЗДАТЬ СВОЙ МИР</button>
+  </section>
   <section id="events" class="wrap" aria-live="polite">
     <div class="empty">Жду события от Погнали…</div>
   </section>
@@ -179,7 +187,7 @@ button[disabled]{opacity:.55;cursor:default}
         : '<input class="age" type="number" min="0" max="120" inputmode="numeric" placeholder="Возраст" aria-label="Возраст">';
       return '<article class="card">'+
         '<div class="row"><div class="title">'+esc(e.emoji||"📍")+' '+esc(e.title)+'</div><strong data-count>'+esc(e.participant_count)+' / '+esc(e.max_participants)+'</strong></div>'+
-        '<div class="meta">Сегодня · '+esc(e.time)+' · 📍 '+esc(e.place?.name||e.place?.city||"Место уточняется")+'</div>'+
+        '<div class="meta">'+esc(e.date||"Дата уточняется")+' · '+esc(e.time)+' · 📍 '+esc(e.place?.name||e.place?.city||"Место уточняется")+'</div>'+
         '<div class="meta">🎂 '+esc(age.min)+'–'+esc(age.max)+' лет</div>'+
         '<div class="desc">'+esc(e.description||"")+'</div>'+
         '<div class="actions">'+ageControl+'<button type="button" data-id="'+esc(e.id)+'">ПОЙТИ</button>'+
@@ -227,6 +235,14 @@ button[disabled]{opacity:.55;cursor:default}
       });
     });
   }
+
+  document.getElementById("create-event")?.addEventListener("click",()=>{
+    try{
+      if(typeof openai?.sendFollowUpMessage==="function"){
+        openai.sendFollowUpMessage({prompt:"Хочу создать своё событие в Погнали. Помоги создать его: спроси только недостающие обязательные данные (название, дата, время, место, максимальное количество участников, минимальный и максимальный возраст), затем вызови create_event."});
+      }
+    }catch(err){}
+  });
 
   window.pognaliRender=render;
   window.addEventListener("message",function(event){
