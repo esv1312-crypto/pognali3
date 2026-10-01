@@ -74,6 +74,12 @@ def create_event(title: str, event_date: str, time: str, place: dict,
 
 
 @mcp.tool()
+def get_messages(event_id: str, limit: int = 50) -> dict:
+    """Get recent messages for a Pognali event chat."""
+    return core.get_messages(event_id, limit)
+
+
+@mcp.tool()
 def send_message(event_id: str, user_id: str, text: str) -> dict:
     return core.send_message(event_id, user_id, text)
 
