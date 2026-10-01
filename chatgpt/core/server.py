@@ -135,6 +135,23 @@ class Handler(BaseHTTPRequestHandler):
         parsed = urlparse(self.path)
         data = self.body()
 
+        if parsed.path == "/invites":
+            result = service.create_invite(
+                data.get("event_id"),
+                data.get("sender_user_id"),
+                data.get("recipient_user_id"),
+            )
+            errors = {
+                "EVENT_NOT_FOUND": 404,
+                "VALIDATION_ERROR": 400,
+                "NOT_AUTHORIZED": 403,
+                "INVALID_RECIPIENT": 400,
+                "ALREADY_JOINED": 409,
+                "EVENT_FULL": 409,
+                "INVITE_ALREADY_SENT": 409,
+            }
+            return self.send_json(errors.get(result.get("error"), 201), result)
+
         if parsed.path == "/events":
             result = service.create_event(
                 title=data.get("title"),
