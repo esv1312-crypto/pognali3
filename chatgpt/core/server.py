@@ -152,6 +152,38 @@ class Handler(BaseHTTPRequestHandler):
             }
             return self.send_json(errors.get(result.get("error"), 201), result)
 
+        if parsed.path.startswith("/invites/") and parsed.path.endswith("/accept"):
+            invite_id = parsed.path.split("/")[2]
+            result = service.accept_invite(
+                invite_id,
+                data.get("user_id"),
+                data.get("user_age"),
+            )
+            errors = {
+                "INVITE_NOT_FOUND": 404,
+                "VALIDATION_ERROR": 400,
+                "NOT_AUTHORIZED": 403,
+                "INVITE_NOT_PENDING": 409,
+                "EVENT_NOT_FOUND": 404,
+                "EVENT_EXPIRED": 409,
+                "ALREADY_JOINED": 409,
+                "EVENT_FULL": 409,
+                "AGE_RESTRICTED": 409,
+            }
+            return self.send_json(errors.get(result.get("error"), 200), result)
+
+        if parsed.path.startswith("/invites/") and parsed.path.endswith("/decline"):
+            invite_id = parsed.path.split("/")[2]
+            result = service.decline_invite(invite_id, data.get("user_id"))
+            errors = {
+                "INVITE_NOT_FOUND": 404,
+                "VALIDATION_ERROR": 400,
+                "NOT_AUTHORIZED": 403,
+                "INVITE_NOT_PENDING": 409,
+                "EVENT_NOT_FOUND": 404,
+            }
+            return self.send_json(errors.get(result.get("error"), 200), result)
+
         if parsed.path == "/events":
             result = service.create_event(
                 title=data.get("title"),
