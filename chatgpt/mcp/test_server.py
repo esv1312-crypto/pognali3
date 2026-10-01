@@ -19,12 +19,18 @@ async def main():
         )
         assert not result.is_error
         assert result.structured_content is not None
-        events = result.structured_content["events"]
+        payload = result.structured_content
+        if isinstance(payload, dict) and isinstance(payload.get("result"), dict):
+            payload = payload["result"]
+        events = payload["events"]
         assert any(event["id"] == "demo-football-1" for event in events)
 
         detail = await client.call_tool("get_event", {"event_id": "demo-football-1"})
         assert not detail.is_error
-        assert detail.structured_content["id"] == "demo-football-1"
+        detail_payload = detail.structured_content
+        if isinstance(detail_payload, dict) and isinstance(detail_payload.get("result"), dict):
+            detail_payload = detail_payload["result"]
+        assert detail_payload["id"] == "demo-football-1"
 
     print("MCP smoke test: PASS")
 
