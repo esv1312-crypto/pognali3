@@ -11,6 +11,7 @@ HOST = "127.0.0.1"
 PORT = 8080
 BASE = f"http://{HOST}:{PORT}"
 
+
 def request(method, path, payload=None):
     data = None if payload is None else json.dumps(payload).encode()
     req = urllib.request.Request(
@@ -24,6 +25,7 @@ def request(method, path, payload=None):
             return response.status, json.loads(response.read())
     except urllib.error.HTTPError as exc:
         return exc.code, json.loads(exc.read())
+
 
 server = subprocess.Popen(
     [sys.executable, "chatgpt/core/server.py"],
@@ -41,9 +43,30 @@ try:
     else:
         raise AssertionError("Core API did not become healthy")
 
-    status, body = request("GET", "/events?" + urlencode({"city": "Екатеринбург", "date": "2026-10-01"}))
+    status, body = request(
+        "GET",
+        "/events?" + urlencode({"city": "Екатеринбург", "date": "2026-10-01"}),
+    )
     assert status == 200
     assert any(e["id"] == "demo-football-1" for e in body["events"])
+
+    status, body = request(
+        "GET",
+        "/events?" + urlencode(
+            {"city": "Екатеринбург", "date": "2026-10-01", "category": "sport", "user_age": 30}
+        ),
+    )
+    assert status == 200
+    assert {e["id"] for e in body["events"]} == {"demo-football-1", "demo-run-1"}
+
+    status, body = request(
+        "GET",
+        "/events?" + urlencode(
+            {"city": "Екатеринбург", "date": "2026-10-01", "user_age": 17}
+        ),
+    )
+    assert status == 200
+    assert body["events"] == []
 
     status, body = request("GET", "/events/demo-football-1")
     assert status == 200
@@ -51,17 +74,33 @@ try:
     assert body["max_participants"] == 10
     assert body["age_range"] == {"min": 18, "max": 35}
 
-    status, body = request("POST", "/events/demo-football-1/join", {"user_id": "qa-user", "user_age": 30})
+    status, body = request(
+        "POST",
+        "/events/demo-football-1/join",
+        {"user_id": "qa-user", "user_age": 30},
+    )
     assert status == 200
     assert body["participant_count"] == 8
 
-    status, body = request("POST", "/events/demo-football-1/join", {"user_id": "qa-user", "user_age": 30})
+    status, body = request(
+        "POST",
+        "/events/demo-football-1/join",
+        {"user_id": "qa-user", "user_age": 30},
+    )
     assert status == 409 and body["error"] == "ALREADY_JOINED"
 
-    status, body = request("POST", "/events/demo-football-1/join", {"user_id": "qa-young", "user_age": 17})
+    status, body = request(
+        "POST",
+        "/events/demo-football-1/join",
+        {"user_id": "qa-young", "user_age": 17},
+    )
     assert status == 409 and body["error"] == "AGE_RESTRICTED"
 
-    status, body = request("POST", "/events/demo-football-1/messages", {"user_id": "qa-user", "text": "Я иду!"})
+    status, body = request(
+        "POST",
+        "/events/demo-football-1/messages",
+        {"user_id": "qa-user", "text": "Я иду!"},
+    )
     assert status == 201
     assert body["text"] == "Я иду!"
 
@@ -86,7 +125,11 @@ try:
     assert body["participant_count"] == 0
     assert body["max_participants"] == 6
 
-    status, body = request("POST", f"/events/{created_id}/join", {"user_id": "qa-creator", "user_age": 31})
+    status, body = request(
+        "POST",
+        f"/events/{created_id}/join",
+        {"user_id": "qa-creator", "user_age": 31},
+    )
     assert status == 200 and body["participant_count"] == 1
 
     status, body = request("GET", "/events/not-found")
