@@ -150,7 +150,30 @@ def openai_connection_status() -> dict:
         return {"ok": False, "configured": True, "reason": "Could not reach OpenAI API"}
 
 
+def verify_openai_on_startup() -> None:
+    """Check OpenAI authentication at startup without exposing the secret."""
+    api_key = os.environ.get("OPENAI_API_KEY", "").strip()
+    if not api_key:
+        print("OPENAI_CONNECTION: NOT_CONFIGURED", flush=True)
+        return
+    from urllib.request import Request, urlopen
+    from urllib.error import HTTPError, URLError
+    request = Request(
+        "https://api.openai.com/v1/models",
+        headers={"Authorization": "Bearer " + api_key, "Accept": "application/json"},
+        method="GET",
+    )
+    try:
+        with urlopen(request, timeout=15) as response:
+            print(f"OPENAI_CONNECTION: {'PASS' if response.status == 200 else 'FAIL'} STATUS={response.status}", flush=True)
+    except HTTPError as exc:
+        print(f"OPENAI_CONNECTION: FAIL STATUS={exc.code}", flush=True)
+    except URLError:
+        print("OPENAI_CONNECTION: FAIL NETWORK", flush=True)
+
+
 if __name__ == "__main__":
+    verify_openai_on_startup()
     mcp.run(
         transport="streamable-http",
         host="0.0.0.0",
