@@ -22,7 +22,7 @@ async def main():
     async with Client(mcp, raise_exceptions=True) as client:
         tools = await client.list_tools()
         names = {tool.name for tool in tools.tools}
-        expected = {"search_events", "get_event", "join_event", "create_event", "send_message"}
+        expected = {"search_events", "get_event", "join_event", "create_event", "get_messages", "send_message"}
         assert expected <= names, (expected, names)
 
         result = await client.call_tool(
@@ -50,6 +50,21 @@ async def main():
             {"event_id": "demo-football-1", "user_id": "mcp-smoke-user", "user_age": 30},
         )
         assert payload_of(duplicate)["error"] == "ALREADY_JOINED"
+
+        sent = await client.call_tool(
+            "send_message",
+            {"event_id": "demo-football-1", "user_id": "mcp-smoke-user", "text": "Буду у входа!"},
+        )
+        sent_payload = payload_of(sent)
+        assert sent_payload["text"] == "Буду у входа!"
+
+        history = await client.call_tool(
+            "get_messages",
+            {"event_id": "demo-football-1", "limit": 10},
+        )
+        messages = payload_of(history)["messages"]
+        assert messages[-1]["text"] == "Буду у входа!"
+        assert messages[-1]["event_id"] == "demo-football-1"
 
         created = await client.call_tool(
             "create_event",
