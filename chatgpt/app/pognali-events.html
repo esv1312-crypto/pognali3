@@ -15,7 +15,9 @@ h2{margin:0;font-size:22px}
 .title{font-weight:750;font-size:18px}
 .meta{font-size:14px;opacity:.8}
 .desc{font-size:14px;line-height:1.35}
-.actions{display:flex;gap:8px;align-items:center}
+.actions{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.message-box{display:flex;gap:8px;align-items:center}
+.message-input{flex:1;min-width:0;border:1px solid color-mix(in srgb,CanvasText 18%,transparent);border-radius:10px;padding:10px;font:inherit;background:transparent;color:inherit}
 button{border:0;border-radius:12px;padding:11px 14px;font:inherit;font-weight:700;cursor:pointer;background:#111;color:#fff}
 button[disabled]{opacity:.55;cursor:default}
 .age{width:76px;border:1px solid color-mix(in srgb,CanvasText 18%,transparent);border-radius:10px;padding:10px;font:inherit;background:transparent;color:inherit}
@@ -97,6 +99,45 @@ button[disabled]{opacity:.55;cursor:default}
     }catch(err){}
   }
 
+  async function writeMessage(eventId, button){
+    const card=button.closest(".card");
+    const input=card?.querySelector(".message-input");
+    const text=input?.value?.trim();
+    if(!text){
+      if(input){input.focus();input.setCustomValidity("Напиши сообщение");input.reportValidity();}
+      return;
+    }
+    button.disabled=true;
+    button.textContent="ОТПРАВЛЯЕМ…";
+    try{
+      if(typeof openai?.callTool!=="function"){
+        if(typeof openai?.sendFollowUpMessage==="function"){
+          await openai.sendFollowUpMessage({prompt:"Напиши в чат события "+eventId+": "+text});
+        }else{
+          throw new Error("Host tool bridge unavailable");
+        }
+      }else{
+        const result=await openai.callTool("send_message",{
+          event_id:eventId,
+          user_id:"chatgpt-user",
+          text
+        });
+        const payload=result?.structuredContent||result?.structured_content||result;
+        if(payload?.error) throw new Error(payload.error);
+      }
+      input.value="";
+      button.textContent="ОТПРАВЛЕНО ✓";
+      const status=card?.querySelector(".status");
+      if(status) status.textContent="Сообщение отправлено в чат события.";
+      setTimeout(()=>{button.disabled=false;button.textContent="НАПИСАТЬ";},1200);
+    }catch(err){
+      button.disabled=false;
+      button.textContent="НАПИСАТЬ";
+      const status=card?.querySelector(".status");
+      if(status) status.textContent="Не удалось отправить сообщение. Попробуй ещё раз.";
+    }
+  }
+
   function render(data){
     const created=data?.id&&!Array.isArray(data?.events)?data:null;
     const items=Array.isArray(data?.events)?data.events:(created?[created]:[]);
@@ -112,8 +153,10 @@ button[disabled]{opacity:.55;cursor:default}
         '<div class="meta">🎂 '+esc(age.min)+'–'+esc(age.max)+' лет</div>'+
         '<div class="desc">'+esc(e.description||"")+'</div>'+
         '<div class="actions">'+ageControl+'<button type="button" data-id="'+esc(e.id)+'">ПОЙТИ</button>'+
+        '<button type="button" class="write" data-write="'+esc(e.id)+'">НАПИСАТЬ</button>'+
         (created?'<button type="button" class="gather" data-gather="'+esc(e.id)+'">СОБРАТЬ КОМПАНИЮ</button>':"")+
         '</div>'+
+        '<div class="message-box" hidden><input class="message-input" type="text" maxlength="500" placeholder="Напиши в чат…" aria-label="Сообщение"><button type="button" class="send" data-send="'+esc(e.id)+'">ОТПРАВИТЬ</button></div>'+
         '<div class="status" aria-live="polite"></div>'+
       '</article>';
     }).join("");
@@ -122,6 +165,26 @@ button[disabled]{opacity:.55;cursor:default}
       button.addEventListener("click",()=>{
         const card=button.closest(".card");
         join(button.dataset.id,button,card?.querySelector(".age"));
+      });
+    });
+    root.querySelectorAll("button[data-write]").forEach(button=>{
+      button.addEventListener("click",()=>{
+        const box=button.closest(".card")?.querySelector(".message-box");
+        if(box){
+          box.hidden=!box.hidden;
+          if(!box.hidden) box.querySelector(".message-input")?.focus();
+        }
+      });
+    });
+    root.querySelectorAll("button[data-send]").forEach(button=>{
+      button.addEventListener("click",()=>writeMessage(button.dataset.send,button));
+    });
+    root.querySelectorAll(".message-input").forEach(input=>{
+      input.addEventListener("keydown",event=>{
+        if(event.key==="Enter"){
+          event.preventDefault();
+          input.closest(".message-box")?.querySelector("button[data-send]")?.click();
+        }
       });
     });
     root.querySelectorAll("button[data-gather]").forEach(button=>{
