@@ -6,3 +6,4 @@ get_event = service.get_event
 join_event = service.join_event
 create_event = service.create_event
 send_message = service.send_message
+get_messages = service.get_messages
