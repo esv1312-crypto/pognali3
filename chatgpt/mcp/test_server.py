@@ -22,7 +22,7 @@ async def main():
     async with Client(mcp, raise_exceptions=True) as client:
         tools = await client.list_tools()
         names = {tool.name for tool in tools.tools}
-        expected = {"search_events", "get_event", "join_event", "create_event", "get_messages", "send_message"}
+        expected = {"search_events", "get_event", "join_event", "create_event", "get_messages", "prepare_invite", "send_message"}
         assert expected <= names, (expected, names)
 
         result = await client.call_tool(
@@ -65,6 +65,16 @@ async def main():
         messages = payload_of(history)["messages"]
         assert messages[-1]["text"] == "Буду у входа!"
         assert messages[-1]["event_id"] == "demo-football-1"
+
+        invite = await client.call_tool(
+            "prepare_invite",
+            {"event_id": "demo-football-1", "user_id": "mcp-smoke-user"},
+        )
+        invite_payload = payload_of(invite)
+        assert invite_payload["event_id"] == "demo-football-1"
+        assert invite_payload["remaining_slots"] == 2
+        assert "Футбол" in invite_payload["invite_text"]
+        assert "Парк" in invite_payload["invite_text"]
 
         created = await client.call_tool(
             "create_event",
