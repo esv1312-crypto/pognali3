@@ -3,8 +3,20 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 """In-process smoke test for the ChatGPT-facing MCP server."""
 import asyncio
+import json
+
 from mcp import Client
 from chatgpt.mcp.server import mcp
+
+
+def payload_of(result):
+    assert not result.is_error
+    assert result.content
+    value = json.loads(result.content[0].text)
+    if isinstance(value.get("result"), dict):
+        value = value["result"]
+    return value
+
 
 async def main():
     async with Client(mcp, raise_exceptions=True) as client:
@@ -17,22 +29,30 @@ async def main():
             "search_events",
             {"city": "Екатеринбург", "event_date": "2026-10-01"},
         )
-        assert not result.is_error
-        import json
-        assert result.content
-        payload = json.loads(result.content[0].text)
-        events = payload.get("events", payload.get("result", {}).get("events", []))
+        events = payload_of(result).get("events", [])
         assert any(event["id"] == "demo-football-1" for event in events)
 
         detail = await client.call_tool("get_event", {"event_id": "demo-football-1"})
-        assert not detail.is_error
-        assert detail.content
-        detail_payload = json.loads(detail.content[0].text)
-        if isinstance(detail_payload.get("result"), dict):
-            detail_payload = detail_payload["result"]
+        detail_payload = payload_of(detail)
         assert detail_payload["id"] == "demo-football-1"
 
+        before = detail_payload["participant_count"]
+        joined = await client.call_tool(
+            "join_event",
+            {"event_id": "demo-football-1", "user_id": "mcp-smoke-user", "user_age": 30},
+        )
+        joined_payload = payload_of(joined)
+        assert joined_payload["joined"] is True
+        assert joined_payload["participant_count"] == before + 1
+
+        duplicate = await client.call_tool(
+            "join_event",
+            {"event_id": "demo-football-1", "user_id": "mcp-smoke-user", "user_age": 30},
+        )
+        assert payload_of(duplicate)["error"] == "ALREADY_JOINED"
+
     print("MCP smoke test: PASS")
+
 
 if __name__ == "__main__":
     asyncio.run(main())
