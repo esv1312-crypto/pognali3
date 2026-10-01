@@ -184,6 +184,51 @@ try:
     })
     assert status == 400 and body["error"] == "VALIDATION_ERROR"
 
+    status, body = request("GET", "/invites?user_id=friend-1")
+    assert status == 200
+    assert body["invites"] == []
+
+    status, body = request("POST", "/invites", {
+        "event_id": "demo-football-1",
+        "sender_user_id": "demo-organizer",
+        "recipient_user_id": "friend-http",
+    })
+    assert status == 201
+    invite_id = body["id"]
+    assert body["status"] == "pending"
+    assert body["recipient_user_id"] == "friend-http"
+
+    status, body = request("POST", "/invites", {
+        "event_id": "demo-football-1",
+        "sender_user_id": "demo-organizer",
+        "recipient_user_id": "friend-http",
+    })
+    assert status == 409 and body["error"] == "INVITE_ALREADY_SENT"
+
+    status, body = request("GET", "/invites?user_id=friend-http")
+    assert status == 200
+    assert len(body["invites"]) == 1
+    assert body["invites"][0]["id"] == invite_id
+
+    status, body = request(
+        "POST",
+        f"/invites/{invite_id}/accept",
+        {"user_id": "friend-http", "user_age": 30},
+    )
+    assert status == 200
+    assert body["status"] == "accepted"
+    assert body["joined"]["participant_count"] == 9
+
+    status, body = request(
+        "POST",
+        f"/invites/{invite_id}/accept",
+        {"user_id": "friend-http", "user_age": 30},
+    )
+    assert status == 409 and body["error"] == "INVITE_NOT_PENDING"
+
+    status, body = request("POST", "/invites/not-found/decline", {"user_id": "friend-http"})
+    assert status == 404 and body["error"] == "INVITE_NOT_FOUND"
+
     status, body = request("GET", "/events/not-found")
     assert status == 404 and body["error"] == "EVENT_NOT_FOUND"
 
