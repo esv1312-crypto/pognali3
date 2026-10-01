@@ -7,6 +7,10 @@ EVENTS = [
     {"id": "demo-run-1", "title": "Пробежка", "emoji": "🏃", "category": "sport", "date": "2026-10-01", "time": "19:00", "place": {"name": "Центральный парк", "city": "Екатеринбург"}, "description": "Спокойная совместная пробежка.", "max_participants": 12, "min_age": 18, "max_age": 45, "creator_id": "demo-organizer-2", "participant_count": 5, "participant_ids": []},
 ]
 MESSAGES = {}
+INVITES = []
+USERS = {
+    "chatgpt-user": {"id": "chatgpt-user", "name": "Пользователь"},
+}
 
 
 def public_event(event):
@@ -143,6 +147,48 @@ def get_messages(event_id, limit=50):
         return {"error": "VALIDATION_ERROR"}
     messages = MESSAGES.get(event_id, [])
     return {"event_id": event_id, "messages": messages[-limit:]}
+
+
+def create_invite(event_id, sender_user_id, recipient_user_id):
+    event = next((e for e in EVENTS if e["id"] == event_id), None)
+    if not event:
+        return {"error": "EVENT_NOT_FOUND"}
+    if not isinstance(sender_user_id, str) or not sender_user_id.strip():
+        return {"error": "VALIDATION_ERROR"}
+    if not isinstance(recipient_user_id, str) or not recipient_user_id.strip():
+        return {"error": "VALIDATION_ERROR"}
+    if sender_user_id.strip() not in event["participant_ids"] and sender_user_id.strip() != event["creator_id"]:
+        return {"error": "NOT_AUTHORIZED"}
+    if recipient_user_id.strip() == sender_user_id.strip():
+        return {"error": "INVALID_RECIPIENT"}
+    if recipient_user_id.strip() in event["participant_ids"]:
+        return {"error": "ALREADY_JOINED"}
+    if event["participant_count"] >= event["max_participants"]:
+        return {"error": "EVENT_FULL"}
+    existing = next(
+        (i for i in INVITES
+         if i["event_id"] == event_id and i["recipient_user_id"] == recipient_user_id.strip()
+         and i["status"] == "pending"),
+        None,
+    )
+    if existing:
+        return {"error": "INVITE_ALREADY_SENT", "invite_id": existing["id"]}
+    invite = {
+        "id": "invite-" + str(len(INVITES) + 1),
+        "event_id": event_id,
+        "sender_user_id": sender_user_id.strip(),
+        "recipient_user_id": recipient_user_id.strip(),
+        "status": "pending",
+        "invite_text": prepare_invite(event_id, sender_user_id)["invite_text"],
+    }
+    INVITES.append(invite)
+    return invite
+
+
+def get_user_invites(user_id):
+    if not isinstance(user_id, str) or not user_id.strip():
+        return {"error": "VALIDATION_ERROR"}
+    return {"invites": [dict(i) for i in INVITES if i["recipient_user_id"] == user_id.strip()]}
 
 
 def prepare_invite(event_id, user_id="chatgpt-user"):
