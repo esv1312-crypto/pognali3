@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
   push:
     branches:
-      - main
+      - chatgpt-mvp-skeleton
 
 permissions:
   contents: read
@@ -46,7 +46,8 @@ jobs:
           python3 - <<'PY'
           import struct, zlib
           w = h = 256
-          raw = b''.join(b'\x00' + bytes((120,120,120))*w for _ in range(h))
+          raw = b'\x00' + bytes((120,120,120))*w
+          raw = raw * h
           def chunk(kind, data):
               return struct.pack(">I", len(data)) + kind + data + struct.pack(">I", zlib.crc32(kind + data) & 0xffffffff)
           png = b'\x89PNG\r\n\x1a\n' + chunk(b'IHDR', struct.pack(">IIBBBBB", w,h,8,2,0,0,0)) + chunk(b'IDAT', zlib.compress(raw, 9)) + chunk(b'IEND', b'')
@@ -67,7 +68,6 @@ jobs:
           disable-animations: true
           script: bash .github/scripts/android-ui-sim.sh
 
-
       - name: Upload visual test artifacts
         if: always()
         uses: actions/upload-artifact@v4
@@ -76,4 +76,4 @@ jobs:
           path: test-results/
           if-no-files-found: warn
           retention-days: 14
-# QA trigger: rerun hardened emulator simulation v2
+# QA trigger: run emulator simulation on chatgpt-mvp-skeleton
