@@ -89,8 +89,17 @@ button[disabled]{opacity:.55;cursor:default}
     }
   }
 
+  async function gather(eventId){
+    try{
+      if(typeof openai?.sendFollowUpMessage==="function"){
+        await openai.sendFollowUpMessage({prompt:"Хочу собрать компанию для события "+eventId+". Помоги пригласить людей и подготовить сообщение в чат события."});
+      }
+    }catch(err){}
+  }
+
   function render(data){
-    const items=Array.isArray(data?.events)?data.events:[];
+    const created=data?.id&&!Array.isArray(data?.events)?data:null;
+    const items=Array.isArray(data?.events)?data.events:(created?[created]:[]);
     if(!items.length){root.innerHTML='<div class="empty">Сегодня рядом пока ничего нет.</div>';return;}
     root.innerHTML=items.map(e=>{
       const age=e.age_range||{min:e.min_age,max:e.max_age};
@@ -102,7 +111,9 @@ button[disabled]{opacity:.55;cursor:default}
         '<div class="meta">Сегодня · '+esc(e.time)+' · 📍 '+esc(e.place?.name||e.place?.city||"Место уточняется")+'</div>'+
         '<div class="meta">🎂 '+esc(age.min)+'–'+esc(age.max)+' лет</div>'+
         '<div class="desc">'+esc(e.description||"")+'</div>'+
-        '<div class="actions">'+ageControl+'<button type="button" data-id="'+esc(e.id)+'">ПОЙТИ</button></div>'+
+        '<div class="actions">'+ageControl+'<button type="button" data-id="'+esc(e.id)+'">ПОЙТИ</button>'+
+        (created?'<button type="button" class="gather" data-gather="'+esc(e.id)+'">СОБРАТЬ КОМПАНИЮ</button>':"")+
+        '</div>'+
         '<div class="status" aria-live="polite"></div>'+
       '</article>';
     }).join("");
@@ -111,6 +122,13 @@ button[disabled]{opacity:.55;cursor:default}
       button.addEventListener("click",()=>{
         const card=button.closest(".card");
         join(button.dataset.id,button,card?.querySelector(".age"));
+      });
+    });
+    root.querySelectorAll("button[data-gather]").forEach(button=>{
+      button.addEventListener("click",()=>{
+        button.disabled=true;
+        button.textContent="СОБИРАЕМ…";
+        gather(button.dataset.gather);
       });
     });
   }
