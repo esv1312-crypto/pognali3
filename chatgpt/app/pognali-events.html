@@ -16,7 +16,13 @@ h2{margin:0;font-size:22px}
 .meta{font-size:14px;opacity:.8}
 .desc{font-size:14px;line-height:1.35}
 .actions{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
-.message-box{display:flex;gap:8px;align-items:center}
+.message-box{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.chat{border-top:1px solid color-mix(in srgb,CanvasText 10%,transparent);padding-top:10px;display:grid;gap:6px}
+.chat-title{font-size:13px;font-weight:700;opacity:.75}
+.messages{display:grid;gap:6px;max-height:180px;overflow:auto}
+.message{font-size:13px;line-height:1.3;padding:7px 9px;border-radius:10px;background:color-mix(in srgb,CanvasText 7%,transparent)}
+.message-user{font-weight:700;margin-right:5px}
+.no-messages{font-size:13px;opacity:.55}
 .message-input{flex:1;min-width:0;border:1px solid color-mix(in srgb,CanvasText 18%,transparent);border-radius:10px;padding:10px;font:inherit;background:transparent;color:inherit}
 button{border:0;border-radius:12px;padding:11px 14px;font:inherit;font-weight:700;cursor:pointer;background:#111;color:#fff}
 button[disabled]{opacity:.55;cursor:default}
@@ -99,6 +105,28 @@ button[disabled]{opacity:.55;cursor:default}
     }catch(err){}
   }
 
+  function payloadFrom(result){
+    return result?.structuredContent||result?.structured_content||result;
+  }
+
+  function renderMessages(card, payload){
+    const box=card?.querySelector(".messages");
+    if(!box) return;
+    const messages=Array.isArray(payload?.messages)?payload.messages:[];
+    box.innerHTML=messages.length
+      ? messages.map(m=>'<div class="message"><span class="message-user">'+esc(m.user_id||"Участник")+'</span>'+esc(m.text)+'</div>').join("")
+      : '<div class="no-messages">Пока сообщений нет.</div>';
+    box.scrollTop=box.scrollHeight;
+  }
+
+  async function loadMessages(eventId, card){
+    try{
+      if(typeof openai?.callTool!=="function") return;
+      const result=await openai.callTool("get_messages",{event_id:eventId,limit:50});
+      renderMessages(card,payloadFrom(result));
+    }catch(err){}
+  }
+
   async function writeMessage(eventId, button){
     const card=button.closest(".card");
     const input=card?.querySelector(".message-input");
@@ -126,6 +154,7 @@ button[disabled]{opacity:.55;cursor:default}
         if(payload?.error) throw new Error(payload.error);
       }
       input.value="";
+      await loadMessages(eventId,card);
       button.textContent="ОТПРАВЛЕНО ✓";
       const status=card?.querySelector(".status");
       if(status) status.textContent="Сообщение отправлено в чат события.";
@@ -156,6 +185,7 @@ button[disabled]{opacity:.55;cursor:default}
         '<button type="button" class="write" data-write="'+esc(e.id)+'">НАПИСАТЬ</button>'+
         (created?'<button type="button" class="gather" data-gather="'+esc(e.id)+'">СОБРАТЬ КОМПАНИЮ</button>':"")+
         '</div>'+
+        '<div class="chat"><div class="chat-title">💬 Чат события</div><div class="messages"><div class="no-messages">Загрузка…</div></div></div>'+
         '<div class="message-box" hidden><input class="message-input" type="text" maxlength="500" placeholder="Напиши в чат…" aria-label="Сообщение"><button type="button" class="send" data-send="'+esc(e.id)+'">ОТПРАВИТЬ</button></div>'+
         '<div class="status" aria-live="polite"></div>'+
       '</article>';
@@ -167,6 +197,7 @@ button[disabled]{opacity:.55;cursor:default}
         join(button.dataset.id,button,card?.querySelector(".age"));
       });
     });
+    root.querySelectorAll(".card").forEach(card=>loadMessages(card.querySelector("button[data-id]")?.dataset.id,card));
     root.querySelectorAll("button[data-write]").forEach(button=>{
       button.addEventListener("click",()=>{
         const box=button.closest(".card")?.querySelector(".message-box");
