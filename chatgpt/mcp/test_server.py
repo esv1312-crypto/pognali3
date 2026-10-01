@@ -72,6 +72,20 @@ async def main():
         assert created_payload["participant_count"] == 0
         assert created_payload["max_participants"] == 6
 
+        invalid = await client.call_tool(
+            "create_event",
+            {
+                "title": "Неверное событие",
+                "event_date": "2026-10-03",
+                "time": "вечером",
+                "place": {"name": "Место", "city": "Екатеринбург"},
+                "max_participants": 5,
+                "min_age": 18,
+                "max_age": 40,
+            },
+        )
+        assert payload_of(invalid)["error"] == "VALIDATION_ERROR"
+
         created_id = created_payload["id"]
         created_detail = await client.call_tool("get_event", {"event_id": created_id})
         assert payload_of(created_detail)["id"] == created_id
