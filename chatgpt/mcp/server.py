@@ -40,6 +40,7 @@ apps.add_html_resource(
     resource_uri=UI_URI,
     description="Find Pognali events for a date, optionally filtered by city, category and age.",
 )
+@mcp.tool()
 def search_events(city: str | None = None, event_date: str | None = None,
                   category: str | None = None, user_age: int | None = None) -> dict:
     return core.search_events(city, event_date, category, user_age)
@@ -64,6 +65,7 @@ def join_event(event_id: str, user_id: str, user_age: int) -> dict:
         "before calling this tool. Do not invent missing date, time, place or limits."
     ),
 )
+@mcp.tool()
 def create_event(title: str, event_date: str, time: str, place: dict,
                  max_participants: int, min_age: int, max_age: int,
                  category: str = "other", emoji: str = "📍",
@@ -86,6 +88,7 @@ def get_messages(event_id: str, limit: int = 50) -> dict:
         "with friends or use it to gather a company. Do not invent event details."
     ),
 )
+@mcp.tool()
 def prepare_invite(event_id: str, user_id: str = "chatgpt-user") -> dict:
     return core.prepare_invite(event_id, user_id)
 
