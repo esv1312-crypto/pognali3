@@ -104,6 +104,21 @@ try:
     assert status == 201
     assert body["text"] == "Я иду!"
 
+    status, body = request(
+        "POST",
+        "/events/demo-football-1/messages",
+        {"user_id": "qa-user", "text": "  Встречаемся у входа  "},
+    )
+    assert status == 201
+    assert body == {"user_id": "qa-user", "text": "Встречаемся у входа"}
+
+    status, body = request(
+        "POST",
+        "/events/demo-football-1/messages",
+        {"user_id": "qa-user", "text": "   "},
+    )
+    assert status == 400 and body["error"] == "VALIDATION_ERROR"
+
     status, body = request("POST", "/events", {
         "title": "Настольные игры",
         "emoji": "🎲",
