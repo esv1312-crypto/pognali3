@@ -51,6 +51,37 @@ async def main():
         )
         assert payload_of(duplicate)["error"] == "ALREADY_JOINED"
 
+        created = await client.call_tool(
+            "create_event",
+            {
+                "title": "Настольный теннис",
+                "event_date": "2026-10-02",
+                "time": "19:30",
+                "place": {"name": "Спортзал", "city": "Екатеринбург"},
+                "max_participants": 6,
+                "min_age": 18,
+                "max_age": 40,
+                "category": "sport",
+                "emoji": "🏓",
+                "description": "Тестовое событие из ChatGPT.",
+                "creator_id": "mcp-smoke-creator",
+            },
+        )
+        created_payload = payload_of(created)
+        assert created_payload["title"] == "Настольный теннис"
+        assert created_payload["participant_count"] == 0
+        assert created_payload["max_participants"] == 6
+
+        created_id = created_payload["id"]
+        created_detail = await client.call_tool("get_event", {"event_id": created_id})
+        assert payload_of(created_detail)["id"] == created_id
+
+        creator_join = await client.call_tool(
+            "join_event",
+            {"event_id": created_id, "user_id": "mcp-smoke-creator", "user_age": 30},
+        )
+        assert payload_of(creator_join)["participant_count"] == 1
+
     print("MCP smoke test: PASS")
 
 
