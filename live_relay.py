@@ -8,7 +8,7 @@ PORT = int(os.environ.get("PORT", "10000"))
 latest = {"jpeg": None, "ts": 0.0}
 lock = threading.Lock()
 
-INDEX = b"""<!doctype html><html><head><meta name='viewport' content='width=device-width,initial-scale=1'><title>Pognali emulator live</title><style>html,body{margin:0;background:#111;color:#eee;font-family:sans-serif}header{padding:10px}img{display:block;width:100%;height:auto}</style></head><body><header>POGNALI — EMULATOR LIVE</header><img src='/stream.mjpg'></body></html>"""
+INDEX = """<!doctype html><html><head><meta name='viewport' content='width=device-width,initial-scale=1'><title>Pognali emulator live</title><style>html,body{margin:0;background:#111;color:#eee;font-family:sans-serif}header{padding:10px}img{display:block;width:100%;height:auto}</style></head><body><header>POGNALI — EMULATOR LIVE</header><img src='/stream.mjpg'></body></html>""".encode("utf-8")
 
 class Handler(BaseHTTPRequestHandler):
     def log_message(self, *args):
