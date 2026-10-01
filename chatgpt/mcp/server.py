@@ -124,6 +124,32 @@ def decline_invite(invite_id: str, user_id: str) -> dict:
 
 
 
+
+
+@mcp.tool()
+def openai_connection_status() -> dict:
+    """Safely verify that Render has a working OPENAI_API_KEY without exposing it."""
+    api_key = os.environ.get("OPENAI_API_KEY", "").strip()
+    if not api_key:
+        return {"ok": False, "configured": False, "reason": "OPENAI_API_KEY is not configured"}
+
+    from urllib.request import Request, urlopen
+    from urllib.error import HTTPError, URLError
+
+    request = Request(
+        "https://api.openai.com/v1/models",
+        headers={"Authorization": "Bearer " + api_key, "Accept": "application/json"},
+        method="GET",
+    )
+    try:
+        with urlopen(request, timeout=15) as response:
+            return {"ok": response.status == 200, "configured": True, "status": response.status}
+    except HTTPError as exc:
+        return {"ok": False, "configured": True, "status": exc.code, "reason": "OpenAI authentication/request failed"}
+    except URLError:
+        return {"ok": False, "configured": True, "reason": "Could not reach OpenAI API"}
+
+
 if __name__ == "__main__":
     mcp.run(
         transport="streamable-http",
