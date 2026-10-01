@@ -110,7 +110,9 @@ try:
         {"user_id": "qa-user", "text": "  Встречаемся у входа  "},
     )
     assert status == 201
-    assert body["event_id"] == "demo-football-1"\n    assert body["user_id"] == "qa-user"\n    assert body["text"] == "Встречаемся у входа"
+    assert body["event_id"] == "demo-football-1"
+    assert body["user_id"] == "qa-user"
+    assert body["text"] == "Встречаемся у входа"
 
     status, body = request(
         "POST",
