@@ -10,3 +10,5 @@ get_messages = service.get_messages
 prepare_invite = service.prepare_invite
 create_invite = service.create_invite
 get_user_invites = service.get_user_invites
+accept_invite = service.accept_invite
+decline_invite = service.decline_invite
