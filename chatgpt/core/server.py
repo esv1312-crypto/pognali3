@@ -39,6 +39,63 @@ class Handler(BaseHTTPRequestHandler):
         if parsed.path == "/health":
             return self.send_json(200, {"ok": True, "service": "pognali-core"})
 
+        if parsed.path == "/invites":
+            qs = parse_qs(parsed.query)
+            user_id = qs.get("user_id", [None])[0]
+            result = service.get_user_invites(user_id)
+            if result.get("error"):
+                return self.send_json(400, result)
+            return self.send_json(200, result)
+
+        if parsed.path == "/invites":
+            result = service.create_invite(
+                data.get("event_id"),
+                data.get("sender_user_id"),
+                data.get("recipient_user_id"),
+            )
+            errors = {
+                "EVENT_NOT_FOUND": 404,
+                "VALIDATION_ERROR": 400,
+                "NOT_AUTHORIZED": 403,
+                "INVALID_RECIPIENT": 400,
+                "ALREADY_JOINED": 409,
+                "EVENT_FULL": 409,
+                "INVITE_ALREADY_SENT": 409,
+                "EVENT_EXPIRED": 409,
+            }
+            return self.send_json(errors.get(result.get("error"), 201), result)
+
+        if parsed.path.startswith("/invites/") and parsed.path.endswith("/accept"):
+            invite_id = parsed.path.split("/")[2]
+            result = service.accept_invite(
+                invite_id,
+                data.get("user_id"),
+                data.get("user_age"),
+            )
+            errors = {
+                "INVITE_NOT_FOUND": 404,
+                "VALIDATION_ERROR": 400,
+                "NOT_AUTHORIZED": 403,
+                "INVITE_NOT_PENDING": 409,
+                "EVENT_NOT_FOUND": 404,
+                "EVENT_EXPIRED": 409,
+                "ALREADY_JOINED": 409,
+                "EVENT_FULL": 409,
+                "AGE_RESTRICTED": 409,
+            }
+            return self.send_json(errors.get(result.get("error"), 200), result)
+
+        if parsed.path.startswith("/invites/") and parsed.path.endswith("/decline"):
+            invite_id = parsed.path.split("/")[2]
+            result = service.decline_invite(invite_id, data.get("user_id"))
+            errors = {
+                "INVITE_NOT_FOUND": 404,
+                "VALIDATION_ERROR": 400,
+                "NOT_AUTHORIZED": 403,
+                "INVITE_NOT_PENDING": 409,
+            }
+            return self.send_json(errors.get(result.get("error"), 200), result)
+
         if parsed.path == "/events":
             qs = parse_qs(parsed.query)
             city = qs.get("city", [None])[0]
