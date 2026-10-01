@@ -49,6 +49,14 @@ button{border:0;border-radius:12px;padding:11px 14px;font:inherit;font-weight:70
     }).join("");
   }
   window.pognaliRender=render;
+  window.addEventListener("message", function(event){
+    const result=event.data?.result;
+    if(result?.structuredContent) render(result.structuredContent);
+    else if(result?.structured_content) render(result.structured_content);
+    else if(result?.content?.[0]?.text){
+      try { render(JSON.parse(result.content[0].text)); } catch(e) {}
+    }
+  });
 })();
 </script>
 </body>
