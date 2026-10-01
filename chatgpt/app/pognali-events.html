@@ -250,7 +250,7 @@ button[disabled]{opacity:.55;cursor:default}
         // После принятия приглашения обновляем список событий, чтобы счётчик и статус были актуальными.
         try{
           if(typeof openai?.callTool==="function"){
-            const eventsResult=await openai.callTool("search_events",{date:new Date().toISOString().slice(0,10)});
+            const eventsResult=await openai.callTool("search_events",{event_date:new Date().toISOString().slice(0,10)});
             render(payloadFrom(eventsResult));
           }
         }catch(err){}
