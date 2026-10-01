@@ -10,10 +10,20 @@ on:
       - "chatgpt/**"
       - ".github/workflows/chatgpt-core-test.yml"
 
+permissions:
+  contents: read
+
+concurrency:
+  group: chatgpt-core-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   core-test:
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    env:
+      PYTHONUNBUFFERED: "1"
+      PYTHONPATH: ${{ github.workspace }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
