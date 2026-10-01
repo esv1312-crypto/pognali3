@@ -95,6 +95,18 @@ def send_message(event_id: str, user_id: str, text: str) -> dict:
     return core.send_message(event_id, user_id, text)
 
 
+@mcp.tool()
+def create_invite(event_id: str, sender_user_id: str, recipient_user_id: str) -> dict:
+    """Send a stateful invitation to another Pognali user."""
+    return core.create_invite(event_id, sender_user_id, recipient_user_id)
+
+
+@mcp.tool()
+def get_user_invites(user_id: str) -> dict:
+    """Get pending and historical invitations for a Pognali user."""
+    return core.get_user_invites(user_id)
+
+
 if __name__ == "__main__":
     mcp.run(
         transport="streamable-http",
