@@ -10,7 +10,6 @@ if str(ROOT) not in sys.path:
 
 from mcp.server.mcpserver import MCPServer
 from mcp.server.apps import Apps
-
 from chatgpt.mcp import adapter as core
 
 UI_URI = "ui://pognali/events-v1.html"
@@ -37,10 +36,7 @@ apps.add_html_resource(
 )
 
 
-@apps.tool(
-    resource_uri=UI_URI,
-    description="Find Pognali events for a date, optionally filtered by city, category and age.",
-)
+@apps.tool(resource_uri=UI_URI, description="Find Pognali events for a date, optionally filtered by city, category and age.")
 @mcp.tool()
 def search_events(city: str | None = None, event_date: str | None = None,
                   category: str | None = None, user_age: int | None = None) -> dict:
@@ -57,15 +53,7 @@ def join_event(event_id: str, user_id: str, user_age: int) -> dict:
     return core.join_event(event_id, user_id, user_age)
 
 
-@apps.tool(
-    resource_uri=UI_URI,
-    description=(
-        "Create a Pognali event. Required: title, date (YYYY-MM-DD), time (HH:MM), "
-        "place, max participants, minimum age and maximum age. When the user gives "
-        "a natural-language creation request, ask only for missing required fields "
-        "before calling this tool. Do not invent missing date, time, place or limits."
-    ),
-)
+@apps.tool(resource_uri=UI_URI, description="Create a Pognali event. Required: title, date (YYYY-MM-DD), time (HH:MM), place, max participants, minimum age and maximum age. When the user gives a natural-language creation request, ask only for missing required fields before calling this tool. Do not invent missing date, time, place or limits.")
 @mcp.tool()
 def create_event(title: str, event_date: str, time: str, place: dict,
                  max_participants: int, min_age: int, max_age: int,
@@ -78,17 +66,10 @@ def create_event(title: str, event_date: str, time: str, place: dict,
 
 @mcp.tool()
 def get_messages(event_id: str, limit: int = 50) -> dict:
-    """Get recent messages for a Pognali event chat."""
     return core.get_messages(event_id, limit)
 
 
-@apps.tool(
-    resource_uri=UI_URI,
-    description=(
-        "Prepare a short invitation for a Pognali event so the creator can share it "
-        "with friends or use it to gather a company. Do not invent event details."
-    ),
-)
+@apps.tool(resource_uri=UI_URI, description="Prepare a short invitation for a Pognali event so the creator can share it with friends or use it to gather a company. Do not invent event details.")
 @mcp.tool()
 def prepare_invite(event_id: str, user_id: str = "chatgpt-user") -> dict:
     return core.prepare_invite(event_id, user_id)
@@ -101,27 +82,22 @@ def send_message(event_id: str, user_id: str, text: str) -> dict:
 
 @mcp.tool()
 def create_invite(event_id: str, sender_user_id: str, recipient_user_id: str) -> dict:
-    """Send a stateful invitation to another Pognali user."""
     return core.create_invite(event_id, sender_user_id, recipient_user_id)
 
 
 @mcp.tool()
 def get_user_invites(user_id: str) -> dict:
-    """Get pending and historical invitations for a Pognali user."""
     return core.get_user_invites(user_id)
 
 
 @mcp.tool()
 def accept_invite(invite_id: str, user_id: str, user_age: int) -> dict:
-    """Accept an incoming Pognali invitation and join its event."""
     return core.accept_invite(invite_id, user_id, user_age)
 
 
 @mcp.tool()
 def decline_invite(invite_id: str, user_id: str) -> dict:
-    """Decline an incoming Pognali invitation."""
     return core.decline_invite(invite_id, user_id)
-
 
 
 if __name__ == "__main__":
