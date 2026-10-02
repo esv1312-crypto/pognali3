@@ -5,6 +5,7 @@ mkdir -p test-results/screenshots test-results test-results/video
 # This gives us a post-run video trail and keeps the stdout telemetry live in GitHub Actions.
 RECORDER_PID=""
 LIVE_PID=""
+TELEMETRY_PID=""
 start_live_stream(){
   if [ -z "${LIVE_URL:-}" ]; then echo "LIVE | disabled (LIVE_URL not set)"; return; fi
   (
@@ -16,6 +17,19 @@ start_live_stream(){
   ) &
   LIVE_PID=$!
   echo "LIVE | started pid=$LIVE_PID"
+}
+start_telemetry(){
+  if [ -z "${LIVE_URL:-}" ]; then echo "TELEMETRY | disabled"; return; fi
+  (
+    tail -n 0 -F "$REPORT" 2>/dev/null | while IFS= read -r line; do
+      curl --silent --show-error --max-time 2 -X POST -H "X-Live-Token: $LIVE_TOKEN" -H "Content-Type: text/plain; charset=utf-8" --data-binary "$line" "$LIVE_URL/log" >/dev/null 2>&1 || true
+    done
+  ) &
+  TELEMETRY_PID=$!
+  echo "TELEMETRY | started pid=$TELEMETRY_PID"
+}
+stop_telemetry(){
+  if [ -n "$TELEMETRY_PID" ]; then kill "$TELEMETRY_PID" >/dev/null 2>&1 || true; wait "$TELEMETRY_PID" 2>/dev/null || true; echo "TELEMETRY | stopped"; fi
 }
 stop_live_stream(){
   if [ -n "$LIVE_PID" ]; then kill "$LIVE_PID" >/dev/null 2>&1 || true; wait "$LIVE_PID" 2>/dev/null || true; echo "LIVE | stopped"; fi
@@ -46,9 +60,12 @@ stop_recorder(){
     echo "RECORDER | stopped"
   fi
 }
-trap 'stop_live_stream; stop_recorder' EXIT
+trap 'stop_telemetry; stop_live_stream; stop_recorder' EXIT
 start_recorder
 start_live_stream
+REPORT="test-results/test-report.txt"
+: > "$REPORT"
+start_telemetry
 adb install -r app/build/outputs/apk/debug/app-debug.apk
 # API 35 blocks shell writes to shared /sdcard storage.
 # Keep the fixture in adb's writable temp area so it never blocks
@@ -57,8 +74,6 @@ adb install -r app/build/outputs/apk/debug/app-debug.apk
 adb push qa-profile.png /data/local/tmp/qa-profile.png >/dev/null
 adb shell ls -l /data/local/tmp/qa-profile.png
 
-REPORT="test-results/test-report.txt"
-: > "$REPORT"
 PASS=0
 FAIL=0
 SKIP=0
@@ -68,6 +83,7 @@ pass(){ PASS=$((PASS+1)); log "PASS | $*"; }
 fail(){ FAIL=$((FAIL+1)); log "FAIL | $*"; }
 skip(){ SKIP=$((SKIP+1)); log "SKIP | $*"; }
 heartbeat(){ log "HEARTBEAT | $* | $(date -u +"%Y-%m-%dT%H:%M:%SZ")"; }
+step(){ log "STEP | $*"; }
 
 shot(){
   adb exec-out screencap -p > "test-results/screenshots/$1.png"
@@ -186,8 +202,8 @@ close_modal(){
 log "FULL HUMAN-STYLE SIMULATION"
 heartbeat "simulation started"
 log "Commit: $GITHUB_SHA"
-log "STEP 00 | APK installed; beginning emulator-driven user simulation"
-log "STEP 00.1 | Profile photo fixture staged in /data/local/tmp"
+step "00 | APK installed; beginning emulator-driven user simulation"
+step "00.1 | Profile photo fixture staged in /data/local/tmp"
 
 log "Started: $(date -u +"%Y-%m-%dT%H:%M:%SZ")"
 
