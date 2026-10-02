@@ -6,12 +6,14 @@ mkdir -p test-results/screenshots test-results test-results/video
 RECORDER_PID=""
 LIVE_PID=""
 TELEMETRY_PID=""
+AI_BRIDGE_PID=""
+AI_COMMENT_ID="5950423112"
 start_live_stream(){
   if [ -z "${LIVE_URL:-}" ]; then echo "LIVE | disabled (LIVE_URL not set)"; return; fi
   (
     echo "LIVE | starting emulator screen stream to $LIVE_URL"
     while true; do
-      adb exec-out screencap -p 2>/dev/null | curl --silent --show-error --max-time 5 -X POST -H "X-Live-Token: $LIVE_TOKEN" --data-binary @- "$LIVE_URL/frame" >/dev/null 2>&1 || true
+      if adb exec-out screencap -p 2>/dev/null | curl --silent --show-error --max-time 5 -X POST -H "X-Live-Token: $LIVE_TOKEN" --data-binary @- "$LIVE_URL/frame" >/dev/null 2>&1; then touch /tmp/pognali-live-frame; fi
       sleep 0.5
     done
   ) &
@@ -27,6 +29,26 @@ start_telemetry(){
   ) &
   TELEMETRY_PID=$!
   echo "TELEMETRY | started pid=$TELEMETRY_PID"
+}
+start_ai_bridge(){
+  if [ -z "${GITHUB_TOKEN:-}" ] || [ -z "${GITHUB_REPOSITORY:-}" ]; then echo "AI_BRIDGE | disabled"; return; fi
+  ( while true; do
+      step_text=$(cat /tmp/pognali-live-step 2>/dev/null || echo "waiting for step")
+      last_log=$(tail -n 1 "$REPORT" 2>/dev/null || echo "waiting for log")
+      frame_age="never"; [ -f /tmp/pognali-live-frame ] && frame_age=$(python3 -c "import os,time; print(round(time.time()-os.path.getmtime(\"/tmp/pognali-live-frame\"),1))")
+      hb_age="never"; [ -f /tmp/pognali-live-heartbeat ] && hb_age=$(python3 -c "import os,time; print(round(time.time()-os.path.getmtime(\"/tmp/pognali-live-heartbeat\"),1))")
+      ui_text=$(cat /tmp/pognali-live-ui.txt 2>/dev/null | tr "\n" " " | cut -c1-2500); [ -n "$ui_text" ] || ui_text="UI snapshot not available yet"
+      body=$(printf "### POGNALI LIVE — AI TELEMETRY\n\n**status:** RUNNING\n**run:** %s\n**step:** %s\n**last action/log:** %s\n**frame age:** %ss\n**heartbeat age:** %ss\n**UI:** %s\n" "$GITHUB_RUN_NUMBER" "$step_text" "$last_log" "$frame_age" "$hb_age" "$ui_text")
+      if [ "$hb_age" != "never" ] && python3 -c "import sys; sys.exit(0 if float(sys.argv[1]) > 15 else 1)" "$hb_age"; then body="${body}\n**stall:** POSSIBLE STALL (heartbeat older than 15s)"; else body="${body}\n**stall:** false"; fi
+      payload=$(printf "%s" "$body" | python3 -c "import json,sys; print(json.dumps({\"body\":sys.stdin.read()},ensure_ascii=False))")
+      curl --silent --show-error --max-time 5 -X PATCH -H "Authorization: Bearer $GITHUB_TOKEN" -H "Accept: application/vnd.github+json" -H "X-GitHub-Api-Version: 2022-11-28" -H "Content-Type: application/json" --data "$payload" "https://api.github.com/repos/$GITHUB_REPOSITORY/issues/comments/$AI_COMMENT_ID" >/dev/null 2>&1 || true
+      sleep 3
+    done ) &
+  AI_BRIDGE_PID=$!
+  echo "AI_BRIDGE | started pid=$AI_BRIDGE_PID comment=$AI_COMMENT_ID"
+}
+stop_ai_bridge(){
+  if [ -n "$AI_BRIDGE_PID" ]; then kill "$AI_BRIDGE_PID" >/dev/null 2>&1 || true; wait "$AI_BRIDGE_PID" 2>/dev/null || true; echo "AI_BRIDGE | stopped"; fi
 }
 stop_telemetry(){
   if [ -n "$TELEMETRY_PID" ]; then kill "$TELEMETRY_PID" >/dev/null 2>&1 || true; wait "$TELEMETRY_PID" 2>/dev/null || true; echo "TELEMETRY | stopped"; fi
@@ -60,12 +82,16 @@ stop_recorder(){
     echo "RECORDER | stopped"
   fi
 }
-trap 'stop_telemetry; stop_live_stream; stop_recorder' EXIT
+trap 'stop_ai_bridge; stop_telemetry; stop_live_stream; stop_recorder' EXIT
 start_recorder
 start_live_stream
 REPORT="test-results/test-report.txt"
 : > "$REPORT"
+: > /tmp/pognali-live-step
+: > /tmp/pognali-live-ui.txt
+rm -f /tmp/pognali-live-frame /tmp/pognali-live-heartbeat
 start_telemetry
+start_ai_bridge
 adb install -r app/build/outputs/apk/debug/app-debug.apk
 # API 35 blocks shell writes to shared /sdcard storage.
 # Keep the fixture in adb's writable temp area so it never blocks
@@ -82,8 +108,8 @@ log(){ echo "$*" | tee -a "$REPORT"; }
 pass(){ PASS=$((PASS+1)); log "PASS | $*"; }
 fail(){ FAIL=$((FAIL+1)); log "FAIL | $*"; }
 skip(){ SKIP=$((SKIP+1)); log "SKIP | $*"; }
-heartbeat(){ log "HEARTBEAT | $* | $(date -u +"%Y-%m-%dT%H:%M:%SZ")"; }
-step(){ log "STEP | $*"; }
+heartbeat(){ touch /tmp/pognali-live-heartbeat; log "HEARTBEAT | $* | $(date -u +"%Y-%m-%dT%H:%M:%SZ")"; }
+step(){ echo "$*" > /tmp/pognali-live-step; log "STEP | $*"; }
 
 shot(){
   adb exec-out screencap -p > "test-results/screenshots/$1.png"
@@ -110,7 +136,17 @@ recover_system_ui(){
 dump_ui(){
   recover_system_ui || true
   adb shell uiautomator dump "$UI_XML" >/dev/null 2>&1 || true
-  adb shell cat "$UI_XML" 2>/dev/null || true
+  adb shell cat "$UI_XML" 2>/dev/null | tee /tmp/pognali-live-ui.xml >/dev/null || true
+python3 - <<'PY' >/tmp/pognali-live-ui.txt 2>/dev/null || true
+import re,html
+try:
+ x=open("/tmp/pognali-live-ui.xml",encoding="utf-8",errors="ignore").read(); vals=[]
+ for m in re.finditer(r'\b(?:text|content-desc)="([^"]*)"',x):
+  v=html.unescape(m.group(1)).strip()
+  if v and v not in vals: vals.append(v)
+ print(" | ".join(vals[:80]))
+except Exception: pass
+PY
 }
 tap_text(){
   NEEDLE="$1"
