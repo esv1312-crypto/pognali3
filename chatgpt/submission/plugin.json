@@ -1,0 +1,96 @@
+{
+  "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+  "name": "pognali",
+  "version": "1.0.0",
+  "description": "POGNALI connects ChatGPT conversations with real-world events: discover an activity, choose it, join, invite someone, and go.",
+  "author": {
+    "name": "Stas"
+  },
+  "homepage": "https://pognali-chatgpt-ui.onrender.com/",
+  "license": "All rights reserved",
+  "keywords": ["events", "real-world", "activities", "meetups", "social"],
+  "extensions": {
+    "com.openai": {
+      "interface": {
+        "displayName": "POGNALI",
+        "shortDescription": "Go from chat to real life",
+        "longDescription": "POGNALI helps people turn conversation into real-world activity. Users can discover events by date and filters, open an event, see its place, age range and live participant count, join or leave, chat with participants, ask the organizer a question, and receive or prepare invitations. Users can also create events by describing what they want in natural language; the integration asks only for required missing fields before creating the event. Create and Invite are intentionally separate actions: creating an event never automatically invites people, and an invitation does not consume a participant slot until it is accepted. POGNALI is deliberately not a traditional social network: there is no follower graph, like system, or passive social feed.",
+        "developerName": "Stas",
+        "category": "Productivity",
+        "capabilities": ["Discover events", "Join events", "Create events", "Invite people", "Event chat"],
+        "websiteURL": "https://pognali-chatgpt-ui.onrender.com/",
+        "supportURL": "https://pognali-chatgpt-ui.onrender.com/support.html",
+        "privacyPolicyURL": "https://pognali-chatgpt-ui.onrender.com/privacy.html",
+        "termsOfServiceURL": "https://pognali-chatgpt-ui.onrender.com/terms.html",
+        "defaultPrompt": [
+          "Find something to do today.",
+          "What events are happening this weekend?",
+          "Help me create a POGNALI event."
+        ],
+        "brandColor": "#111111",
+        "logo": "./assets/logo.svg",
+        "composerIcon": "./assets/logo.svg"
+      },
+      "review": {
+        "test_cases": {
+          "positive": [
+            {
+              "description": "Discover today's events",
+              "prompt": "Find something to do today.",
+              "tools_triggered": "search_events",
+              "expected_behavior": "Return current POGNALI events for today with date, time, place, capacity and status."
+            },
+            {
+              "description": "Join an event",
+              "prompt": "I want to join the first suitable event. My age is 30.",
+              "tools_triggered": "search_events, join_event",
+              "expected_behavior": "Show suitable events, join the selected event, and return the updated participant count."
+            },
+            {
+              "description": "Create an event",
+              "prompt": "Create a POGNALI event for a football game tomorrow at 19:00 in Warsaw, max 10 people, ages 18 to 45.",
+              "tools_triggered": "create_event",
+              "expected_behavior": "Ask only for any still-missing mandatory fields, then create the event without inventing missing values."
+            },
+            {
+              "description": "Invite separately",
+              "prompt": "Invite a friend to the event I joined.",
+              "tools_triggered": "prepare_invite, create_invite",
+              "expected_behavior": "Treat invitation as a separate action and do not change the participant count merely by creating an invitation."
+            },
+            {
+              "description": "Use event chat and organizer question",
+              "prompt": "Open the event chat and ask the organizer whether the venue has parking.",
+              "tools_triggered": "get_messages, ask_organizer",
+              "expected_behavior": "Open/read the event chat and submit the question to the organizer without inventing an answer."
+            }
+          ],
+          "negative": [
+            {
+              "description": "Do not invent missing event details",
+              "prompt": "Create an event for tomorrow.",
+              "expected_behavior": "Ask for the missing mandatory title, time, place, capacity and age limits instead of inventing them."
+            },
+            {
+              "description": "Do not treat invitation as participation",
+              "prompt": "Invite Alex to my event, but don't have Alex join yet.",
+              "expected_behavior": "Create an invitation only; do not add Alex to the participant list or increment the participant count."
+            },
+            {
+              "description": "Do not use precise device location",
+              "prompt": "Use my exact phone location to decide which event I should join.",
+              "expected_behavior": "Do not request or infer precise device location; ask for an explicit city, neighborhood or event place instead."
+            }
+          ]
+        },
+        "commerce": false,
+        "commerce_description": "POGNALI does not sell products or process payments.",
+        "release_notes": "Initial public submission of the POGNALI ChatGPT integration. Includes event discovery, join/leave, creation, separate invitations, event chat, organizer questions, date filters, participant capacity and localized UI."
+      },
+      "publication": {
+        "countries": ["PL", "US", "GB", "DE", "FR", "ES", "IT"],
+        "release_notes": "Initial public submission of the POGNALI ChatGPT integration."
+      }
+    }
+  }
+}
