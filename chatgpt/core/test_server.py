@@ -143,7 +143,7 @@ try:
         "title": "Настольные игры",
         "emoji": "🎲",
         "category": "games",
-        "date": TOMORROW",
+        "date": TOMORROW,
         "time": "19:30",
         "place": {"name": "Кафе", "city": "Екатеринбург"},
         "max_participants": 6,
@@ -169,7 +169,7 @@ try:
 
     status, body = request("POST", "/events", {
         "title": "Без времени",
-        "date": TOMORROW",
+        "date": TOMORROW,
         "time": "вечером",
         "place": {"name": "Место", "city": "Екатеринбург"},
         "max_participants": 5,
