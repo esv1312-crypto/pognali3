@@ -3,6 +3,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 """In-process smoke test for the ChatGPT-facing MCP server."""
 import asyncio
+from datetime import date, timedelta
 import json
 
 from mcp import Client
@@ -19,6 +20,8 @@ def payload_of(result):
 
 
 async def main():
+    today = date.today().isoformat()
+    tomorrow = (date.today() + timedelta(days=1)).isoformat()
     async with Client(mcp, raise_exceptions=True) as client:
         tools = await client.list_tools()
         names = {tool.name for tool in tools.tools}
@@ -27,7 +30,7 @@ async def main():
 
         result = await client.call_tool(
             "search_events",
-            {"city": "Екатеринбург", "event_date": "2026-10-01"},
+            {"city": "Екатеринбург", "event_date": today},
         )
         events = payload_of(result).get("events", [])
         assert any(event["id"] == "demo-football-1" for event in events)
@@ -108,7 +111,7 @@ async def main():
             "create_event",
             {
                 "title": "Настольный теннис",
-                "event_date": "2026-10-02",
+                "event_date": tomorrow,
                 "time": "19:30",
                 "place": {"name": "Спортзал", "city": "Екатеринбург"},
                 "max_participants": 6,
@@ -129,7 +132,7 @@ async def main():
             "create_event",
             {
                 "title": "Неверное событие",
-                "event_date": "2026-10-03",
+                "event_date": tomorrow,
                 "time": "вечером",
                 "place": {"name": "Место", "city": "Екатеринбург"},
                 "max_participants": 5,
