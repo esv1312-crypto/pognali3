@@ -30,10 +30,16 @@ const uid="chatgpt-user", inputAge=Number(A?.toolInput?.user_age), profileAge=Nu
 const esc=x=>String(x??"").replace(/[&<>"]/g,s=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[s]));
 const payload=r=>r?.structuredContent||r?.structured_content||r;
 const iso=d=>d.toISOString().slice(0,10);
-function targetDate(){const d=new Date();if(selectedDate==="tomorrow")d.setDate(d.getDate()+1);return iso(d)}
+function targetDate(){
+const d=new Date();
+if(selectedDate==="tomorrow")d.setDate(d.getDate()+1);
+if(selectedDate==="weekend")return "weekend";
+if(selectedDate==="all")return null;
+return iso(d)
+}
 function statusText(e){if(e.status==="live")return "🟢 Идёт сейчас";if(e.status==="completed")return "Завершено";if(e.status==="full")return "Мест нет";if(e.participant_count===0)return "Можно быть первым";if(e.remaining_slots===1)return "Осталось 1 место";return "Люди уже собираются"}
 async function tool(name,args){if(typeof A.callTool!=="function")throw Error("TOOL_UNAVAILABLE");return payload(await A.callTool(name,args))}
-async function loadEvents(){let args={event_date:targetDate()};if(selectedDate==="all")delete args.event_date;try{const p=await tool("search_events",args);renderEvents(p?.events||[])}catch(e){root.innerHTML='<div class="empty">Не удалось загрузить события.</div>'}}
+async function loadEvents(){let args={};const td=targetDate();if(td)args.event_date=td;try{const p=await tool("search_events",args);renderEvents(p?.events||[])}catch(e){root.innerHTML='<div class="empty">Не удалось загрузить события.</div>'}}
 function renderEvents(items){if(!items.length){root.innerHTML='<div class="empty">На эту дату пока ничего нет.</div>';return}
 root.innerHTML=items.map(e=>{const age=e.age_range||{min:e.min_age,max:e.max_age};const ageCtl=profileAge?"":'<input class="age" type="number" min="0" max="120" placeholder="Возраст" aria-label="Возраст">';
 return '<article class="card" data-event="'+esc(e.id)+'"><div class="row"><div class="title">'+esc(e.emoji||"📍")+' '+esc(e.title)+'</div><span class="badge" data-count>'+e.participant_count+' / '+e.max_participants+'</span></div>'+
@@ -49,7 +55,7 @@ join.onclick=async()=>{const a=profileAge||Number(age?.value);if(!Number.isInteg
 leave.onclick=async()=>{leave.disabled=true;try{const p=await tool("leave_event",{event_id:id,user_id:uid});if(p.error)throw Error(p.error);leave.hidden=true;join.disabled=false;join.textContent="ПОЙТИ";card.querySelector("[data-count]").textContent=p.participant_count+" / "+p.max_participants;status.textContent="Ты вышел из события."}catch(e){leave.disabled=false;status.textContent="Не удалось выйти: "+e.message}};
 card.querySelector("[data-invite]").onclick=()=>{if(typeof A.sendFollowUpMessage==="function")A.sendFollowUpMessage({prompt:"Я хочу пригласить человека на событие "+id+". Помоги отдельно оформить приглашение: уточни, кого пригласить, затем вызови create_invite. Само событие не создавай и не меняй."})};
 card.querySelector("[data-write]").onclick=async()=>{const chat=card.querySelector("[data-chat]");chat.hidden=!chat.hidden;if(!chat.hidden){try{const p=await tool("get_messages",{event_id:id,limit:50});chat.querySelector(".messages").innerHTML=(p.messages||[]).map(m=>'<div class="message"><b>'+esc(m.user_id)+'</b> '+esc(m.text)+'</div>').join("")||'<div class="sub">Пока сообщений нет.</div>'}catch(e){}}};
-card.querySelector("[data-send]").onclick=async()=>{const i=card.querySelector("[data-msg]"),t=i.value.trim();if(!t)return;try{const p=await tool("send_message",{event_id:id,user_id:uid,text:t});if(p.error)throw Error(p.error);i.value="";card.querySelector("[data-write]").click();card.querySelector("[data-write]").click()}catch(e){status.textContent="Не удалось отправить: "+e.message}}}
+card.querySelector("[data-send]").onclick=async()=>{const i=card.querySelector("[data-msg]"),t=i.value.trim();if(!t)return;try{const p=await tool("send_message",{event_id:id,user_id:uid,text:t});if(p.error)throw Error(p.error);i.value="";const chat=card.querySelector("[data-chat]");const msgs=chat.querySelector(".messages");const p2=await tool("get_messages",{event_id:id,limit:50});msgs.innerHTML=(p2.messages||[]).map(m=>'<div class="message"><b>'+esc(m.user_id)+'</b> '+esc(m.text)+'</div>').join("")||'<div class="sub">Пока сообщений нет.</div>';chat.hidden=false;msgs.scrollTop=msgs.scrollHeight}catch(e){status.textContent="Не удалось отправить: "+e.message}}}
 async function loadMine(){try{const p=await tool("my_events",{user_id:uid});renderEvents(p.events||[])}catch(e){root.innerHTML='<div class="empty">Не удалось загрузить «Мои».</div>'}}
 async function loadInvites(){try{const p=await tool("get_user_invites",{user_id:uid}),items=(p.invites||[]).filter(x=>x.status==="pending");if(!items.length){inv.innerHTML="";return}
 inv.innerHTML='<section class="panel"><b>💌 Тебя приглашают</b>'+items.map(i=>'<div class="card" data-invite-card="'+esc(i.id)+'"><div>'+esc(i.invite_text||("Событие "+i.event_id))+'</div><div class="actions"><button data-accept>ПОЙТИ</button><button class="secondary" data-decline>НЕ ИДУ</button></div><div class="status"></div></div>').join("")+'</section>';
