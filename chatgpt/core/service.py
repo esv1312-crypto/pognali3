@@ -85,6 +85,8 @@ def _using_db():
 
 
 def _status(event):
+    if event.get("completed") or event.get("status") == "completed":
+        return "completed"
     now = datetime.now()
     try:
         starts = datetime.strptime(f"{event['date']} {event['time']}", "%Y-%m-%d %H:%M")
@@ -139,12 +141,28 @@ def _db_events(city=None, event_date=None, category=None, user_age=None):
 
 
 def search_events(city=None, event_date=None, category=None, user_age=None):
-    target_date = event_date or date.today().isoformat()
+    # None means all dates; "weekend" means the nearest Saturday/Sunday pair.
+    if event_date == "weekend":
+        today = date.today()
+        days_to_sat = (5 - today.weekday()) % 7
+        saturday = today.fromordinal(today.toordinal() + days_to_sat)
+        sunday = saturday.fromordinal(saturday.toordinal() + 1)
+        allowed_dates = {saturday.isoformat(), sunday.isoformat()}
+    elif event_date:
+        allowed_dates = {event_date}
+    else:
+        allowed_dates = None
     if _using_db():
-        return {"events": [_public(e) for e in _db_events(city, target_date, category, user_age)]}
+        if allowed_dates is None:
+            rows = _db_events(city, None, category, user_age)
+        else:
+            rows = []
+            for d in sorted(allowed_dates):
+                rows.extend(_db_events(city, d, category, user_age))
+        return {"events": [_public(e) for e in rows]}
     items = []
     for event in _local_events():
-        if event["date"] != target_date:
+        if allowed_dates is not None and event["date"] not in allowed_dates:
             continue
         if city and event["place"].get("city", "").lower() != city.lower():
             continue
