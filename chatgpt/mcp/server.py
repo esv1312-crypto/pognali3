@@ -65,6 +65,31 @@ def create_event(title: str, event_date: str, time: str, place: dict,
 
 
 @mcp.tool()
+def leave_event(event_id: str, user_id: str) -> dict:
+    return core.leave_event(event_id, user_id)
+
+
+@mcp.tool()
+def my_events(user_id: str) -> dict:
+    return core.my_events(user_id)
+
+
+@mcp.tool()
+def delete_event(event_id: str, user_id: str) -> dict:
+    return core.delete_event(event_id, user_id)
+
+
+@mcp.tool()
+def complete_event(event_id: str, user_id: str) -> dict:
+    return core.complete_event(event_id, user_id)
+
+
+@mcp.tool()
+def ask_organizer(event_id: str, user_id: str, text: str) -> dict:
+    return core.ask_organizer(event_id, user_id, text)
+
+
+@mcp.tool()
 def get_messages(event_id: str, limit: int = 50) -> dict:
     return core.get_messages(event_id, limit)
 
