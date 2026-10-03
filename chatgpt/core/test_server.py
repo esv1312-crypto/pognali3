@@ -1,5 +1,6 @@
 """Black-box tests for the minimal Pognali Core API."""
 import json
+from datetime import date, timedelta
 import subprocess
 import sys
 import time
@@ -10,6 +11,8 @@ from urllib.parse import urlencode
 HOST = "127.0.0.1"
 PORT = 8080
 BASE = f"http://{HOST}:{PORT}"
+TODAY = date.today().isoformat()
+TOMORROW = (date.today() + timedelta(days=1)).isoformat()
 
 
 def request(method, path, payload=None):
@@ -45,7 +48,7 @@ try:
 
     status, body = request(
         "GET",
-        "/events?" + urlencode({"city": "Екатеринбург", "date": "2026-10-01"}),
+        "/events?" + urlencode({"city": "Екатеринбург", "date": TODAY}),
     )
     assert status == 200
     assert any(e["id"] == "demo-football-1" for e in body["events"])
@@ -53,7 +56,7 @@ try:
     status, body = request(
         "GET",
         "/events?" + urlencode(
-            {"city": "Екатеринбург", "date": "2026-10-01", "category": "sport", "user_age": 30}
+            {"city": "Екатеринбург", "date": TODAY, "category": "sport", "user_age": 30}
         ),
     )
     assert status == 200
@@ -62,7 +65,7 @@ try:
     status, body = request(
         "GET",
         "/events?" + urlencode(
-            {"city": "Екатеринбург", "date": "2026-10-01", "user_age": 17}
+            {"city": "Екатеринбург", "date": TODAY, "user_age": 17}
         ),
     )
     assert status == 200
@@ -140,7 +143,7 @@ try:
         "title": "Настольные игры",
         "emoji": "🎲",
         "category": "games",
-        "date": "2026-10-02",
+        "date": TOMORROW",
         "time": "19:30",
         "place": {"name": "Кафе", "city": "Екатеринбург"},
         "max_participants": 6,
@@ -166,7 +169,7 @@ try:
 
     status, body = request("POST", "/events", {
         "title": "Без времени",
-        "date": "2026-10-03",
+        "date": TOMORROW",
         "time": "вечером",
         "place": {"name": "Место", "city": "Екатеринбург"},
         "max_participants": 5,
