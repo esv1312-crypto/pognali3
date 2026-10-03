@@ -20,11 +20,11 @@ LOCK = threading.RLock()
 DATABASE_URL = os.environ.get("DATABASE_URL")
 
 EVENTS = [
-    {"id": "demo-football-1", "title": "Футбол", "emoji": "⚽", "category": "sport", "date": "2026-10-01", "time": "20:30",
+    {"id": "demo-football-1", "title": "Футбол", "emoji": "⚽", "category": "sport", "date": date.today().isoformat(), "time": "20:30",
      "place": {"name": "Парк", "city": "Екатеринбург"}, "description": "Дружеская игра. Собираем компанию.",
      "max_participants": 10, "min_age": 18, "max_age": 35, "creator_id": "demo-organizer",
      "participant_ids": [f"demo-football-user-{i}" for i in range(1, 8)]},
-    {"id": "demo-run-1", "title": "Пробежка", "emoji": "🏃", "category": "sport", "date": "2026-10-01", "time": "19:00",
+    {"id": "demo-run-1", "title": "Пробежка", "emoji": "🏃", "category": "sport", "date": date.today().isoformat(), "time": "19:00",
      "place": {"name": "Центральный парк", "city": "Екатеринбург"}, "description": "Спокойная совместная пробежка.",
      "max_participants": 12, "min_age": 18, "max_age": 45, "creator_id": "demo-organizer-2",
      "participant_ids": [f"demo-run-user-{i}" for i in range(1, 6)]},
