@@ -469,7 +469,27 @@ function initMap(){
   const initialView=savedView ? [savedView.lat,savedView.lng] : (userGeo?[userGeo.lat,userGeo.lng]:[MAP_CENTER.lat,MAP_CENTER.lng]);
   const initialZoom=savedView ? savedView.zoom : (worldMode?2:9);
   map=L.map('map').setView(initialView,initialZoom);
-  L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png',{maxZoom:20,subdomains:'abcd',attribution:'© OpenStreetMap contributors © CARTO'}).addTo(map);
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19,subdomains:'abc',attribution:'© OpenStreetMap contributors'}).addTo(map);
+  // Long-press (mobile) or right-click (desktop) offers event creation at that point.
+  let holdTimer=null,holdStart=null,holdTriggered=false;
+  const mapEl=map.getContainer();
+  const clearHold=()=>{if(holdTimer){clearTimeout(holdTimer);holdTimer=null}holdStart=null};
+  map.on('contextmenu',ev=>{L.DomEvent.preventDefault(ev);askCreateAtMapPoint(ev.latlng.lat,ev.latlng.lng)});
+  mapEl.addEventListener('touchstart',ev=>{
+    if(!ev.touches||ev.touches.length!==1)return;
+    const t=ev.touches[0];holdStart={x:t.clientX,y:t.clientY};
+    holdTriggered=false;
+    const point=map.containerPointToLatLng(map.mouseEventToContainerPoint({clientX:t.clientX,clientY:t.clientY}));
+    holdTimer=setTimeout(()=>{holdTriggered=true;askCreateAtMapPoint(point.lat,point.lng)},650);
+  },{passive:true});
+  mapEl.addEventListener('touchmove',ev=>{
+    if(!holdStart||!ev.touches||!ev.touches.length)return;
+    const t=ev.touches[0];
+    if(Math.hypot(t.clientX-holdStart.x,t.clientY-holdStart.y)>12)clearHold();
+  },{passive:true});
+  mapEl.addEventListener('touchend',()=>{if(!holdTriggered)clearHold();else clearHold()},{passive:true});
+  mapEl.addEventListener('touchcancel',clearHold,{passive:true});
+
   const updateMapState=()=>{const c=map.getCenter();lastMapView={lat:c.lat,lng:c.lng,zoom:map.getZoom()};mapViews[selectedFilter]=lastMapView;try{localStorage.setItem(KEY+'_map_views',JSON.stringify(mapViews))}catch(e){};const el=document.getElementById('map');if(el)el.classList.toggle('map-zoomed',map.getZoom()>=16);const scope=document.getElementById('mapScope');if(scope){scope.textContent=mapScopeLabel();scope.classList.toggle('world',!mapRadiusKm(map.getZoom())&&!!userGeo)}};
   map.on('moveend',updateMapState);
   updateMapState();
@@ -499,6 +519,24 @@ function initMap(){
   if(!userGeo && selectedFilter!=='Мои') requestUserLocation();
   else if(userGeo && selectedFilter!=='Мои') drawUserLocation(userGeo.lat,userGeo.lng,false);
   refreshMainMapLayout(!!selectedDate);
+}
+
+let pendingMapCreatePoint=null;
+function askCreateAtMapPoint(lat,lng){
+  if(!map||!Number.isFinite(lat)||!Number.isFinite(lng))return;
+  pendingMapCreatePoint={lat,lng};
+  const content=document.createElement('div');
+  content.className='map-create-confirm';
+  content.innerHTML='<b>Создать событие здесь?</b><div style="display:flex;gap:8px;margin-top:10px"><button type="button" class="primary" onclick="createEventAtMapPoint()">Создать событие</button><button type="button" class="secondary" onclick="cancelMapCreate()">Отмена</button></div>';
+  L.popup({closeButton:true,autoPan:true,offset:[0,-8],maxWidth:260}).setLatLng([lat,lng]).setContent(content).openOn(map);
+}
+function cancelMapCreate(){pendingMapCreatePoint=null;if(map)map.closePopup()}
+function createEventAtMapPoint(){
+  const point=pendingMapCreatePoint;
+  pendingMapCreatePoint=null;
+  if(map)map.closePopup();
+  renderCreate();
+  if(point)setTimeout(()=>{if(pickerMap&&document.getElementById('elat'))setPickerPoint(point.lat,point.lng,true)},180);
 }
 function drawUserLocation(lat,lng,center){
   if(!map)return;
@@ -694,7 +732,7 @@ function eventIcon(cat,title='',custom=''){
   for(const [re,icon] of specific) if(re.test(t)) return icon;
   return ({'Спорт':'🏅','Прогулка':'🚶','Кино':'🎬','Кафе/бар':'🍻','Кафе/еда':'☕','Путешествие':'🧳','Вечеринка':'🥳','Учёба':'📚','Общение':'👋','Игры':'🎮','Настольные игры':'🎲','Мафия':'🕵️','Музыка/концерт':'🎵','Природа/поход':'🥾','Творчество':'🎨','Фото':'📸','Авто':'🚗','Шопинг':'🛍️','Знакомства':'💬','Другое':'✨'})[cat]||'📍';
 }
-function initPickerMap(lat,lng,hasPoint){destroyPickerMap();pickerMap=L.map('pickerMap').setView([lat,lng],14);L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png',{maxZoom:20,subdomains:'abcd',attribution:'© OpenStreetMap contributors © CARTO'}).addTo(pickerMap);if(hasPoint)setPickerPoint(lat,lng,false);pickerMap.on('click',ev=>setPickerPoint(ev.latlng.lat,ev.latlng.lng,true));setTimeout(()=>pickerMap.invalidateSize(),100);}
+function initPickerMap(lat,lng,hasPoint){destroyPickerMap();pickerMap=L.map('pickerMap').setView([lat,lng],14);L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19,subdomains:'abc',attribution:'© OpenStreetMap contributors'}).addTo(pickerMap);if(hasPoint)setPickerPoint(lat,lng,false);pickerMap.on('click',ev=>setPickerPoint(ev.latlng.lat,ev.latlng.lng,true));setTimeout(()=>pickerMap.invalidateSize(),100);}
 async function reverseGeocode(lat,lng){
   const fallback={place:'Точка на карте '+lat.toFixed(5)+', '+lng.toFixed(5),country:'',city:''};
   const parse=(data)=>{const a=data?.address||data?.properties||{};const country=a.country||a.country_name||'';const city=a.city||a.town||a.village||a.municipality||a.city_district||'';const venue=a.name||a.amenity||a.leisure||a.tourism||'';const road=a.road||a.street||a.pedestrian||a.path||a.cycleway||a.footway||'';const house=a.house_number?(', '+a.house_number):'';let detail=venue&&road&&venue!==road?venue+' · '+road+house:(venue||road)+house;let place=[country,city,detail].filter(Boolean).join(', ');if(!place&&data?.display_name)place=data.display_name.split(',').slice(0,4).join(', ').trim();return {place:place||fallback.place,country,city};};
