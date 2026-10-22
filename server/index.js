@@ -104,7 +104,7 @@ app.get('/api/events', async (req, res) => {
 
 app.get('/api/events/:id', async (req, res) => {
   const result = await pool.query(
-    `SELECT e.*, u.first_name AS creator_first_name, u.username AS creator_username,
+    `SELECT e.*, COALESCE(u.display_name, u.first_name) AS creator_first_name, u.username AS creator_username,
        COUNT(ep.user_id) FILTER (WHERE ep.status='joined')::int AS participants_count,
        BOOL_OR(ep.user_id=$2 AND ep.status='joined') AS joined_by_me
      FROM events e JOIN users u ON u.id=e.creator_id
