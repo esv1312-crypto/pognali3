@@ -201,6 +201,37 @@ app.post('/api/events/:id/finish', async (req, res) => {
   res.json({ finished: true, eventId: String(req.params.id) });
 });
 
+app.get('/api/events/:id/messages', async (req, res) => {
+  const member = await pool.query(
+    `SELECT 1 FROM event_participants WHERE event_id=$1 AND user_id=$2 AND status='joined'`,
+    [req.params.id, req.telegramUser.id]
+  );
+  if (!member.rowCount) return res.status(403).json({ error: 'Join the event to access its chat' });
+  const result = await pool.query(
+    `SELECT m.id, m.event_id, m.sender_id, m.body, m.created_at,
+       COALESCE(u.display_name, u.first_name) AS sender_name, u.username, u.photo_url
+     FROM event_messages m JOIN users u ON u.id=m.sender_id
+     WHERE m.event_id=$1 ORDER BY m.created_at ASC LIMIT 500`,
+    [req.params.id]
+  );
+  res.json({ messages: result.rows });
+});
+
+app.post('/api/events/:id/messages', async (req, res) => {
+  const body = typeof req.body.body === 'string' ? req.body.body.trim() : '';
+  if (!body || body.length > 2000) return res.status(400).json({ error: 'Message must contain 1–2000 characters' });
+  const member = await pool.query(
+    `SELECT 1 FROM event_participants WHERE event_id=$1 AND user_id=$2 AND status='joined'`,
+    [req.params.id, req.telegramUser.id]
+  );
+  if (!member.rowCount) return res.status(403).json({ error: 'Join the event to send messages' });
+  const result = await pool.query(
+    'INSERT INTO event_messages (event_id, sender_id, body) VALUES ($1,$2,$3) RETURNING id, event_id, sender_id, body, created_at',
+    [req.params.id, req.telegramUser.id, body]
+  );
+  res.status(201).json({ message: result.rows[0] });
+});
+
 app.post('/api/events/:id/join', async (req, res) => {
   const client = await pool.connect();
   try {

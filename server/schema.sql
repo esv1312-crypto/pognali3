@@ -44,3 +44,12 @@ CREATE TABLE IF NOT EXISTS event_participants (
   PRIMARY KEY (event_id, user_id)
 );
 CREATE INDEX IF NOT EXISTS event_participants_user_idx ON event_participants (user_id, status);
+
+CREATE TABLE IF NOT EXISTS event_messages (
+  id BIGSERIAL PRIMARY KEY,
+  event_id BIGINT NOT NULL REFERENCES events(id) ON DELETE CASCADE,
+  sender_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  body TEXT NOT NULL CHECK (char_length(body) BETWEEN 1 AND 2000),
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS event_messages_event_idx ON event_messages (event_id, created_at);
