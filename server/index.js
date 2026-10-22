@@ -161,7 +161,10 @@ app.get('/api/events/:id', async (req, res) => {
 app.post('/api/events', async (req, res) => {
   const b = req.body || {};
   const title = typeof b.title === 'string' ? b.title.trim() : '';
-  const city = typeof b.city === 'string' ? b.city.trim() : '';
+  const cityInput = typeof b.city === 'string' ? b.city.trim().slice(0, 120) : '';
+  const addressInput = typeof b.address === 'string' ? b.address.trim().slice(0, 120) : '';
+  // A map-picked point can be valid even when reverse geocoding cannot identify a city.
+  const city = cityInput || addressInput || 'Не указан';
   const startsAt = new Date(b.starts_at);
   if (title.length < 3 || title.length > 120 || !city || city.length > 120 || !Number.isFinite(startsAt.getTime())) {
     return res.status(400).json({ error: 'Title (3–120 chars), city and valid starts_at are required' });
