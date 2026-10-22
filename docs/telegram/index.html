@@ -461,6 +461,57 @@ body{background:var(--pg-bg)!important}
 .place-result-name{font-size:13px;font-weight:800}
 .place-result-detail{font-size:11px;line-height:1.35;color:#777b84}
 .location-row button:disabled{opacity:.65;cursor:wait}
+
+/* Compact liquid-glass switch between map and list */
+.viewtoggle{
+  top:82px!important;
+  right:10px!important;
+  display:flex!important;
+  align-items:center;
+  gap:2px;
+  padding:3px!important;
+  border:1px solid rgba(255,255,255,.58)!important;
+  border-radius:14px!important;
+  background:rgba(248,247,255,.48)!important;
+  box-shadow:0 5px 18px rgba(31,24,61,.12),inset 0 1px 0 rgba(255,255,255,.7)!important;
+  -webkit-backdrop-filter:blur(20px) saturate(175%)!important;
+  backdrop-filter:blur(20px) saturate(175%)!important;
+}
+.viewtoggle button{
+  min-height:30px!important;
+  padding:6px 10px!important;
+  border-radius:10px!important;
+  font-size:11px!important;
+  line-height:1!important;
+  color:rgba(35,30,55,.82)!important;
+  background:transparent!important;
+}
+.viewtoggle button.active{
+  color:#fff!important;
+  background:rgba(105,72,235,.88)!important;
+  box-shadow:0 2px 7px rgba(74,48,170,.2),inset 0 1px 0 rgba(255,255,255,.22)!important;
+}
+.list-viewtoggle{
+  position:relative!important;
+  top:auto!important;
+  right:auto!important;
+  z-index:2!important;
+  margin:0 0 10px auto!important;
+  padding:3px!important;
+  background:rgba(248,247,255,.54)!important;
+  border:1px solid rgba(255,255,255,.7)!important;
+  border-radius:13px!important;
+  box-shadow:0 4px 14px rgba(31,24,61,.09),inset 0 1px 0 rgba(255,255,255,.72)!important;
+  -webkit-backdrop-filter:blur(18px) saturate(170%)!important;
+  backdrop-filter:blur(18px) saturate(170%)!important;
+}
+.list-viewtoggle button{min-width:58px!important;min-height:29px!important;padding:6px 9px!important}
+@media(max-width:380px){
+  .viewtoggle{right:8px!important;top:78px!important}
+  .viewtoggle button{padding:6px 8px!important}
+  .list-viewtoggle button{min-width:54px!important}
+}
+
 </style>
 </head>
 <body>
