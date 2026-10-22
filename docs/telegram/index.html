@@ -55,6 +55,59 @@ input:focus,textarea:focus,select:focus{outline:3px solid #8d72ff35;border-color
 .sheet{border:1px solid #f0eaff;box-shadow:0 -12px 50px #33215b20}
 @media(min-width:600px){.app{margin:16px auto;height:calc(100dvh - 32px);border-radius:28px;overflow:hidden}}
 
+
+/* POGNALI VISUAL IDENTITY — reference artwork */
+:root{color-scheme:dark;--pg-yellow:#ffdf24;--pg-navy:#07172a;--pg-card:#10243b;--pg-line:#29425d}
+body{background:#07172a;color:#f8fbff}
+.app,.content{background:#07172a;color:#f8fbff}
+.top{background:#07172a;border-bottom:1px solid #203751;padding:12px 15px}
+.logo-btn{background:transparent!important;box-shadow:none!important;color:#fff!important;padding:0!important;border-radius:0!important;font-size:30px!important;font-weight:950;letter-spacing:-1.5px}
+.logo-btn .logo-emoji{font-size:25px;filter:drop-shadow(0 0 7px #ffdf2466)}
+.life-tagline{color:#c1d1e2;font-size:10px;font-weight:750}.life-tagline b{color:#ffdf24}
+.lang-btn,.pill,.iconbtn{background:#142b45;color:#fff;border:1px solid #2b4562}
+.bottomnav{background:#07172a;border-top:1px solid #29405a;height:78px;min-height:78px}
+.nav{color:#9aacbf;background:transparent}.nav.active{color:#ffdf24}.nav b{font-size:22px}
+.nav.create-nav b{display:grid;place-items:center;width:44px;height:44px;border-radius:16px;background:#ffdf24;color:#07172a;font-size:31px;box-shadow:0 4px 20px #ffdf2444}
+.nav.create-nav span{color:#ffdf24}
+.filter{background:#142b45;color:#dce7f3;border:1px solid #2a4561;box-shadow:none}
+.filter.active{background:#ffdf24;color:#07172a;border-color:#ffdf24;box-shadow:0 4px 18px #ffdf243d}
+.list-viewtoggle,.viewtoggle{background:#10243b;border-color:#29415c}.list-viewtoggle button,.viewtoggle button{color:#d4e0ed}.list-viewtoggle .active,.viewtoggle .active{background:#ffdf24;color:#07172a}
+.event-card{position:relative;background:linear-gradient(145deg,#132a43,#0b1d31);border:1px solid #2a4560;border-radius:22px;box-shadow:0 12px 28px #0004;overflow:hidden;color:#f8fbff;padding:0;margin:0 0 15px}
+.event-card-accent{display:none}
+.event-card::before{content:"";display:block;height:166px;background:#17314b center/cover no-repeat;position:relative}
+.event-card[data-cat*="Поход"]::before,.event-card[data-cat*="гор"]::before{background-image:linear-gradient(0deg,#07172a66,transparent),url("https://images.unsplash.com/photo-1464278533981-50106e6176b1?auto=format&fit=crop&w=1000&q=85")}
+.event-card[data-cat*="Спорт"]::before,.event-card[data-cat*="Футбол"]::before{background-image:linear-gradient(0deg,#07172a66,transparent),url("https://images.unsplash.com/photo-1521412644187-c49fa049e84d?auto=format&fit=crop&w=1000&q=85")}
+.event-card[data-cat*="Пляж"]::before,.event-card[data-cat*="волейбол"]::before{background-image:linear-gradient(0deg,#07172a66,transparent),url("https://images.unsplash.com/photo-1504450758481-7338eba7524a?auto=format&fit=crop&w=1000&q=85")}
+.event-card[data-cat*="Вечерин"]::before,.event-card[data-cat*="Музык"]::before{background-image:linear-gradient(0deg,#07172a66,transparent),url("https://images.unsplash.com/photo-1492684223066-81342ee5ff30?auto=format&fit=crop&w=1000&q=85")}
+.event-card[data-cat*="Прогул"]::before{background-image:linear-gradient(0deg,#07172a66,transparent),url("https://images.unsplash.com/photo-1511632765486-a01980e01a18?auto=format&fit=crop&w=1000&q=85")}
+.event-card-top{padding:13px 14px 9px;gap:10px;align-items:center}
+.event-card-icon{position:absolute;top:119px;right:14px;z-index:2;width:48px;height:48px;border-radius:17px;background:#ffdf24;display:grid;place-items:center;border:3px solid #10243b;box-shadow:0 4px 12px #0005}
+.event-card-icon span{font-size:27px}
+.event-card-title{font-size:18px;line-height:1.2;font-weight:900;letter-spacing:-.4px;color:#fff}
+.event-card-badges{margin-top:7px}
+.event-badge{background:#203a55;color:#e0ebf8;border:1px solid #34516e;border-radius:9px;font-size:10px;font-weight:850}
+.event-badge.open{background:#143e36;color:#8ff0c2;border-color:#246451}
+.event-badge.joined{background:#4c4115;color:#ffe66d;border-color:#76651b}
+.event-badge.full{background:#49252e;color:#ffb9c2;border-color:#713744}
+.event-card-meta{padding:0 14px 12px;display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:8px;color:#c7d7e8;font-size:11px}
+.event-card-meta>div{display:flex;align-items:flex-start;gap:5px;min-width:0;line-height:1.35}
+.event-card-meta>div:first-child{color:#ffdf24;font-weight:850}.event-card-meta span{overflow-wrap:anywhere}
+.event-card-desc{padding:0 14px 10px;color:#a9bdd2;font-size:12px;line-height:1.4}
+.event-social{margin:0 12px;padding:9px 0;border-top:1px solid #29415a;display:flex;align-items:center;justify-content:space-between;gap:8px}
+.event-social-left{background:transparent;color:#dce7f3}.people-stack span{background:#ffdf24;border-color:#132a43;color:#07172a}
+.event-social-note{font-size:11px;color:#b4c7dc}
+.event-spots{background:#263f59;color:#fff;border-radius:10px;padding:7px 9px;font-size:11px;font-weight:900;white-space:nowrap}
+.event-spots.good{background:#164237;color:#91f2c4}
+.event-card-actions{display:flex;gap:8px;padding:0 12px 12px}
+.event-card-actions button{border-radius:12px;padding:11px 10px;font-size:11px;font-weight:950;letter-spacing:.2px}
+.event-card-actions .primary{background:#ffdf24;color:#07172a;box-shadow:0 4px 14px #ffdf242b}
+.event-card-actions .secondary{background:#203a55;color:#e0ebf8;border:1px solid #34516e}
+.mine-card,.calendar-panel,.sheet,.modal-card,.profile-card,.message-card{background:#10243b;color:#f8fbff;border-color:#29425d}
+input,textarea,select{background:#0b1d31!important;color:#f8fbff!important;border-color:#2a4560!important}
+h1,h2,h3,h4{color:#f8fbff}
+.preview-banner{background:#3d3310;color:#ffeb87}
+@media(max-width:380px){.event-card::before{height:145px}.event-card-meta{grid-template-columns:1fr}.logo-btn{font-size:26px!important}}
+
 </style>
 <style id="pognali-polish-v2">
 /* Полировка списка событий: чёткие отдельные карточки, воздух и социальные акценты */
