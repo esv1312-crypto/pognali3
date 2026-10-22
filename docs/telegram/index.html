@@ -621,7 +621,21 @@ body{background:var(--pg-bg)!important}
 }
 
 </style>
-<style id="pognali-unread-badge">.nav .unread-badge{position:absolute;top:2px;left:calc(50% + 8px);min-width:18px;height:18px;padding:0 4px;display:inline-flex;align-items:center;justify-content:center;border:2px solid #fff;border-radius:999px;background:#e53935;color:#fff;font-size:10px;font-weight:900;line-height:1;box-shadow:0 1px 4px #0002;z-index:2}.nav .unread-badge.hidden{display:none!important}.nav.active .unread-badge{border-color:#17191d}</style></head>
+<style id="pognali-unread-badge">.nav .unread-badge{position:absolute;top:2px;left:calc(50% + 8px);min-width:18px;height:18px;padding:0 4px;display:inline-flex;align-items:center;justify-content:center;border:2px solid #fff;border-radius:999px;background:#e53935;color:#fff;font-size:10px;font-weight:900;line-height:1;box-shadow:0 1px 4px #0002;z-index:2}.nav .unread-badge.hidden{display:none!important}.nav.active .unread-badge{border-color:#17191d}</style><style id="pognali-reference-design-v4">
+:root{color-scheme:dark;--pg-yellow:#ffdf24;--pg-navy:#07172a;--pg-card:#10243b;--pg-line:#29425d}
+html,body{background:#07172a!important;color:#f8fbff!important}.app,.content{background:#07172a!important;color:#f8fbff!important}
+.top{background:#07172a!important;border-bottom:1px solid #203751!important}.logo-btn{background:transparent!important;box-shadow:none!important;color:#fff!important;font-size:29px!important;font-weight:950!important}.logo-btn .logo-emoji{filter:drop-shadow(0 0 7px #ffdf2466)}
+.life-tagline{color:#c1d1e2!important}.life-tagline b{color:#ffdf24!important}.lang-btn,.pill,.iconbtn{background:#142b45!important;color:#fff!important;border:1px solid #2b4562!important}
+.bottomnav{background:#07172a!important;border-top:1px solid #29405a!important;height:78px!important;min-height:78px!important;padding:6px 7px max(7px,env(safe-area-inset-bottom,0px))!important;gap:3px!important}
+.nav{color:#9aacbf!important;background:transparent!important;min-width:0!important;flex:1!important;border-radius:14px!important}.nav.active{color:#ffdf24!important;background:#142b45!important}.nav b{font-size:22px!important}.nav span{font-size:10px!important;white-space:nowrap!important}
+.nav.create-nav{background:transparent!important;color:#ffdf24!important;box-shadow:none!important}.nav.create-nav b{display:grid;place-items:center;width:42px;height:42px;border-radius:15px;background:#ffdf24;color:#07172a;font-size:30px;box-shadow:0 4px 20px #ffdf2444}.nav.create-nav span{color:#ffdf24!important}
+.filter{background:#142b45!important;color:#dce7f3!important;border:1px solid #2a4561!important;box-shadow:none!important}.filter.active{background:#ffdf24!important;color:#07172a!important;border-color:#ffdf24!important}
+.list{background:#07172a!important}.list-intro h2{color:#fff!important}.list-intro p{color:#9aacbf!important}.list-intro-count{background:#142b45!important;color:#fff!important;border-color:#2a4561!important}
+.event-card{background:linear-gradient(145deg,#142b45,#0c1d32)!important;border:1px solid #29425d!important;border-radius:20px!important;box-shadow:0 12px 28px #0004!important;color:#f8fbff!important}.event-card-title{color:#fff!important}
+.event-badge{background:#203a56!important;color:#e1ecf7!important;border-color:#304e6d!important}.event-card-meta,.event-card-desc,.event-social-note{color:#b9c9da!important}.event-spots{background:#263b52!important;color:#fff!important}
+.event-card-actions .primary,.primary{background:#ffdf24!important;color:#101b2a!important;border-color:#ffdf24!important;box-shadow:0 4px 12px #ffdf242b!important}.event-card-actions .secondary,.secondary{background:#20364d!important;color:#dbe7f5!important;border:1px solid #304962!important}
+.sheet,.message-card,.calendar-panel,.mine-card{background:#10243b!important;color:#f4f7fc!important;border-color:#29425d!important}input,textarea,select{background:#0b1a2b!important;color:#f6f8fc!important;border-color:#2a4059!important}h1,h2,h3,h4{color:#f7f9fc!important}.nav .unread-badge{border-color:#07172a!important}
+</style></head>
 <body>
 <div class="app">
 <header class="top"><button class="logo-btn" type="button" onclick="go('events')" aria-label="Погнали — открыть события"><span class="logo-emoji">🚀</span><span>Погнали</span></button><div class="life-tagline">Жизнь начинается здесь <b>→</b></div><div class="spacer"></div><button class="pill lang-btn" onclick="openLanguage()" aria-label="Выбрать язык">🌐 <span id="langLabel">RU</span> ▾</button></header>
