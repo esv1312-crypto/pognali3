@@ -3,12 +3,14 @@ CREATE TABLE IF NOT EXISTS users (
   username TEXT,
   first_name TEXT NOT NULL DEFAULT '',
   last_name TEXT NOT NULL DEFAULT '',
+  display_name TEXT,
   photo_url TEXT,
   city TEXT,
   bio TEXT,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+ALTER TABLE users ADD COLUMN IF NOT EXISTS display_name TEXT;
 
 CREATE TABLE IF NOT EXISTS events (
   id BIGSERIAL PRIMARY KEY,

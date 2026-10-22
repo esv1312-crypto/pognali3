@@ -242,12 +242,14 @@ body{min-height:100dvh;overscroll-behavior:none}
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script>
 const KEY='pognali_telegram_demo_01';
+const API_MODE=!!window.Telegram?.WebApp?.initData;
+const TELEGRAM_INIT_DATA=window.Telegram?.WebApp?.initData||'';
 const base={profile:{name:'Стас',birth:'1988-04-01',city:'Симферополь',bio:'Люблю спорт, новые места и когда можно просто сказать: «Погнали».',photo:''},events:[
 {id:1,title:'Прогулка по Гагаринскому парку',cat:'Прогулка',date:'2026-09-25',time:'18:30',place:'Гагаринский парк',country:'Россия',city:'Симферополь',lat:44.9463,lng:34.0957,limit:8,desc:'Спокойно пройтись, поболтать и познакомиться с новыми людьми.',people:[2],owner:1,status:'ACTIVE'},
 {id:2,title:'Футбол 5×5',cat:'Спорт',date:'2026-09-26',time:'17:00',place:'Спортивная площадка в Гагаринском парке',country:'Россия',city:'Симферополь',lat:44.9448,lng:34.1015,limit:10,desc:'Нужны игроки на дружеский футбол. Без профессионализма.',people:[2,3,4],owner:2,status:'ACTIVE'},
 {id:3,title:'Кофе и знакомство',cat:'Общение',date:'2026-09-27',time:'13:00',place:'Центр Симферополя',country:'Россия',city:'Симферополь',lat:44.9521,lng:34.1024,limit:6,desc:'Кофе, разговоры и новые знакомства. Без обязательств.',people:[2],owner:3,status:'ACTIVE'},
 {id:4,title:'Вечерний забег',cat:'Спорт',date:'2026-09-28',time:'19:00',place:'Набережная Салгира',country:'Россия',city:'Симферополь',lat:44.9569,lng:34.1045,limit:12,desc:'Лёгкий темп, около 5 км. Бежим вместе.',people:[2,5],owner:4,status:'ACTIVE'}],users:{1:{name:'Стас',city:'Симферополь'},2:{name:'Стас',city:'Симферополь'},3:{name:'Маша',city:'Симферополь'},4:{name:'Илья',city:'Симферополь'},5:{name:'Олег',city:'Симферополь'}},chats:{},questions:{}};
-let db=JSON.parse(localStorage.getItem(KEY)||'null')||base;
+let db=API_MODE?{profile:{name:[window.Telegram?.WebApp?.initDataUnsafe?.user?.first_name,window.Telegram?.WebApp?.initDataUnsafe?.user?.last_name].filter(Boolean).join(' ')||'Участник',birth:'',city:'',bio:'',photo:''},events:[],users:{},chats:{},questions:{}}:(JSON.parse(localStorage.getItem(KEY)||'null')||base);
 if(!db.questions)db.questions={};
 if(!db.chats)db.chats={};
 const demoProfileData={
@@ -259,6 +261,7 @@ const demoProfileData={
 };
 function ensureUserProfiles(){
   db.users=db.users||{};
+  if(API_MODE)return;
   Object.entries(demoProfileData).forEach(([id,v])=>{db.users[id]={...(db.users[id]||{}),...v}});
   Object.keys(db.users).forEach((id,i)=>{let u=db.users[id]||{};if(!u.city)u.city='Симферополь';if(!u.bio)u.bio='Открыт к новым встречам и интересным событиям.';if(!Array.isArray(u.interests))u.interests=['общение','новые места'];db.users[id]=u});
 }
@@ -294,6 +297,7 @@ function normalizeEvents(){
 }
 normalizeEvents();
 function seedDemoEvents(){
+  if(API_MODE)return;
   const target=200;
   // Полная замена старого демо-набора: ничего из Симферополя и прежних регионов не переносим.
   if(localStorage.getItem('pognali_seed_ekb_v1')!=='1'){
@@ -393,7 +397,7 @@ function seedDemoEvents(){
 seedDemoEvents();
 db.events.forEach(e=>{if(!e.country&&e.city==='Симферополь')e.country='Россия';if(!e.city&&e.place) e.city=e.place;});
 save();
-let currentTab='events', map, markers=[]; let selectedFilter='Рядом', eventView='map'; let selectedDate=null, calendarOpen=false, calendarMonth=new Date(2026,8,1); let lastMapView=null; let mapViews={Мир:null,Рядом:null,Мои:null}; try{mapViews={...mapViews,...(JSON.parse(localStorage.getItem(KEY+'_map_views')||'{}')||{})}}catch(e){} let userLocationMarker=null; let userLocationRequested=false; let userGeo=null;
+let currentTab='events', map, markers=[]; let selectedFilter=API_MODE?'Мир':'Рядом', eventView='map'; let selectedDate=null, calendarOpen=false, calendarMonth=new Date(2026,8,1); let lastMapView=null; let mapViews={Мир:null,Рядом:null,Мои:null}; try{mapViews={...mapViews,...(JSON.parse(localStorage.getItem(KEY+'_map_views')||'{}')||{})}}catch(e){} let userLocationMarker=null; let userLocationRequested=false; let userGeo=null;
 const NEARBY_RADIUS_KM=200; const MAP_RADIUS_LEVELS=[{minZoom:13,km:25},{minZoom:11,km:50},{minZoom:9,km:150},{minZoom:7,km:600}];
 function mapRadiusKm(zoom){for(const x of MAP_RADIUS_LEVELS)if(zoom>=x.minZoom)return x.km;return null}
 function mapScopeLabel(){if(selectedFilter==='Мир')return '🌍 Весь мир';if(selectedFilter==='Рядом')return userGeo?`📍 Рядом · ${NEARBY_RADIUS_KM} км`:'📍 Включи геолокацию';return '🙋 Мои события'}
@@ -585,8 +589,8 @@ function openUserProfile(pid){const u=db.users[pid]||{name:'Участник'};c
 function updateLiveNote(id){let e=db.events.find(x=>x.id===id);if(!e||e.owner!==2)return;showPrompt('Сообщение участникам','Что увидят все открывшие событие',e.liveNote||'',v=>{e.liveNote=v.trim().slice(0,240);save();openEvent(id)},'Обновить')}
 
 function finishEvent(id){let e=db.events.find(x=>x.id===id);if(!e||e.owner!==2)return;showConfirm('Завершить событие?','После этого оно исчезнет с карты и из общего списка.',()=>{e.status='FINISHED';e.finishedAt=new Date().toISOString();save();closeModal();renderEvents();showToast('Событие завершено','info')},'Завершить')}
-function joinEvent(id){const wasList=eventView==='list';let e=db.events.find(x=>x.id===id);if(!e)return;if(eventState(e)==='FINISHED')return showToast('Событие уже завершено','error');if(e.people.length>=e.limit)return showToast('Мест нет','error');if(!e.people.includes(2))e.people.push(2);save();closeModal();if(wasList)renderList();else renderEvents();showToast('Ты участвуешь. Чат события доступен в карточке.','success')}
-function leaveEvent(id){const wasList=eventView==='list';let e=db.events.find(x=>x.id===id);if(!e)return;showConfirm('Выйти из события?','Ты перестанешь быть участником и потеряешь доступ к чату события.',()=>{e.people=e.people.filter(x=>x!==2);save();closeModal();if(wasList)renderList();else renderEvents();showToast('Ты вышел из события','info')},'Выйти')}
+async function joinEvent(id){const wasList=eventView==='list';let e=db.events.find(x=>x.id===id);if(!e)return;if(eventState(e)==='FINISHED')return showToast('Событие уже завершено','error');if(e.people.length>=e.limit&&!e.people.includes(2))return showToast('Мест нет','error');if(API_MODE){try{await apiRequest('/events/'+encodeURIComponent(id)+'/join',{method:'POST'});await refreshApiData();closeModal();if(wasList)renderList();else renderEvents();showToast('Ты участвуешь в событии','success')}catch(err){showToast(err.message||'Не удалось присоединиться','error')}return}if(!e.people.includes(2))e.people.push(2);save();closeModal();if(wasList)renderList();else renderEvents();showToast('Ты участвуешь. Чат события доступен в карточке.','success')}
+function leaveEvent(id){const wasList=eventView==='list';let e=db.events.find(x=>x.id===id);if(!e)return;showConfirm('Выйти из события?','Ты перестанешь быть участником и потеряешь доступ к чату события.',async()=>{try{if(API_MODE){await apiRequest('/events/'+encodeURIComponent(id)+'/leave',{method:'POST'});await refreshApiData()}else{e.people=e.people.filter(x=>x!==2);save()}closeModal();if(wasList)renderList();else renderEvents();showToast('Ты вышел из события','info')}catch(err){showToast(err.message||'Не удалось выйти из события','error')}},'Выйти')}
 function readEvent(existing=null){
   const title=document.getElementById('etitle').value.trim();
   const cat=document.getElementById('ecat').value;
@@ -622,7 +626,7 @@ function showToast(message,type='info'){const el=ensureQaToast();el.textContent=
 function showConfirm(title,text,onOk,okLabel='Подтвердить',cancelLabel='Отмена'){openModal(`<div class="qa-dialog"><button class="close" onclick="closeModal()">✕</button><h2>${esc(qaT(title))}</h2><p>${esc(qaT(text))}</p><div class="qa-dialog-actions"><button class="secondary" onclick="closeModal()">${esc(qaT(cancelLabel))}</button><button class="primary" id="qaConfirmOk">${esc(qaT(okLabel))}</button></div></div>`);document.getElementById('qaConfirmOk').onclick=()=>{closeModal();onOk()}}
 function showPrompt(title,label,value,onSubmit,submitLabel='Сохранить'){openModal(`<div class="qa-dialog"><button class="close" onclick="closeModal()">✕</button><h2>${esc(qaT(title))}</h2><div class="field"><label>${esc(qaT(label))}</label><textarea id="qaPromptInput" maxlength="500">${esc(value||'')}</textarea></div><div class="qa-dialog-actions"><button class="secondary" onclick="closeModal()">${esc(qaT('Отмена'))}</button><button class="primary" id="qaPromptOk">${esc(qaT(submitLabel))}</button></div></div>`);document.getElementById('qaPromptOk').onclick=()=>{const v=document.getElementById('qaPromptInput').value;closeModal();onSubmit(v)}}
 
-function submitEvent(ev,id){ev.preventDefault();try{let e=id?db.events.find(x=>x.id===id):null;let data=readEvent(e);if(e){Object.assign(e,data)}else{db.events.unshift({...data,id:Date.now(),people:[2],owner:2,status:'ACTIVE'})}save();go('mine');showToast(id?'Событие изменено':'УРА! 🎉 Событие создано','success')}catch(err){showToast(err.message||'Не удалось сохранить событие','error')}}
+async function submitEvent(ev,id){ev.preventDefault();try{let e=id?db.events.find(x=>x.id===id):null;let data=readEvent(e);if(API_MODE){if(e)throw new Error('Редактирование событий подключим следующим этапом.');await apiRequest('/events',{method:'POST',body:JSON.stringify({title:data.title,category:data.cat,description:data.desc,city:data.city||db.profile.city,address:data.place,latitude:data.lat,longitude:data.lng,starts_at:new Date(data.date+'T'+data.time).toISOString(),capacity:data.limit})});await refreshApiData()}else{if(e){Object.assign(e,data)}else{db.events.unshift({...data,id:Date.now(),people:[2],owner:2,status:'ACTIVE'})}save()}go('mine');showToast(id?'Событие изменено':'УРА! 🎉 Событие создано','success')}catch(err){showToast(err.message||'Не удалось сохранить событие','error')}}
 function formatTimeInput(el){let v=String(el.value||'').replace(/\D/g,'').slice(0,4);if(v.length>=3)v=v.slice(0,2)+':'+v.slice(2);el.value=v;}
 function categoryOptions(){return [['Общение','👋'],['Спорт','🏅'],['Прогулка','🚶'],['Игры','🎮'],['Настольные игры','🎲'],['Мафия','🕵️'],['Кино','🎬'],['Музыка/концерт','🎵'],['Кафе/еда','☕'],['Вечеринка','🥳'],['Путешествие','🧳'],['Природа/поход','🥾'],['Учёба','📚'],['Творчество','🎨'],['Фото','📸'],['Авто','🚗'],['Шопинг','🛍️'],['Знакомства','💬'],['Другое','✨']]}
 function selectCategory(name){document.getElementById('ecat').value=name;document.querySelectorAll('.cat-choice').forEach(b=>b.classList.toggle('active',b.dataset.cat===name));let el=document.getElementById('categoryCurrent');if(el)el.textContent=name}
@@ -826,7 +830,7 @@ function renderProfileMessages(){const chats=profileMessages();return `<div clas
 function openPersonalMessages(){openModal(`<button class="close" onclick="closeModal()">✕</button><h2>${translateText('Личные сообщения')}</h2><div class="empty"><b>${translateText('Личных сообщений пока нет.')}</b><br>${translateText('Вопросы организатору и общение доступны в контексте конкретных событий.')}</div>`)}
 function renderProfile(){let p=db.profile;document.getElementById('content').innerHTML=`<div class="profile"><h2>Профиль</h2><div class="avatar" onclick="document.getElementById('photoInput').click()">${p.photo?`<img src="${p.photo}" alt="Фото профиля">`:'👤'}</div><input id="photoInput" type="file" accept="image/*" hidden onchange="handlePhoto(this)"><button type="button" class="avatarPick" onclick="document.getElementById('photoInput').click()">📷 Выбрать фотографию</button><div class="field"><label>Имя</label><input id="pname" value="${esc(p.name)}"></div><div class="field"><label>Дата рождения</label><input id="pbirth" type="date" value="${p.birth}"></div><div class="field"><label>Город</label><input id="pcity" value="${esc(p.city)}"></div><div class="field"><label>О себе</label><textarea id="pbio">${esc(p.bio)}</textarea></div><button class="primary full" onclick="saveProfile()">СОХРАНИТЬ ПРОФИЛЬ</button>${renderProfileMessages()}<div class="notice" style="margin:12px 0 0">Фото сохраняется в этом демо на устройстве. В настоящем приложении оно будет загружаться на сервер.</div></div>`}
 function handlePhoto(input){let file=input.files?.[0];if(!file)return;if(!file.type.startsWith('image/'))return showToast('Выбери изображение.','error');let reader=new FileReader();reader.onload=()=>{let img=new Image();img.onload=()=>{let max=512,scale=Math.min(1,max/Math.max(img.width,img.height)),c=document.createElement('canvas');c.width=Math.round(img.width*scale);c.height=Math.round(img.height*scale);c.getContext('2d').drawImage(img,0,0,c.width,c.height);db.profile.photo=c.toDataURL('image/jpeg',0.82);save();renderProfile()};img.src=reader.result};reader.readAsDataURL(file)}
-function saveProfile(){db.profile={...db.profile,name:document.getElementById('pname').value.trim()||'Пользователь',birth:document.getElementById('pbirth').value,city:document.getElementById('pcity').value.trim(),bio:document.getElementById('pbio').value.trim()};db.users[2]={...(db.users[2]||{}),...db.profile};save();renderProfile();showToast('Профиль сохранён','success')}
+async function saveProfile(){db.profile={...db.profile,name:document.getElementById('pname').value.trim()||'Пользователь',birth:document.getElementById('pbirth').value,city:document.getElementById('pcity').value.trim(),bio:document.getElementById('pbio').value.trim()};db.users[2]={...(db.users[2]||{}),...db.profile};try{if(API_MODE){const result=await apiRequest('/me',{method:'PATCH',body:JSON.stringify({display_name:db.profile.name,city:db.profile.city,bio:db.profile.bio})});if(result.user)db.profile={...db.profile,name:result.user.display_name||result.user.first_name||db.profile.name,city:result.user.city||'',bio:result.user.bio||''}}save();renderProfile();showToast('Профиль сохранён','success')}catch(err){showToast(err.message||'Не удалось сохранить профиль','error')}}
 function openProfile(){go('profile')}
 function updateKeyboardInset(){
   const vv=window.visualViewport;
@@ -847,6 +851,9 @@ function openModal(html){document.getElementById('sheet').innerHTML=html;documen
 function closeModal(){document.getElementById('modal').classList.remove('open')}
 function esc(s){return String(s??'').replace(/[&<>'"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c]))}
 
+async function apiRequest(path,options={}){const tg=window.Telegram?.WebApp;const headers={'Content-Type':'application/json','X-Telegram-Init-Data':tg?.initData||''};const response=await fetch('/api'+path,{...options,headers:{...headers,...(options.headers||{})}});const payload=await response.json().catch(()=>({}));if(!response.ok)throw new Error(payload.error||('Ошибка сервера: '+response.status));return payload}
+function mapApiEvent(x){const tgId=String(window.Telegram?.WebApp?.initDataUnsafe?.user?.id||'');const ownerIsMe=String(x.creator_id)===tgId;let owner=ownerIsMe?2:1000000+(Number(x.creator_id)%900000000);if(owner===2&&!ownerIsMe)owner=3;const start=new Date(x.starts_at);const people=[owner];if(x.joined_by_me&&!ownerIsMe)people.push(2);const count=Math.max(1,Number(x.participants_count)||1);for(let i=0;people.length<count&&i<100;i++){let pid=500000000+i;if(pid===2||pid===owner||people.includes(pid))continue;people.push(pid)}return{id:Number(x.id),title:x.title,cat:x.category||'Другое',emoji:'',date:[start.getFullYear(),String(start.getMonth()+1).padStart(2,'0'),String(start.getDate()).padStart(2,'0')].join('-'),time:String(start.getHours()).padStart(2,'0')+':'+String(start.getMinutes()).padStart(2,'0'),place:x.address||x.city,country:'',city:x.city||'',lat:Number.isFinite(Number(x.latitude))?Number(x.latitude):MAP_CENTER.lat,lng:Number.isFinite(Number(x.longitude))?Number(x.longitude):MAP_CENTER.lng,limit:Number(x.capacity)||1000,desc:x.description||'',people,owner,status:x.status==='cancelled'||x.status==='completed'?'FINISHED':'ACTIVE',apiJoined:!!x.joined_by_me}}
+async function refreshApiData(){if(!API_MODE)return;const [me,events]=await Promise.all([apiRequest('/me'),apiRequest('/events')]);const u=me.user||{};db.profile={...db.profile,name:u.display_name||[u.first_name,u.last_name].filter(Boolean).join(' ')||'Участник',birth:'',city:u.city||'',bio:u.bio||'',photo:u.photo_url||''};db.users[2]={name:db.profile.name,city:db.profile.city,bio:db.profile.bio,photo:db.profile.photo};db.events=(events.events||[]).map(mapApiEvent);save();if(currentTab==='events')renderEvents();else if(currentTab==='mine')renderMine();else if(currentTab==='profile')renderProfile()}
 function initTelegramMiniApp(){
   const tg=window.Telegram?.WebApp;
   if(!tg)return;
@@ -866,6 +873,7 @@ function initTelegramMiniApp(){
       if(name&&db.profile&&(!db.profile.name||db.profile.name==='Стас'))db.profile.name=name;
       if(u.photo_url&&db.profile&&!db.profile.photo)db.profile.telegramPhoto=u.photo_url;
     }
+    if(API_MODE)refreshApiData().catch(e=>{console.error('Pognali API:',e);showToast(e.message||'Сервер пока не настроен','error')});
   }catch(e){console.warn('Telegram Mini App initialization:',e)}
 }
 

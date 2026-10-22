@@ -66,19 +66,20 @@ app.use('/api', (req, res, next) => {
 
 app.get('/api/me', async (req, res) => {
   const result = await pool.query(
-    'SELECT id, username, first_name, last_name, photo_url, city, bio, created_at FROM users WHERE id=$1',
+    'SELECT id, username, first_name, last_name, display_name, photo_url, city, bio, created_at FROM users WHERE id=$1',
     [req.telegramUser.id]
   );
   res.json({ user: result.rows[0] });
 });
 
 app.patch('/api/me', async (req, res) => {
+  const displayName = typeof req.body.display_name === 'string' ? req.body.display_name.trim().slice(0, 80) : undefined;
   const city = typeof req.body.city === 'string' ? req.body.city.trim().slice(0, 120) : undefined;
   const bio = typeof req.body.bio === 'string' ? req.body.bio.trim().slice(0, 500) : undefined;
   const result = await pool.query(
-    `UPDATE users SET city=COALESCE($2, city), bio=COALESCE($3, bio), updated_at=NOW()
-     WHERE id=$1 RETURNING id, username, first_name, last_name, photo_url, city, bio`,
-    [req.telegramUser.id, city ?? null, bio ?? null]
+    `UPDATE users SET display_name=COALESCE($2, display_name), city=COALESCE($3, city), bio=COALESCE($4, bio), updated_at=NOW()
+     WHERE id=$1 RETURNING id, username, first_name, last_name, display_name, photo_url, city, bio`,
+    [req.telegramUser.id, displayName ?? null, city ?? null, bio ?? null]
   );
   res.json({ user: result.rows[0] });
 });
@@ -88,7 +89,7 @@ app.get('/api/events', async (req, res) => {
   const category = typeof req.query.category === 'string' ? req.query.category.trim().slice(0, 40) : '';
   const limit = Math.min(100, Math.max(1, Number.parseInt(req.query.limit, 10) || 40));
   const result = await pool.query(
-    `SELECT e.*, u.first_name AS creator_first_name, u.username AS creator_username,
+    `SELECT e.*, COALESCE(u.display_name, u.first_name) AS creator_first_name, u.username AS creator_username,
        COUNT(ep.user_id) FILTER (WHERE ep.status='joined')::int AS participants_count,
        BOOL_OR(ep.user_id=$3 AND ep.status='joined') AS joined_by_me
      FROM events e JOIN users u ON u.id=e.creator_id
