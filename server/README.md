@@ -3,7 +3,8 @@
 ## What is implemented
 - Express API served from the same origin as `docs/telegram`.
 - Telegram Mini App `initData` signature verification on the server; never trust a client-supplied Telegram user ID.
-- PostgreSQL schema for profiles, events, participants.
+- PostgreSQL schema for profiles, events, participants and event chat messages.
+- A Telegram webhook endpoint for `/start` that returns a Mini App launch button; it is protected by `TELEGRAM_WEBHOOK_SECRET`.
 - API routes: `GET /api/health`, `GET/PATCH /api/me`, `GET /api/events`, `GET /api/events/:id`, `POST /api/events`, `POST /api/events/:id/join`, `POST /api/events/:id/leave`, `GET /api/my/events`.
 - Capacity checks are performed inside a transaction.
 - Frontend is served from `docs/telegram`.
@@ -21,9 +22,9 @@ On startup the server applies `server/schema.sql` using idempotent `CREATE TABLE
 - Runtime: Node
 - Build command: `npm install`
 - Start command: `npm start`
-- Required environment variables: `DATABASE_URL`, `TELEGRAM_BOT_TOKEN`.
+- Required environment variables: `DATABASE_URL`, `TELEGRAM_BOT_TOKEN`, `TELEGRAM_WEBHOOK_SECRET`, `MINI_APP_URL`.
 - Keep the database in the same Render region as the web service; prefer the internal database URL.
 - Configure `DATABASE_URL` using Render's secret/environment-variable UI or a database connection reference. Never put credentials in Git.
 
 ## Important current limitation
-The API and database are implemented as a separate backend foundation, but the existing Telegram HTML UI still contains prototype/localStorage flows and must be wired to these endpoints before claiming a complete multi-user app. A real BotFather token and database connection must be configured on Render before production use. Do not expose a bot token in frontend code or commit history.
+The API and database are implemented as a separate backend foundation, but the existing Telegram HTML UI still contains prototype/localStorage flows and must be wired to these endpoints before claiming a complete multi-user app. A real BotFather token, webhook secret, HTTPS Mini App URL and database connection must be configured on Render before production use. Do not expose a bot token in frontend code or commit history.

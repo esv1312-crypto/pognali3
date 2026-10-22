@@ -36,7 +36,7 @@
 :root{--tg-safe-top:env(safe-area-inset-top,0px);--tg-safe-bottom:env(safe-area-inset-bottom,0px);--pognali-violet:#6d4aff;--pognali-pink:#ff5ca8;--pognali-orange:#ff9a3d;--pognali-ink:#17152b}
 html,body{min-height:100%;background:#f6f4ff}
 body{color:var(--pognali-ink);background:radial-gradient(ellipse at 8% 0%,#eee7ff 0,transparent 34%),radial-gradient(ellipse at 95% 18%,#ffe5f1 0,transparent 29%),#f7f6fb}
-.app{height:100dvh;min-height:560px;background:rgba(255,255,255,.94);backdrop-filter:blur(18px);border-left:1px solid #ffffff;border-right:1px solid #ffffff;box-shadow:0 10px 50px #38276b0d}
+ .preview-banner{padding:8px 12px;background:#fff4cf;color:#755500;border-bottom:1px solid #f1df9b;font-size:11px;font-weight:750;text-align:center;line-height:1.35}.app{height:100dvh;min-height:560px;background:rgba(255,255,255,.94);backdrop-filter:blur(18px);border-left:1px solid #ffffff;border-right:1px solid #ffffff;box-shadow:0 10px 50px #38276b0d}
 .top{padding-top:calc(10px + var(--tg-safe-top));background:rgba(255,255,255,.9);border-bottom:1px solid #eee8ff}
 .logo-btn{background:linear-gradient(130deg,#6d4aff 0%,#9b50ff 52%,#ff5ca8 100%);box-shadow:0 7px 20px #8157ff35;border-radius:16px}
 .logo-btn .logo-sticker{color:#6d4aff}
@@ -236,6 +236,7 @@ body{min-height:100dvh;overscroll-behavior:none}
 <body>
 <div class="app">
 <header class="top"><button class="logo-btn" type="button" onclick="go('events')" aria-label="Погнали — открыть события"><span class="logo-emoji">🚀</span><span>Погнали</span></button><div class="life-tagline">Жизнь начинается здесь <b>→</b></div><div class="spacer"></div><button class="pill lang-btn" onclick="openLanguage()" aria-label="Выбрать язык">🌐 <span id="langLabel">RU</span> ▾</button></header>
+<div id="previewBanner" class="preview-banner hidden">🧪 ДЕМО-режим: события тестовые, данные не общие. Открой приложение через Telegram после настройки сервера.</div>
 <main class="content" id="content"></main>
 <nav class="bottomnav"> <button class="nav active" data-tab="events" onclick="go('events')"><b>🗺️</b><span>События</span></button> <button class="nav create-nav" data-tab="create" onclick="go('create')"><b>＋</b><span>Создать</span></button> <button class="nav" data-tab="mine" onclick="go('mine')"><b>🙋</b><span>Мои</span></button> <button class="nav" data-tab="profile" onclick="go('profile')"><b>👤</b><span>Профиль</span></button> </nav></div>
 <div class="modal" id="modal"><div class="sheet" id="sheet"></div></div>
@@ -244,6 +245,7 @@ body{min-height:100dvh;overscroll-behavior:none}
 const KEY='pognali_telegram_demo_01';
 const API_MODE=!!window.Telegram?.WebApp?.initData;
 const TELEGRAM_INIT_DATA=window.Telegram?.WebApp?.initData||'';
+if(!API_MODE)document.getElementById('previewBanner')?.classList.remove('hidden');
 const base={profile:{name:'Стас',birth:'1988-04-01',city:'Симферополь',bio:'Люблю спорт, новые места и когда можно просто сказать: «Погнали».',photo:''},events:[
 {id:1,title:'Прогулка по Гагаринскому парку',cat:'Прогулка',date:'2026-09-25',time:'18:30',place:'Гагаринский парк',country:'Россия',city:'Симферополь',lat:44.9463,lng:34.0957,limit:8,desc:'Спокойно пройтись, поболтать и познакомиться с новыми людьми.',people:[2],owner:1,status:'ACTIVE'},
 {id:2,title:'Футбол 5×5',cat:'Спорт',date:'2026-09-26',time:'17:00',place:'Спортивная площадка в Гагаринском парке',country:'Россия',city:'Симферополь',lat:44.9448,lng:34.1015,limit:10,desc:'Нужны игроки на дружеский футбол. Без профессионализма.',people:[2,3,4],owner:2,status:'ACTIVE'},

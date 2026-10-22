@@ -16,6 +16,41 @@ const pool = process.env.DATABASE_URL ? new Pool({
   connectionTimeoutMillis: 8000
 }) : null;
 
+app.post('/telegram/webhook', async (req, res) => {
+  const expectedSecret = process.env.TELEGRAM_WEBHOOK_SECRET;
+  if (!expectedSecret || req.get('x-telegram-bot-api-secret-token') !== expectedSecret) {
+    return res.status(401).json({ error: 'Invalid webhook secret' });
+  }
+  const token = process.env.TELEGRAM_BOT_TOKEN;
+  const miniAppUrl = process.env.MINI_APP_URL;
+  if (!token || !miniAppUrl || !miniAppUrl.startsWith('https://')) {
+    return res.status(503).json({ error: 'Bot token or HTTPS Mini App URL is not configured' });
+  }
+  const message = req.body?.message;
+  const chatId = message?.chat?.id;
+  if (!chatId) return res.json({ ok: true });
+  const text = String(message.text || '');
+  let replyText = 'Погнали — это приложение для реальных встреч, прогулок, спорта и других планов. Выбирай событие и присоединяйся!';
+  let replyMarkup = { inline_keyboard: [[{ text: '🚀 Открыть Погнали', web_app: { url: miniAppUrl } }]] };
+  if (/^\\/(start|startapp)(?:\\s|$)/i.test(text)) {
+    replyText = 'Не листай чужую жизнь — давай строить свою. Найди событие или создай своё 👇';
+  } else if (message.location) {
+    replyText = 'Спасибо! Открой Погнали — там можно выбрать события рядом и поставить точку на карте.';
+  }
+  try {
+    const response = await fetch('https://api.telegram.org/bot' + token + '/sendMessage', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ chat_id: chatId, text: replyText, reply_markup: replyMarkup })
+    });
+    if (!response.ok) throw new Error('Telegram Bot API returned ' + response.status);
+    res.json({ ok: true });
+  } catch (error) {
+    console.error('Telegram webhook delivery failed:', error.message);
+    res.status(502).json({ error: 'Could not reply through Telegram Bot API' });
+  }
+});
+
 app.get('/api/health', async (_req, res) => {
   let database = 'not_configured';
   if (pool) {
