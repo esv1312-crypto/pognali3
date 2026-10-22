@@ -270,7 +270,16 @@ app.post('/api/events/:id/messages', async (req, res) => {
 
 function sortedUserPair(a,b){return BigInt(a)<BigInt(b)?[String(a),String(b)]:[String(b),String(a)]}
 async function hasBlock(a,b){const r=await pool.query('SELECT 1 FROM user_blocks WHERE (blocker_id=$1 AND blocked_id=$2) OR (blocker_id=$2 AND blocked_id=$1) LIMIT 1',[a,b]);return r.rowCount>0}
-app.get('/api/users/search',async(req,res)=>{const q=typeof req.query.q==='string'?req.query.q.trim().slice(0,80):'';if(q.length<2)return res.json({users:[]});const r=await pool.query("SELECT id,username,first_name,last_name,display_name,photo_url,city FROM users WHERE id<>$1 AND (COALESCE(display_name,'') ILIKE $2 OR COALESCE(username,'') ILIKE $2 OR first_name ILIKE $2 OR last_name ILIKE $2) ORDER BY COALESCE(display_name,first_name) LIMIT 20",[req.telegramUser.id,'%'+q.replace(/[\\%_]/g,'\\app.post('/api/events/:id/join', async (req, res) => {')+'%']);res.json({users:r.rows})});
+app.get('/api/users/search', async (req, res) => {
+  const q = typeof req.query.q === 'string' ? req.query.q.trim().slice(0, 80) : '';
+  if (q.length < 2) return res.json({ users: [] });
+  const pattern = '%' + q.replace(/[\\%_]/g, '\\$&') + '%';
+  const result = await pool.query(
+    "SELECT id, username, first_name, last_name, display_name, photo_url, city FROM users WHERE id<>$1 AND (COALESCE(display_name,'') ILIKE $2 OR COALESCE(username,'') ILIKE $2 OR first_name ILIKE $2 OR last_name ILIKE $2) ORDER BY COALESCE(display_name,first_name) LIMIT 20",
+    [req.telegramUser.id, pattern]
+  );
+  res.json({ users: result.rows });
+});
 app.get('/api/messages',async(req,res)=>{const uid=req.telegramUser.id;const [direct,contacts,eventChats]=await Promise.all([
 pool.query("SELECT c.id,c.status,c.requested_by,c.updated_at,CASE WHEN c.user_low=$1 THEN c.user_high ELSE c.user_low END AS other_user_id,COALESCE(u.display_name,u.first_name) AS other_name,u.username,(SELECT body FROM direct_messages m WHERE m.conversation_id=c.id ORDER BY m.created_at DESC LIMIT 1) AS last_message FROM direct_conversations c JOIN users u ON u.id=CASE WHEN c.user_low=$1 THEN c.user_high ELSE c.user_low END WHERE (c.user_low=$1 OR c.user_high=$1) AND (c.status<>'rejected' OR c.requested_by=$1) ORDER BY c.updated_at DESC LIMIT 100",[uid]),
 pool.query("SELECT c.id,c.event_id,c.participant_id,c.organizer_id,c.updated_at,e.title AS event_title,CASE WHEN c.participant_id=$1 THEN c.organizer_id ELSE c.participant_id END AS other_user_id,COALESCE(u.display_name,u.first_name) AS other_name,(SELECT body FROM event_contact_messages m WHERE m.conversation_id=c.id ORDER BY m.created_at DESC LIMIT 1) AS last_message FROM event_contact_conversations c JOIN events e ON e.id=c.event_id JOIN users u ON u.id=CASE WHEN c.participant_id=$1 THEN c.organizer_id ELSE c.participant_id END WHERE c.participant_id=$1 OR c.organizer_id=$1 ORDER BY c.updated_at DESC LIMIT 100",[uid]),
