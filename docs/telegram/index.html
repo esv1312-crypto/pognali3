@@ -357,6 +357,39 @@ button:focus-visible{outline:3px solid rgba(240,91,69,.35);outline-offset:2px}
 @media(min-width:600px){.app{border-radius:28px!important}}
 @media(prefers-reduced-motion:reduce){*,*:before,*:after{animation-duration:.01ms!important;animation-iteration-count:1!important;scroll-behavior:auto!important;transition-duration:.01ms!important}}
 </style>
+<style id="pognali-refined-mobile">
+:root{--pg-bg:#f7f6f2;--pg-surface:#fff;--pg-ink:#20231f;--pg-muted:#73776f;--pg-line:#e8e7e0;--pg-accent:#e65b45;--pg-accent-dark:#c84935;--pg-soft:#fff0eb;--pg-green:#237b5b;--pg-shadow:0 8px 28px rgba(32,35,31,.075)}
+html,body{background:var(--pg-bg)!important;color:var(--pg-ink)!important}
+body{letter-spacing:-.012em}
+.top{min-height:66px!important;padding:12px 16px!important;gap:10px!important;background:rgba(255,255,255,.96)!important;border-bottom:1px solid var(--pg-line)!important;box-shadow:none!important}
+.logo-btn{min-height:44px!important;padding:0 15px!important;border-radius:14px!important;background:var(--pg-ink)!important;box-shadow:0 5px 14px rgba(32,35,31,.12)!important;font-size:20px!important;letter-spacing:-.04em!important}
+.logo-emoji{font-size:20px!important}
+.life-tagline{font-size:11px!important;line-height:1.2!important;color:var(--pg-muted)!important;font-weight:650!important}
+.lang-btn{min-height:42px!important;border:1px solid var(--pg-line)!important;border-radius:13px!important;background:#fff!important;font-size:13px!important}
+.pill,.filter-chip,.filter-btn{box-shadow:none!important}
+button{transition:transform .16s ease,background-color .16s ease,border-color .16s ease!important}
+button:active{transform:scale(.975)}
+.bottomnav{background:rgba(255,255,255,.97)!important;border-top:1px solid var(--pg-line)!important;box-shadow:0 -8px 24px rgba(32,35,31,.035)!important;padding:8px 10px calc(8px + env(safe-area-inset-bottom,0px))!important;gap:5px!important}
+.nav{min-height:60px!important;border-radius:16px!important;background:transparent!important;color:#777b73!important;font-weight:650!important;gap:4px!important}
+.nav b{font-size:21px!important;line-height:1.15!important;filter:none!important}
+.nav span{font-size:11px!important;letter-spacing:-.015em!important}
+.nav.active{background:var(--pg-soft)!important;color:var(--pg-accent-dark)!important;box-shadow:inset 0 0 0 1px rgba(230,91,69,.08)!important}
+.nav.create-nav{background:var(--pg-ink)!important;color:#fff!important;box-shadow:0 6px 16px rgba(32,35,31,.15)!important}
+.nav.create-nav b{font-size:29px!important;font-weight:400!important}
+.event-card,.profile,.list-panel,.calendar-panel,.sheet{border:1px solid var(--pg-line)!important;box-shadow:var(--pg-shadow)!important}
+.event-card{border-radius:20px!important;background:#fff!important;padding:16px!important}
+.event-card-title{font-weight:760!important;letter-spacing:-.035em!important}
+.primary,button.primary{background:var(--pg-accent)!important;color:white!important;border:1px solid var(--pg-accent)!important;border-radius:14px!important;box-shadow:0 4px 10px rgba(230,91,69,.16)!important;font-weight:750!important}
+.primary:active,button.primary:active{background:var(--pg-accent-dark)!important}
+.secondary,button.secondary{background:#fff!important;color:var(--pg-ink)!important;border:1px solid var(--pg-line)!important;border-radius:13px!important;box-shadow:none!important}
+input,textarea,select{background:#fff!important;border:1px solid #dedfd7!important;border-radius:13px!important;color:var(--pg-ink)!important;min-height:45px}
+input:focus,textarea:focus,select:focus{outline:none!important;border-color:#e6a093!important;box-shadow:0 0 0 3px rgba(230,91,69,.11)!important}
+.badge,.tag,.chip{font-weight:700!important}
+.notice{background:#f2f6f0!important;border:1px solid #e0e9dc!important;color:#38644a!important;border-radius:13px!important}
+#content{padding-bottom:18px}
+@media(max-width:420px){.top{padding:10px 12px!important;gap:7px!important}.logo-btn{padding:0 12px!important;font-size:18px!important}.life-tagline{max-width:100px!important}.bottomnav{padding-left:6px!important;padding-right:6px!important}.nav{min-width:0!important;padding:7px 2px!important}.nav span{font-size:10px!important}.event-card{padding:14px!important}}
+@media(prefers-reduced-motion:reduce){button{transition:none!important}}
+</style>
 </head>
 <body>
 <div class="app">
