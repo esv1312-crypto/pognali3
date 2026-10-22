@@ -518,6 +518,55 @@ body{background:var(--pg-bg)!important}
   .list-viewtoggle button{min-width:48px!important;padding:5px 6px!important}
 }
 
+
+/* Компактное «жидкое стекло» для переключателя Карта / Список.
+   Переключатель в списке не должен оставаться поверх прокручиваемого текста. */
+.viewtoggle:not(.list-viewtoggle){
+  top:78px!important;right:9px!important;z-index:520!important;
+  padding:3px!important;gap:2px!important;
+  border:1px solid rgba(255,255,255,.58)!important;
+  background:rgba(248,248,255,.38)!important;
+  box-shadow:0 5px 18px rgba(24,20,48,.12),inset 0 1px 0 rgba(255,255,255,.62)!important;
+  border-radius:14px!important;
+  -webkit-backdrop-filter:blur(22px) saturate(175%)!important;
+  backdrop-filter:blur(22px) saturate(175%)!important;
+}
+.viewtoggle:not(.list-viewtoggle) button{
+  min-height:29px!important;padding:6px 9px!important;
+  border-radius:10px!important;font-size:11px!important;
+  color:var(--pg-ink,#242033)!important;background:transparent!important;
+}
+.viewtoggle:not(.list-viewtoggle) button.active{
+  color:#fff!important;background:rgba(103,72,238,.88)!important;
+  box-shadow:0 2px 8px rgba(75,48,180,.24),inset 0 1px 0 rgba(255,255,255,.22)!important;
+}
+.viewtoggle.list-viewtoggle{
+  position:relative!important;top:auto!important;right:auto!important;
+  z-index:2!important;align-self:flex-end!important;
+  margin:-3px 0 9px auto!important;padding:2px!important;gap:1px!important;
+  background:rgba(247,247,255,.34)!important;
+  border:1px solid rgba(255,255,255,.62)!important;
+  border-radius:11px!important;
+  box-shadow:0 4px 14px rgba(24,20,48,.10),inset 0 1px 0 rgba(255,255,255,.68)!important;
+  -webkit-backdrop-filter:blur(22px) saturate(180%)!important;
+  backdrop-filter:blur(22px) saturate(180%)!important;
+}
+.viewtoggle.list-viewtoggle button{
+  min-width:49px!important;min-height:27px!important;
+  padding:5px 7px!important;border-radius:8px!important;
+  font-size:10px!important;background:transparent!important;
+  color:var(--pg-ink,#242033)!important;
+}
+.viewtoggle.list-viewtoggle button.active{
+  background:rgba(103,72,238,.88)!important;color:#fff!important;
+  box-shadow:0 2px 7px rgba(75,48,180,.22)!important;
+}
+@media(max-width:380px){
+ .viewtoggle:not(.list-viewtoggle){top:66px!important;right:7px!important}
+ .viewtoggle.list-viewtoggle{margin-top:-2px!important}
+ .viewtoggle.list-viewtoggle button{min-width:46px!important;padding:4px 6px!important}
+}
+
 </style>
 </head>
 <body>
@@ -896,16 +945,30 @@ async function ensureEventCoordinates(){
   if(latEl?.value!==''&&lngEl?.value!==''&&Number.isFinite(lat)&&Number.isFinite(lng)&&Math.abs(lat)<=90&&Math.abs(lng)<=180)return;
   const query=placeEl?.value?.trim();
   if(!query||query==='Определяю место…')throw new Error('Укажи адрес или выбери точку на карте.');
+  let near=userGeo;
+  if(!near){try{near=await resolveDeviceLocation()}catch(e){}}
+  if(!near)near=MAP_CENTER;
   let point=null;
+  const valid=(p)=>p&&Number.isFinite(p.lat)&&Number.isFinite(p.lng)&&Math.abs(p.lat)<=90&&Math.abs(p.lng)<=180;
+  const chooseNearest=(items,getPoint)=>{
+    const candidates=(items||[]).map(item=>({item,point:getPoint(item)})).filter(x=>valid(x.point));
+    candidates.sort((a,b)=>distanceKm(near.lat,near.lng,a.point.lat,a.point.lng)-distanceKm(near.lat,near.lng,b.point.lat,b.point.lng));
+    return candidates[0]?.point||null;
+  };
   try{
-    const url='https://photon.komoot.io/api/?q='+encodeURIComponent(query)+'&limit=1&lang='+encodeURIComponent((LOCALES[getLang()]||'ru-RU').slice(0,2));
+    const url='https://photon.komoot.io/api/?q='+encodeURIComponent(query)+'&limit=10&lat='+encodeURIComponent(near.lat)+'&lon='+encodeURIComponent(near.lng)+'&lang='+encodeURIComponent((LOCALES[getLang()]||'ru-RU').slice(0,2));
     const r=await fetch(url,{headers:{'Accept':'application/json'}});
-    if(r.ok){const data=await r.json();const c=data?.features?.[0]?.geometry?.coordinates;if(Array.isArray(c)&&c.length>=2)point={lat:Number(c[1]),lng:Number(c[0])};}
+    if(r.ok){const data=await r.json();point=chooseNearest(data?.features||[],item=>({lat:Number(item.geometry?.coordinates?.[1]),lng:Number(item.geometry?.coordinates?.[0])}));}
   }catch(e){}
   if(!point){
-    try{const url='https://nominatim.openstreetmap.org/search?format=jsonv2&limit=1&accept-language=ru&q='+encodeURIComponent(query);const r=await fetch(url,{headers:{'Accept':'application/json'}});if(r.ok){const data=await r.json();if(Array.isArray(data)&&data[0])point={lat:Number(data[0].lat),lng:Number(data[0].lon)};}}catch(e){}
+    try{
+      const viewbox=[near.lng-1.5,near.lat+1.0,near.lng+1.5,near.lat-1.0].join(',');
+      const url='https://nominatim.openstreetmap.org/search?format=jsonv2&addressdetails=1&limit=10&accept-language='+encodeURIComponent((LOCALES[getLang()]||'ru-RU').slice(0,2))+'&viewbox='+encodeURIComponent(viewbox)+'&q='+encodeURIComponent(query);
+      const r=await fetch(url,{headers:{'Accept':'application/json'}});
+      if(r.ok){const data=await r.json();point=chooseNearest(Array.isArray(data)?data:[],item=>({lat:Number(item.lat),lng:Number(item.lon)}));}
+    }catch(e){}
   }
-  if(!point||!Number.isFinite(point.lat)||!Number.isFinite(point.lng)||Math.abs(point.lat)>90||Math.abs(point.lng)>180)throw new Error('Не удалось определить координаты места. Нажми «Найти» и выбери адрес из списка или поставь точку на карте.');
+  if(!valid(point))throw new Error('Не удалось определить координаты места рядом с тобой. Нажми «Найти» и выбери нужный адрес из списка или поставь точку на карте.');
   if(!pickerMap||!document.getElementById('elat'))throw new Error('Карта выбора места ещё загружается. Подожди секунду и попробуй снова.');
   setPickerPoint(point.lat,point.lng,false);
   pickerMap.setView([point.lat,point.lng],16);
