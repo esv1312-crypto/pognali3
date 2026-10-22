@@ -245,7 +245,7 @@ body{min-height:100dvh;overscroll-behavior:none}
 const KEY='pognali_telegram_demo_01';
 const API_MODE=!!window.Telegram?.WebApp?.initData;
 const TELEGRAM_INIT_DATA=window.Telegram?.WebApp?.initData||'';
-if(!API_MODE)document.getElementById('previewBanner')?.classList.remove('hidden');
+if(!API_MODE){document.getElementById('previewBanner')?.classList.remove('hidden');window.addEventListener('error',e=>{const b=document.getElementById('previewBanner');if(b){b.classList.remove('hidden');b.textContent='⚠ Ошибка интерфейса: '+String(e.message||'unknown').slice(0,180)}});window.addEventListener('unhandledrejection',e=>{const b=document.getElementById('previewBanner');if(b){b.classList.remove('hidden');b.textContent='⚠ Ошибка интерфейса: '+String(e.reason?.message||e.reason||'unknown').slice(0,180)}})}
 const base={profile:{name:'Стас',birth:'1988-04-01',city:'Симферополь',bio:'Люблю спорт, новые места и когда можно просто сказать: «Погнали».',photo:''},events:[
 {id:1,title:'Прогулка по Гагаринскому парку',cat:'Прогулка',date:'2026-09-25',time:'18:30',place:'Гагаринский парк',country:'Россия',city:'Симферополь',lat:44.9463,lng:34.0957,limit:8,desc:'Спокойно пройтись, поболтать и познакомиться с новыми людьми.',people:[2],owner:1,status:'ACTIVE'},
 {id:2,title:'Футбол 5×5',cat:'Спорт',date:'2026-09-26',time:'17:00',place:'Спортивная площадка в Гагаринском парке',country:'Россия',city:'Симферополь',lat:44.9448,lng:34.1015,limit:10,desc:'Нужны игроки на дружеский футбол. Без профессионализма.',people:[2,3,4],owner:2,status:'ACTIVE'},

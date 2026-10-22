@@ -5,6 +5,7 @@ on:
     branches: [main]
     paths:
       - 'server/**'
+      - 'docs/telegram/index.html'
       - 'package.json'
       - 'package-lock.json'
       - '.github/workflows/telegram-api-test.yml'
