@@ -833,7 +833,27 @@ function showToast(message,type='info'){const el=ensureQaToast();el.textContent=
 function showConfirm(title,text,onOk,okLabel='Подтвердить',cancelLabel='Отмена'){openModal(`<div class="qa-dialog"><button class="close" onclick="closeModal()">✕</button><h2>${esc(qaT(title))}</h2><p>${esc(qaT(text))}</p><div class="qa-dialog-actions"><button class="secondary" onclick="closeModal()">${esc(qaT(cancelLabel))}</button><button class="primary" id="qaConfirmOk">${esc(qaT(okLabel))}</button></div></div>`);document.getElementById('qaConfirmOk').onclick=()=>{closeModal();onOk()}}
 function showPrompt(title,label,value,onSubmit,submitLabel='Сохранить'){openModal(`<div class="qa-dialog"><button class="close" onclick="closeModal()">✕</button><h2>${esc(qaT(title))}</h2><div class="field"><label>${esc(qaT(label))}</label><textarea id="qaPromptInput" maxlength="500">${esc(value||'')}</textarea></div><div class="qa-dialog-actions"><button class="secondary" onclick="closeModal()">${esc(qaT('Отмена'))}</button><button class="primary" id="qaPromptOk">${esc(qaT(submitLabel))}</button></div></div>`);document.getElementById('qaPromptOk').onclick=()=>{const v=document.getElementById('qaPromptInput').value;closeModal();onSubmit(v)}}
 
-async function submitEvent(ev,id){ev.preventDefault();try{let e=id?db.events.find(x=>x.id===id):null;let data=readEvent(e);if(API_MODE){const payload=JSON.stringify({title:data.title,category:data.cat,description:data.desc,city:data.city||db.profile.city||data.place,address:data.place,latitude:data.lat,longitude:data.lng,starts_at:new Date(data.date+'T'+data.time).toISOString(),capacity:data.limit});await apiRequest('/events'+(e?'/'+encodeURIComponent(e.id):''),{method:e?'PATCH':'POST',body:payload});await refreshApiData()}else{if(e){Object.assign(e,data)}else{db.events.unshift({...data,id:Date.now(),people:[2],owner:2,status:'ACTIVE'})}save()}go('mine');showToast(id?'Событие изменено':'УРА! 🎉 Событие создано','success')}catch(err){showToast(err.message||'Не удалось сохранить событие','error')}}
+async function ensureEventCoordinates(){
+  const latEl=document.getElementById('elat'),lngEl=document.getElementById('elng'),placeEl=document.getElementById('eplace');
+  const lat=Number(latEl?.value),lng=Number(lngEl?.value);
+  if(latEl?.value!==''&&lngEl?.value!==''&&Number.isFinite(lat)&&Number.isFinite(lng)&&Math.abs(lat)<=90&&Math.abs(lng)<=180)return;
+  const query=placeEl?.value?.trim();
+  if(!query||query==='Определяю место…')throw new Error('Укажи адрес или выбери точку на карте.');
+  let point=null;
+  try{
+    const url='https://photon.komoot.io/api/?q='+encodeURIComponent(query)+'&limit=1&lang='+encodeURIComponent((LOCALES[getLang()]||'ru-RU').slice(0,2));
+    const r=await fetch(url,{headers:{'Accept':'application/json'}});
+    if(r.ok){const data=await r.json();const c=data?.features?.[0]?.geometry?.coordinates;if(Array.isArray(c)&&c.length>=2)point={lat:Number(c[1]),lng:Number(c[0])};}
+  }catch(e){}
+  if(!point){
+    try{const url='https://nominatim.openstreetmap.org/search?format=jsonv2&limit=1&accept-language=ru&q='+encodeURIComponent(query);const r=await fetch(url,{headers:{'Accept':'application/json'}});if(r.ok){const data=await r.json();if(Array.isArray(data)&&data[0])point={lat:Number(data[0].lat),lng:Number(data[0].lon)};}}catch(e){}
+  }
+  if(!point||!Number.isFinite(point.lat)||!Number.isFinite(point.lng)||Math.abs(point.lat)>90||Math.abs(point.lng)>180)throw new Error('Не удалось определить координаты места. Нажми «Найти» и выбери адрес из списка или поставь точку на карте.');
+  if(!pickerMap||!document.getElementById('elat'))throw new Error('Карта выбора места ещё загружается. Подожди секунду и попробуй снова.');
+  setPickerPoint(point.lat,point.lng,false);
+  pickerMap.setView([point.lat,point.lng],16);
+}
+async function submitEvent(ev,id){ev.preventDefault();const submitButton=ev.submitter||ev.target?.querySelector('button[type="submit"],button:not([type])');if(submitButton){submitButton.disabled=true;submitButton.dataset.originalText=submitButton.textContent;submitButton.textContent='Сохраняю…'}try{await ensureEventCoordinates();let e=id?db.events.find(x=>x.id===id):null;let data=readEvent(e);if(API_MODE){const payload=JSON.stringify({title:data.title,category:data.cat,description:data.desc,city:data.city||db.profile.city||data.place,address:data.place,latitude:data.lat,longitude:data.lng,starts_at:new Date(data.date+'T'+data.time).toISOString(),capacity:data.limit});await apiRequest('/events'+(e?'/'+encodeURIComponent(e.id):''),{method:e?'PATCH':'POST',body:payload});await refreshApiData()}else{if(e){Object.assign(e,data)}else{db.events.unshift({...data,id:Date.now(),people:[2],owner:2,status:'ACTIVE'})}save()}go('mine');showToast(id?'Событие изменено':'УРА! 🎉 Событие создано','success')}catch(err){showToast(err.message||'Не удалось сохранить событие','error')}finally{if(submitButton){submitButton.disabled=false;submitButton.textContent=submitButton.dataset.originalText||'ПОГНАЛИ'}}}
 function formatTimeInput(el){let v=String(el.value||'').replace(/\D/g,'').slice(0,4);if(v.length>=3)v=v.slice(0,2)+':'+v.slice(2);el.value=v;}
 function categoryOptions(){return [['Общение','👋'],['Спорт','🏅'],['Прогулка','🚶'],['Игры','🎮'],['Настольные игры','🎲'],['Мафия','🕵️'],['Кино','🎬'],['Музыка/концерт','🎵'],['Кафе/еда','☕'],['Вечеринка','🥳'],['Путешествие','🧳'],['Природа/поход','🥾'],['Учёба','📚'],['Творчество','🎨'],['Фото','📸'],['Авто','🚗'],['Шопинг','🛍️'],['Знакомства','💬'],['Другое','✨']]}
 function selectCategory(name){document.getElementById('ecat').value=name;document.querySelectorAll('.cat-choice').forEach(b=>b.classList.toggle('active',b.dataset.cat===name));let el=document.getElementById('categoryCurrent');if(el)el.textContent=name}
