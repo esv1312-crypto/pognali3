@@ -83,3 +83,17 @@ CREATE TABLE IF NOT EXISTS event_contact_messages (
  sender_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,body TEXT NOT NULL CHECK(char_length(body) BETWEEN 1 AND 2000),
  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW());
 CREATE INDEX IF NOT EXISTS event_contact_messages_conversation_idx ON event_contact_messages(conversation_id,created_at);
+
+
+-- Event sharing attribution and share/open analytics.
+ALTER TABLE event_participants ADD COLUMN IF NOT EXISTS join_source TEXT NOT NULL DEFAULT 'organic';
+CREATE INDEX IF NOT EXISTS event_participants_source_idx ON event_participants (event_id, join_source) WHERE status = 'joined';
+CREATE TABLE IF NOT EXISTS event_share_events (
+ id BIGSERIAL PRIMARY KEY,
+ event_id BIGINT NOT NULL REFERENCES events(id) ON DELETE CASCADE,
+ user_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+ action TEXT NOT NULL CHECK (action IN ('share_opened','opened_from_share')),
+ created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS event_share_events_event_idx ON event_share_events (event_id, action, created_at DESC);
+CREATE INDEX IF NOT EXISTS event_share_events_user_idx ON event_share_events (user_id, created_at DESC);
