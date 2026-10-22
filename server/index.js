@@ -215,7 +215,7 @@ app.use((err, _req, res, _next) => {
 
 const webRoot = path.resolve(process.env.WEB_ROOT || 'docs/telegram');
 app.use(express.static(webRoot));
-app.get('*', async (req, res, next) => {
+app.get('/{*splat}', (req, res, next) => {
   if (req.path.startsWith('/api/')) return next();
   try { res.sendFile(path.join(webRoot, 'index.html')); } catch { next(); }
 });
