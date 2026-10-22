@@ -97,3 +97,13 @@ CREATE TABLE IF NOT EXISTS event_share_events (
 );
 CREATE INDEX IF NOT EXISTS event_share_events_event_idx ON event_share_events (event_id, action, created_at DESC);
 CREATE INDEX IF NOT EXISTS event_share_events_user_idx ON event_share_events (user_id, created_at DESC);
+
+
+-- Per-user read cursor for each conversation; shared conversations need separate cursors per participant.
+CREATE TABLE IF NOT EXISTS message_reads (
+  user_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  conversation_type TEXT NOT NULL CHECK (conversation_type IN ('event','direct','event_contact')),
+  conversation_id BIGINT NOT NULL,
+  last_read_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  PRIMARY KEY (user_id, conversation_type, conversation_id)
+);
