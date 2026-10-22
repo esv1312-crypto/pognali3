@@ -284,10 +284,23 @@ app.post('/api/events/:id/contact',async(req,res)=>{const e=await pool.query("SE
 app.get('/api/event-contacts/:id/messages',async(req,res)=>{const c=await pool.query('SELECT id,event_id,participant_id,organizer_id FROM event_contact_conversations WHERE id=$1 AND (participant_id=$2 OR organizer_id=$2)',[req.params.id,req.telegramUser.id]);if(!c.rowCount)return res.status(404).json({error:'Conversation not found'});const row=c.rows[0],other=String(row.participant_id)===String(req.telegramUser.id)?row.organizer_id:row.participant_id;if(await hasMessagingBlock(req.telegramUser.id,other))return res.status(403).json({error:'Messaging is unavailable between these users'});const r=await pool.query('SELECT m.id,m.sender_id,m.body,m.created_at,COALESCE(u.display_name,u.first_name) AS sender_name FROM event_contact_messages m JOIN users u ON u.id=m.sender_id WHERE m.conversation_id=$1 ORDER BY m.created_at ASC LIMIT 500',[req.params.id]);res.json({messages:r.rows,conversation:row})});
 app.post('/api/event-contacts/:id/messages',async(req,res)=>{const body=typeof(req.body&&req.body.body)==='string'?req.body.body.trim():'';if(!body||body.length>2000)return res.status(400).json({error:'Message must contain 1–2000 characters'});const c=await pool.query('SELECT id,participant_id,organizer_id FROM event_contact_conversations WHERE id=$1 AND (participant_id=$2 OR organizer_id=$2)',[req.params.id,req.telegramUser.id]);if(!c.rowCount)return res.status(404).json({error:'Conversation not found'});const row=c.rows[0],other=String(row.participant_id)===String(req.telegramUser.id)?row.organizer_id:row.participant_id;if(await hasMessagingBlock(req.telegramUser.id,other))return res.status(403).json({error:'Messaging is unavailable between these users'});const r=await pool.query('INSERT INTO event_contact_messages(conversation_id,sender_id,body) VALUES($1,$2,$3) RETURNING id,sender_id,body,created_at',[req.params.id,req.telegramUser.id,body]);await pool.query('UPDATE event_contact_conversations SET updated_at=NOW() WHERE id=$1',[req.params.id]);res.status(201).json({message:r.rows[0]})});
 
+async function recordEventShareAction(eventId, userId, action) {
+  const table = await pool.query("SELECT to_regclass('public.event_share_events') AS table_name");
+  if (!table.rows[0]?.table_name) return false;
+  await pool.query('INSERT INTO event_share_events (event_id,user_id,action) VALUES ($1,$2,$3)', [eventId,userId,action]);
+  return true;
+}
 app.post('/api/events/:id/share', async (req, res) => {
   const event = await pool.query("SELECT id FROM events WHERE id=$1 AND status='published'", [req.params.id]);
   if (!event.rowCount) return res.status(404).json({ error: 'Event not found or no longer available' });
-  res.json({ tracked: true, eventId: String(req.params.id) });
+  const tracked = await recordEventShareAction(req.params.id, req.telegramUser.id, 'share_opened');
+  res.json({ tracked, eventId: String(req.params.id) });
+});
+app.post('/api/events/:id/share-opened', async (req, res) => {
+  const event = await pool.query("SELECT id FROM events WHERE id=$1 AND status='published'", [req.params.id]);
+  if (!event.rowCount) return res.status(404).json({ error: 'Event not found or no longer available' });
+  const tracked = await recordEventShareAction(req.params.id, req.telegramUser.id, 'opened_from_share');
+  res.json({ tracked, eventId: String(req.params.id) });
 });
 
 app.post('/api/events/:id/join', async (req, res) => {
@@ -299,6 +312,8 @@ app.post('/api/events/:id/join', async (req, res) => {
       await client.query('ROLLBACK'); return res.status(404).json({ error: 'Event not found' });
     }
     const source = ['share','organic'].includes(req.body?.source) ? req.body.source : 'organic';
+    const sourceColumn = await client.query("SELECT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema='public' AND table_name='event_participants' AND column_name='join_source') AS available");
+    const hasSourceColumn = sourceColumn.rows[0]?.available === true;
     const existing = await client.query(
       `SELECT status FROM event_participants WHERE event_id=$1 AND user_id=$2`,
       [req.params.id, req.telegramUser.id]
@@ -309,11 +324,19 @@ app.post('/api/events/:id/join', async (req, res) => {
         await client.query('ROLLBACK'); return res.status(409).json({ error: 'Event is full' });
       }
     }
-    await client.query(
-      `INSERT INTO event_participants (event_id,user_id,status,join_source) VALUES ($1,$2,'joined',$3)
-       ON CONFLICT (event_id,user_id) DO UPDATE SET status='joined', joined_at=NOW(), join_source=EXCLUDED.join_source`,
-      [req.params.id, req.telegramUser.id, source]
-    );
+    if (hasSourceColumn) {
+      await client.query(
+        `INSERT INTO event_participants (event_id,user_id,status,join_source) VALUES ($1,$2,'joined',$3)
+         ON CONFLICT (event_id,user_id) DO UPDATE SET status='joined', joined_at=NOW(), join_source=EXCLUDED.join_source`,
+        [req.params.id, req.telegramUser.id, source]
+      );
+    } else {
+      await client.query(
+        `INSERT INTO event_participants (event_id,user_id,status) VALUES ($1,$2,'joined')
+         ON CONFLICT (event_id,user_id) DO UPDATE SET status='joined', joined_at=NOW()`,
+        [req.params.id, req.telegramUser.id]
+      );
+    }
     await client.query('COMMIT');
     res.json({ joined: true, eventId: String(req.params.id) });
   } catch (error) {
