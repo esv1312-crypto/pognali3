@@ -403,7 +403,7 @@ async function configureTelegramWebhook() {
     } else {
       console.error('Telegram getMe failed:', identity.description || identityResponse.status);
     }
-    const response = await fetch('https://api.telegram.org/bot' + token + '/setWebhook',
+    const response = await fetch('https://api.telegram.org/bot' + token + '/setWebhook', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ url: webhookUrl, secret_token: secret, allowed_updates: ['message'], drop_pending_updates: false })
