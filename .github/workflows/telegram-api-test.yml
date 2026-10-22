@@ -8,13 +8,6 @@ on:
       - 'package.json'
       - 'package-lock.json'
       - '.github/workflows/telegram-api-test.yml'
-  push:
-    branches: [feature/telegram-mini-app]
-    paths:
-      - 'server/**'
-      - 'package.json'
-      - 'package-lock.json'
-      - '.github/workflows/telegram-api-test.yml'
 
 jobs:
   test:
