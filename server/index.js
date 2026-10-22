@@ -331,13 +331,42 @@ app.get('/{*splat}', (req, res, next) => {
   try { res.sendFile(path.join(webRoot, 'index.html')); } catch { next(); }
 });
 
+async function configureTelegramWebhook() {
+  const token = process.env.TELEGRAM_BOT_TOKEN;
+  const secret = process.env.TELEGRAM_WEBHOOK_SECRET;
+  const miniAppUrl = process.env.MINI_APP_URL;
+  if (!token || !secret || !miniAppUrl || !miniAppUrl.startsWith('https://')) {
+    console.log('Telegram webhook not configured: required environment variables are missing');
+    return;
+  }
+  const webhookUrl = 'https://pognali-telegram-mini-app.onrender.com/telegram/webhook';
+  try {
+    const response = await fetch('https://api.telegram.org/bot' + token + '/setWebhook', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ url: webhookUrl, secret_token: secret, allowed_updates: ['message'], drop_pending_updates: false })
+    });
+    const result = await response.json();
+    if (!response.ok || !result.ok) {
+      console.error('Telegram webhook setup failed:', result.description || response.status);
+      return;
+    }
+    console.log('Telegram webhook configured');
+  } catch (error) {
+    console.error('Telegram webhook setup failed:', error.message);
+  }
+}
+
 async function start() {
   if (pool) {
     const schema = await fs.readFile(path.join(__dirname, 'schema.sql'), 'utf8');
     await pool.query(schema);
   }
   const port = Number(process.env.PORT || 3000);
-  app.listen(port, '0.0.0.0', () => console.log(`Pognali API listening on ${port}; DB ${pool ? 'configured' : 'missing'}`));
+  app.listen(port, '0.0.0.0', () => {
+    console.log(`Pognali API listening on ${port}; DB ${pool ? 'configured' : 'missing'}`);
+    configureTelegramWebhook();
+  });
 }
 if (require.main === module) start().catch(error => { console.error('Startup failed:', error.message); process.exit(1); });
 module.exports = { app, start };
