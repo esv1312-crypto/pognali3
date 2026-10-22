@@ -157,6 +157,50 @@ app.post('/api/events', async (req, res) => {
   res.status(201).json({ event: { ...result.rows[0], participants_count: 1, joined_by_me: true } });
 });
 
+app.patch('/api/events/:id', async (req, res) => {
+  const b = req.body || {};
+  const title = typeof b.title === 'string' ? b.title.trim() : '';
+  const city = typeof b.city === 'string' ? b.city.trim() : '';
+  const startsAt = new Date(b.starts_at);
+  const capacity = b.capacity == null || b.capacity === '' ? null : Number(b.capacity);
+  const lat = b.latitude == null || b.latitude === '' ? null : Number(b.latitude);
+  const lon = b.longitude == null || b.longitude === '' ? null : Number(b.longitude);
+  const endsAt = b.ends_at ? new Date(b.ends_at) : null;
+  if (title.length < 3 || title.length > 120 || !city || city.length > 120 || !Number.isFinite(startsAt.getTime())) {
+    return res.status(400).json({ error: 'Title (3–120 chars), city and valid starts_at are required' });
+  }
+  if (capacity !== null && (!Number.isInteger(capacity) || capacity < 1 || capacity > 5000)) return res.status(400).json({ error: 'Invalid capacity' });
+  if ((lat === null) !== (lon === null) || (lat !== null && (!Number.isFinite(lat) || lat < -90 || lat > 90 || !Number.isFinite(lon) || lon < -180 || lon > 180))) return res.status(400).json({ error: 'Invalid map coordinates' });
+  if (endsAt && (!Number.isFinite(endsAt.getTime()) || endsAt < startsAt)) return res.status(400).json({ error: 'Invalid ends_at' });
+  const result = await pool.query(
+    `UPDATE events SET title=$3, description=$4, category=$5, city=$6, address=$7,
+       latitude=$8, longitude=$9, starts_at=$10, ends_at=$11, capacity=$12, updated_at=NOW()
+     WHERE id=$1 AND creator_id=$2 AND status='published' RETURNING *`,
+    [req.params.id, req.telegramUser.id, title, typeof b.description === 'string' ? b.description.trim().slice(0,3000) : '',
+      typeof b.category === 'string' ? b.category.slice(0,40) : 'other', city,
+      typeof b.address === 'string' ? b.address.trim().slice(0,250) : '', lat, lon,
+      startsAt.toISOString(), endsAt ? endsAt.toISOString() : null, capacity]
+  );
+  if (!result.rowCount) return res.status(404).json({ error: 'Event not found or you are not its organizer' });
+  res.json({ event: result.rows[0] });
+});
+
+app.delete('/api/events/:id', async (req, res) => {
+  const result = await pool.query('DELETE FROM events WHERE id=$1 AND creator_id=$2 RETURNING id', [req.params.id, req.telegramUser.id]);
+  if (!result.rowCount) return res.status(404).json({ error: 'Event not found or you are not its organizer' });
+  res.json({ deleted: true, eventId: String(req.params.id) });
+});
+
+app.post('/api/events/:id/finish', async (req, res) => {
+  const result = await pool.query(
+    `UPDATE events SET status='completed', updated_at=NOW()
+     WHERE id=$1 AND creator_id=$2 AND status='published' RETURNING id`,
+    [req.params.id, req.telegramUser.id]
+  );
+  if (!result.rowCount) return res.status(404).json({ error: 'Event not found or you are not its organizer' });
+  res.json({ finished: true, eventId: String(req.params.id) });
+});
+
 app.post('/api/events/:id/join', async (req, res) => {
   const client = await pool.connect();
   try {
