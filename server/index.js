@@ -32,7 +32,7 @@ app.post('/telegram/webhook', async (req, res) => {
   const text = String(message.text || '');
   let replyText = 'Погнали — это приложение для реальных встреч, прогулок, спорта и других планов. Выбирай событие и присоединяйся!';
   let replyMarkup = { inline_keyboard: [[{ text: '🚀 Открыть Погнали', web_app: { url: miniAppUrl } }]] };
-  if (/^\\/(start|startapp)(?:\\s|$)/i.test(text)) {
+  if (/^\/(start|startapp)(?:\s|$)/i.test(text)) {
     replyText = 'Не листай чужую жизнь — давай строить свою. Найди событие или создай своё 👇';
   } else if (message.location) {
     replyText = 'Спасибо! Открой Погнали — там можно выбрать события рядом и поставить точку на карте.';
