@@ -471,6 +471,7 @@ body{background:var(--pg-bg)!important}
 <nav class="bottomnav"> <button class="nav active" data-tab="events" onclick="go('events')"><b>🗺️</b><span>События</span></button> <button class="nav create-nav" data-tab="create" onclick="go('create')"><b>＋</b><span>Создать</span></button> <button class="nav" data-tab="mine" onclick="go('mine')"><b>🙋</b><span>Мои</span></button> <button class="nav" data-tab="messages" onclick="go('messages')"><b>💬</b><span>Сообщения</span></button> <button class="nav" data-tab="profile" onclick="go('profile')"><b>👤</b><span>Профиль</span></button> </nav></div>
 <div class="modal" id="modal"><div class="sheet" id="sheet"></div></div>
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="./pognali-map-services.js"></script>
 <script>
 const KEY='pognali_telegram_demo_01';
 const API_MODE=!!window.Telegram?.WebApp?.initData;
@@ -1036,27 +1037,7 @@ async function findPlace(){
     if(!near){try{near=await resolveDeviceLocation()}catch(e){}}
     if(!near)near=MAP_CENTER;
     const lang=(LOCALES[getLang()]||'ru-RU').slice(0,2);
-    let results=[];
-    // Primary provider: Photon (OpenStreetMap data), biased towards the user's location.
-    try{
-      const url='https://photon.komoot.io/api/?q='+encodeURIComponent(q)+'&limit=10&lat='+encodeURIComponent(near.lat)+'&lon='+encodeURIComponent(near.lng)+'&lang='+encodeURIComponent(lang);
-      const r=await fetch(url,{headers:{'Accept':'application/json'}});
-      if(r.ok){const data=await r.json();results=(data.features||[]).filter(f=>Array.isArray(f.geometry?.coordinates)&&f.geometry.coordinates.length>=2);}
-    }catch(e){}
-    // Fallback: Nominatim often finds named venues and addresses that Photon misses.
-    if(!results.length){
-      const url='https://nominatim.openstreetmap.org/search?format=jsonv2&addressdetails=1&namedetails=1&accept-language='+encodeURIComponent(lang)+'&limit=10&q='+encodeURIComponent(q);
-      const r=await fetch(url,{headers:{'Accept':'application/json'}});
-      if(r.ok){
-        const data=await r.json();
-        results=(Array.isArray(data)?data:[]).filter(x=>Number.isFinite(Number(x.lat))&&Number.isFinite(Number(x.lon))).map(x=>({
-          type:'Feature',geometry:{type:'Point',coordinates:[Number(x.lon),Number(x.lat)]},
-          properties:{name:x.name||x.namedetails?.name||x.display_name,display_name:x.display_name,
-            country:x.address?.country||'',city:x.address?.city||x.address?.town||x.address?.village||x.address?.municipality||'',
-            state:x.address?.state||'',street:x.address?.road||x.address?.pedestrian||'',housenumber:x.address?.house_number||''}
-        }));
-      }
-    }
+    const results=await window.PognaliMapServices.searchPlaces(q,near,lang);
     if(!results.length){status.textContent='Ничего не нашлось. Попробуй полное название или адрес; можно выбрать точку на карте.';return;}
     const coords=f=>({lat:Number(f.geometry.coordinates[1]),lng:Number(f.geometry.coordinates[0])});
     results.sort((a,b)=>distanceKm(near.lat,near.lng,coords(a).lat,coords(a).lng)-distanceKm(near.lat,near.lng,coords(b).lat,coords(b).lng));
