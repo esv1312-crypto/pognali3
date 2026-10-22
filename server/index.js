@@ -22,7 +22,7 @@ app.get('/api/health', async (_req, res) => {
     try { await pool.query('SELECT 1'); database = 'ok'; }
     catch { database = 'error'; }
   }
-  res.status(database === 'error' ? 503 : 200).json({
+  res.status(database === 'ok' ? 200 : 503).json({
     ok: database !== 'error',
     service: 'pognali-api',
     database,
