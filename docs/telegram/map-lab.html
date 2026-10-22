@@ -1,0 +1,87 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#101216">
+<title>Погнали — карта, тестовый стенд</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<style>
+:root{color-scheme:dark;--bg:#101216;--panel:#191c22;--line:#2c3039;--text:#f7f7f4;--muted:#a4a8b1;--accent:#ffcf58}
+*{box-sizing:border-box}html,body{margin:0;height:100%;font-family:Inter,system-ui,-apple-system,Segoe UI,Roboto,sans-serif;background:var(--bg);color:var(--text)}
+body{display:flex;flex-direction:column;min-height:100dvh}.top{padding:15px 16px 12px;border-bottom:1px solid var(--line);background:#121419;display:flex;align-items:center;justify-content:space-between;gap:12px}
+.brand{font-size:18px;font-weight:850;letter-spacing:-.04em}.brand span{color:var(--accent)}.sub{font-size:12px;color:var(--muted);margin-top:4px}
+.badge{border:1px solid #6e5c2d;color:var(--accent);background:#302817;border-radius:99px;padding:6px 9px;font-size:11px;font-weight:750;white-space:nowrap}
+main{width:min(100%,1000px);margin:0 auto;padding:14px;display:flex;flex-direction:column;gap:12px;flex:1}
+.tools{display:flex;gap:8px;flex-wrap:wrap}.btn,.search button{border:1px solid var(--line);background:var(--panel);color:var(--text);border-radius:12px;padding:10px 13px;font-weight:700}.btn.active{background:var(--accent);border-color:var(--accent);color:#171717}
+.search{display:flex;gap:8px;flex:1;min-width:min(100%,260px)}.search input{width:100%;min-width:0;border:1px solid var(--line);background:#171a20;color:var(--text);border-radius:12px;padding:11px 13px;outline:none}.search input:focus{border-color:var(--accent)}
+.row{display:flex;gap:8px;flex-wrap:wrap}.status{color:var(--muted);font-size:12px;align-self:center}
+#map{height:min(66dvh,650px);min-height:360px;border:1px solid var(--line);border-radius:18px;overflow:hidden;background:#222}
+.bottom{display:flex;gap:10px;align-items:center;justify-content:space-between;flex-wrap:wrap}.note{color:var(--muted);font-size:12px;line-height:1.5}.results{display:flex;gap:6px;flex-wrap:wrap}.result{background:#252a33;border:1px solid #3a414d;border-radius:10px;color:var(--text);padding:8px 10px;text-align:left;font-size:12px}
+@media(max-width:560px){main{padding:10px}.top{padding:13px 12px}#map{height:58dvh;min-height:330px}.badge{font-size:10px}}
+</style>
+</head>
+<body>
+<header class="top"><div><div class="brand">Погнали<span>.</span> Карта</div><div class="sub">Изолированный стенд · production не изменяется</div></div><div class="badge">ТЕСТОВЫЙ РЕЖИМ</div></header>
+<main>
+  <div class="tools"><button class="btn active" id="eventsMode">🗺️ События</button><button class="btn" id="pickerMode">📍 Выбрать место</button><span class="status" id="stats">Подготовка карты…</span></div>
+  <div class="row"><div class="search"><input id="placeQuery" placeholder="Найти место, заведение или адрес"><button id="searchBtn">Найти</button></div><button class="btn" id="fitBtn">Показать события</button></div>
+  <div class="results" id="results"></div>
+  <div id="map" role="application" aria-label="Интерактивная карта событий"></div>
+  <div class="bottom"><div class="note" id="help">Нажми на маркер события. Если маркеры рядом, они сгруппируются; приближай карту, чтобы увидеть отдельные события.</div><button class="btn" id="load1000">Нагрузочный тест: 1000 событий</button></div>
+</main>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="./pognali-map-module.js"></script>
+<script>
+(function(){
+  const center=[56.8389,60.6057];
+  const categories=[['🏃','Спорт'],['☕','Кафе'],['🚶','Прогулка'],['🎲','Игры'],['🎵','Музыка'],['🥾','Поход'],['🎨','Творчество']];
+  let mode='events', count=200, selected=null, mapModule;
+  const $=id=>document.getElementById(id);
+  function makeEvents(n){
+    const rows=[];
+    for(let i=0;i<n;i++){
+      const a=i*2.399963229728653, radius=0.002+Math.sqrt((i%997)/997)*0.085;
+      const cat=categories[i%categories.length];
+      rows.push({id:i+1,title:cat[1]+': встреча №'+(i+1),category:cat[1],emoji:cat[0],place:'Тестовая локация '+(i+1),date:'Сегодня',time:String(10+i%12).padStart(2,'0')+':00',lat:center[0]+Math.sin(a)*radius,lng:center[1]+Math.cos(a)*radius});
+    }
+    return rows;
+  }
+  let events=makeEvents(count);
+  function setStatus(text){$('stats').textContent=text}
+  function renderResults(items){
+    const box=$('results');box.replaceChildren();
+    items.forEach(place=>{
+      const b=document.createElement('button');b.className='result';b.textContent=[place.name,place.address].filter(Boolean).join(' · ');
+      b.addEventListener('click',()=>{mapModule.choosePlace(place);selected=place;setStatus('Точка выбрана: '+place.lat.toFixed(5)+', '+place.lng.toFixed(5));box.replaceChildren();});
+      box.appendChild(b);
+    });
+  }
+  function switchMode(next){
+    mode=next;$('eventsMode').classList.toggle('active',mode==='events');$('pickerMode').classList.toggle('active',mode==='picker');
+    $('fitBtn').hidden=mode!=='events';$('load1000').hidden=mode!=='events';$('searchBtn').textContent='Найти';
+    $('help').textContent=mode==='picker'?'Нажми на карту, чтобы выбрать точку, или найди место через поиск. Это тестовый выбор — данные приложения не меняются.':'Нажми на маркер события. Если маркеры рядом, они сгруппируются; приближай карту, чтобы увидеть отдельные события.';
+    mapModule.destroy();
+    mapModule=PognaliMap.create({container:'map',mode,center,zoom:12,events:mode==='events'?events:[],onVisibleCount:(visible,total)=>setStatus('На экране: '+visible+' / всего: '+total+' событий'),onEventSelect:event=>{setStatus('Выбрано: '+event.title);alert(event.title+'\n'+event.place+'\n\nТестовый маркер — реальное событие не открывается.');},onPointSelect:(point,place)=>{selected={...point,...(place||{})};setStatus('Точка: '+point.lat.toFixed(5)+', '+point.lng.toFixed(5));}});
+    if(mode==='events')mapModule.fitEvents(events);
+    renderResults([]);
+    setTimeout(()=>mapModule.invalidateSize(),120);
+  }
+  $('eventsMode').addEventListener('click',()=>switchMode('events'));
+  $('pickerMode').addEventListener('click',()=>switchMode('picker'));
+  $('fitBtn').addEventListener('click',()=>mapModule.fitEvents(events));
+  $('load1000').addEventListener('click',()=>{count=1000;events=makeEvents(count);mapModule.setEvents(events);mapModule.fitEvents(events);setStatus('Загружено 1000 тестовых событий');});
+  async function search(){
+    const q=$('placeQuery').value.trim();if(!q){setStatus('Введи название или адрес');return;}
+    $('searchBtn').disabled=true;$('searchBtn').textContent='Ищу…';setStatus('Ищем места…');
+    try{const places=await mapModule.searchPlaces(q);renderResults(places);setStatus(places.length?'Найдено вариантов: '+places.length:'Места не найдены');}
+    catch(e){setStatus(e.message||'Поиск временно недоступен');}
+    finally{$('searchBtn').disabled=false;$('searchBtn').textContent='Найти';}
+  }
+  $('searchBtn').addEventListener('click',search);
+  $('placeQuery').addEventListener('keydown',e=>{if(e.key==='Enter')search()});
+  switchMode('events');
+})();
+</script>
+</body>
+</html>

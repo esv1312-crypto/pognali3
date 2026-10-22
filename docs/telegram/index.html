@@ -471,6 +471,7 @@ body{background:var(--pg-bg)!important}
 <nav class="bottomnav"> <button class="nav active" data-tab="events" onclick="go('events')"><b>🗺️</b><span>События</span></button> <button class="nav create-nav" data-tab="create" onclick="go('create')"><b>＋</b><span>Создать</span></button> <button class="nav" data-tab="mine" onclick="go('mine')"><b>🙋</b><span>Мои</span></button> <button class="nav" data-tab="messages" onclick="go('messages')"><b>💬</b><span>Сообщения</span></button> <button class="nav" data-tab="profile" onclick="go('profile')"><b>👤</b><span>Профиль</span></button> </nav></div>
 <div class="modal" id="modal"><div class="sheet" id="sheet"></div></div>
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="./map-module.js"></script>
 <script>
 const KEY='pognali_telegram_demo_01';
 const API_MODE=!!window.Telegram?.WebApp?.initData;
@@ -701,8 +702,7 @@ function initMap(){
   const savedView=selectedDate?null:(mapViews[selectedFilter]||lastMapView);
   const initialView=savedView ? [savedView.lat,savedView.lng] : (userGeo?[userGeo.lat,userGeo.lng]:[MAP_CENTER.lat,MAP_CENTER.lng]);
   const initialZoom=savedView ? savedView.zoom : (worldMode?2:9);
-  map=L.map('map').setView(initialView,initialZoom);
-  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19,subdomains:'abc',attribution:'© OpenStreetMap contributors'}).addTo(map);
+  map=window.PognaliMap.create('map',{center:initialView,zoom:initialZoom});
   // Long-press (mobile) or right-click (desktop) offers event creation at that point.
   let holdTimer=null,holdStart=null,holdTriggered=false;
   const mapEl=map.getContainer();
@@ -968,7 +968,7 @@ function eventIcon(cat,title='',custom=''){
   for(const [re,icon] of specific) if(re.test(t)) return icon;
   return ({'Спорт':'🏅','Прогулка':'🚶','Кино':'🎬','Кафе/бар':'🍻','Кафе/еда':'☕','Путешествие':'🧳','Вечеринка':'🥳','Учёба':'📚','Общение':'👋','Игры':'🎮','Настольные игры':'🎲','Мафия':'🕵️','Музыка/концерт':'🎵','Природа/поход':'🥾','Творчество':'🎨','Фото':'📸','Авто':'🚗','Шопинг':'🛍️','Знакомства':'💬','Другое':'✨'})[cat]||'📍';
 }
-function initPickerMap(lat,lng,hasPoint){destroyPickerMap();pickerMap=L.map('pickerMap').setView([lat,lng],14);L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19,subdomains:'abc',attribution:'© OpenStreetMap contributors'}).addTo(pickerMap);if(hasPoint)setPickerPoint(lat,lng,false);pickerMap.on('click',ev=>setPickerPoint(ev.latlng.lat,ev.latlng.lng,true));setTimeout(()=>pickerMap.invalidateSize(),100);}
+function initPickerMap(lat,lng,hasPoint){destroyPickerMap();pickerMap=window.PognaliMap.create('pickerMap',{center:[lat,lng],zoom:14});if(hasPoint)setPickerPoint(lat,lng,false);pickerMap.on('click',ev=>setPickerPoint(ev.latlng.lat,ev.latlng.lng,true));setTimeout(()=>pickerMap.invalidateSize(),100);}
 async function reverseGeocode(lat,lng){
   const fallback={place:'Точка на карте '+lat.toFixed(5)+', '+lng.toFixed(5),country:'',city:''};
   const parse=(data)=>{const a=data?.address||data?.properties||{};const country=a.country||a.country_name||'';const city=a.city||a.town||a.village||a.municipality||a.city_district||'';const venue=a.name||a.amenity||a.leisure||a.tourism||'';const road=a.road||a.street||a.pedestrian||a.path||a.cycleway||a.footway||'';const house=a.house_number?(', '+a.house_number):'';let detail=venue&&road&&venue!==road?venue+' · '+road+house:(venue||road)+house;let place=[country,city,detail].filter(Boolean).join(', ');if(!place&&data?.display_name)place=data.display_name.split(',').slice(0,4).join(', ').trim();return {place:place||fallback.place,country,city};};
