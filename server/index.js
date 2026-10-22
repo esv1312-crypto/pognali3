@@ -76,7 +76,12 @@ async function requireTelegram(req, res, next) {
   if (!token) return res.status(503).json({ error: 'Telegram bot token is not configured on the server' });
   const initData = req.get('x-telegram-init-data') || '';
   const auth = verifyTelegramInitData(initData, token);
-  if (!auth.ok) return res.status(401).json({ error: auth.error });
+  if (!auth.ok) {
+    let initDataKeys = [];
+    try { initDataKeys = [...new URLSearchParams(initData).keys()].sort(); } catch {}
+    console.warn('Telegram initData rejected:', JSON.stringify({ reason: auth.error, initDataPresent: Boolean(initData), initDataLength: initData.length, keys: initDataKeys }));
+    return res.status(401).json({ error: auth.error });
+  }
   req.telegramUser = auth.user;
   try {
     await pool.query(
@@ -391,7 +396,14 @@ async function configureTelegramWebhook() {
   }
   const webhookUrl = 'https://pognali-telegram-mini-app.onrender.com/telegram/webhook';
   try {
-    const response = await fetch('https://api.telegram.org/bot' + token + '/setWebhook', {
+    const identityResponse = await fetch('https://api.telegram.org/bot' + token + '/getMe');
+    const identity = await identityResponse.json();
+    if (identity.ok && identity.result && identity.result.username) {
+      console.log('Telegram token belongs to bot @' + identity.result.username);
+    } else {
+      console.error('Telegram getMe failed:', identity.description || identityResponse.status);
+    }
+    const response = await fetch('https://api.telegram.org/bot' + token + '/setWebhook',
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ url: webhookUrl, secret_token: secret, allowed_updates: ['message'], drop_pending_updates: false })
