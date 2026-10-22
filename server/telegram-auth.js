@@ -15,7 +15,7 @@ function verifyTelegramInitData(initData, botToken, nowSeconds = Math.floor(Date
     .map(([key, value]) => key + '=' + value)
     .join('\n');
 
-  const secretKey = crypto.createHmac('sha256', botToken).update('WebAppData').digest();
+  const secretKey = crypto.createHmac('sha256', 'WebAppData').update(botToken).digest();
   const calculatedHash = crypto.createHmac('sha256', secretKey).update(dataCheckString).digest();
   const suppliedHash = Buffer.from(receivedHash, 'hex');
   if (suppliedHash.length !== calculatedHash.length || !crypto.timingSafeEqual(suppliedHash, calculatedHash)) {
