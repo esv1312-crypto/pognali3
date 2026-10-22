@@ -120,6 +120,110 @@
       filterBar.appendChild(button);
     });
     container.querySelector('.pognali-map-top').appendChild(filterBar);
+    // Place search is intentionally isolated from the main app. Photon is primary;
+    // Nominatim is a fallback only when Photon returns no usable result.
+    const searchBox = document.createElement('form');
+    searchBox.className = 'pognali-map-search';
+    searchBox.innerHTML = '<input type="search" aria-label="Поиск места" placeholder="Адрес, кафе или место…">' +
+      '<button type="submit">Найти</button><button type="button" class="pognali-map-pick">Выбрать точку</button>' +
+      '<div class="pognali-map-search-results" hidden></div>';
+    container.querySelector('.pognali-map-top').insertBefore(searchBox, filterBar);
+    const searchInput = searchBox.querySelector('input');
+    const searchResults = searchBox.querySelector('.pognali-map-search-results');
+    let pickLocation = false;
+    let searchMarker = null;
+    const pickButton = searchBox.querySelector('.pognali-map-pick');
+    pickButton.addEventListener('click', () => {
+      pickLocation = !pickLocation;
+      pickButton.classList.toggle('is-active', pickLocation);
+      pickButton.textContent = pickLocation ? 'Нажми на карту…' : 'Выбрать точку';
+      count.textContent = pickLocation ? 'Нажми на карте, чтобы выбрать место' : count.textContent;
+    });
+    map.on('click', event => {
+      if (!pickLocation) return;
+      const point = { lat: event.latlng.lat, lng: event.latlng.lng };
+      if (searchMarker) searchMarker.remove();
+      searchMarker = global.L.marker([point.lat, point.lng]).addTo(map);
+      searchMarker.bindPopup('Выбранное место').openPopup();
+      pickLocation = false;
+      pickButton.classList.remove('is-active');
+      pickButton.textContent = 'Выбрать точку';
+      count.textContent = 'Точка выбрана: ' + point.lat.toFixed(5) + ', ' + point.lng.toFixed(5);
+      if (typeof options.onLocationSelect === 'function') options.onLocationSelect(point);
+    });
+    searchBox.addEventListener('submit', async event => {
+      event.preventDefault();
+      const query = searchInput.value.trim();
+      if (query.length < 2) { searchInput.focus(); return; }
+      const submit = searchBox.querySelector('button[type="submit"]');
+      submit.disabled = true;
+      submit.textContent = 'Ищем…';
+      searchResults.hidden = false;
+      searchResults.textContent = 'Ищем адреса и организации…';
+      try {
+        const lang = String(options.language || document.documentElement.lang || 'ru').slice(0, 2);
+        const photonUrl = new URL('https://photon.komoot.io/api/');
+        photonUrl.search = new URLSearchParams({ q: query, limit: '8', lang }).toString();
+        const getJson = async url => {
+          const controller = new AbortController();
+          const timer = global.setTimeout(() => controller.abort(), 8000);
+          try {
+            const response = await fetch(url, { headers: { Accept: 'application/json' }, signal: controller.signal, credentials: 'omit' });
+            if (!response.ok) return null;
+            return await response.json();
+          } finally { global.clearTimeout(timer); }
+        };
+        let places = [];
+        try {
+          const data = await getJson(photonUrl.toString());
+          places = (data && Array.isArray(data.features) ? data.features : []).map(feature => {
+            const coords = feature && feature.geometry && feature.geometry.coordinates;
+            const props = feature && feature.properties || {};
+            if (!Array.isArray(coords) || coords.length < 2 || !Number.isFinite(Number(coords[0])) || !Number.isFinite(Number(coords[1]))) return null;
+            return { name: props.name || props.street || props.city || 'Место', address: [props.street, props.housenumber, props.city, props.state, props.country].filter(Boolean).join(', '), lat: Number(coords[1]), lng: Number(coords[0]) };
+          }).filter(Boolean);
+        } catch (_) {}
+        if (!places.length) {
+          const fallback = new URL('https://nominatim.openstreetmap.org/search');
+          fallback.search = new URLSearchParams({ q: query, format: 'jsonv2', addressdetails: '1', limit: '8', 'accept-language': lang }).toString();
+          try {
+            const data = await getJson(fallback.toString());
+            places = (Array.isArray(data) ? data : []).map(item => ({
+              name: item.name || item.display_name || 'Место', address: item.display_name || '',
+              lat: Number(item.lat), lng: Number(item.lon)
+            })).filter(p => Number.isFinite(p.lat) && Number.isFinite(p.lng) && Math.abs(p.lat) <= 90 && Math.abs(p.lng) <= 180);
+          } catch (_) {}
+        }
+        searchResults.innerHTML = '';
+        if (!places.length) {
+          searchResults.textContent = 'Ничего не найдено. Попробуй другой запрос или выбери точку на карте.';
+          return;
+        }
+        places.forEach(place => {
+          const button = document.createElement('button');
+          button.type = 'button';
+          button.className = 'pognali-map-search-result';
+          const title = document.createElement('strong');
+          title.textContent = place.name;
+          const address = document.createElement('span');
+          address.textContent = place.address || place.name;
+          button.append(title, address);
+          button.addEventListener('click', () => {
+            map.setView([place.lat, place.lng], 16);
+            if (searchMarker) searchMarker.remove();
+            searchMarker = global.L.marker([place.lat, place.lng]).addTo(map).bindPopup(place.name).openPopup();
+            searchResults.hidden = true;
+            count.textContent = 'Выбрано место: ' + (place.address || place.name);
+            if (typeof options.onLocationSelect === 'function') options.onLocationSelect({ lat: place.lat, lng: place.lng, address: place.address, name: place.name });
+          });
+          searchResults.appendChild(button);
+        });
+      } finally {
+        submit.disabled = false;
+        submit.textContent = 'Найти';
+      }
+    });
+
     container.querySelector('.pognali-map-locate').addEventListener('click', () => {
       if (!global.navigator.geolocation) return;
       global.navigator.geolocation.getCurrentPosition(position => {
