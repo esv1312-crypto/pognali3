@@ -38,7 +38,7 @@
       '<button type="button" class="pognali-map-locate" aria-label="Моё местоположение" title="Моё местоположение">⌖</button></div>' +
       '<div class="pognali-map-count"></div>' +
       '<div class="pognali-map-sheet" hidden></div>' +
-      '<div class="pognali-map-attribution">© OpenStreetMap contributors</div>';
+      '<div class="pognali-map-attribution"></div>';
 
     const canvas = container.querySelector('.pognali-map-canvas');
     const count = container.querySelector('.pognali-map-count');
@@ -48,9 +48,14 @@
     global.L.control.zoom({ position: 'bottomright' }).addTo(map);
     // The public OSM tile endpoint is suitable for development/preview only.
     // Configure a contracted tile provider before production scale-up.
-    global.L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-      maxZoom: 19, subdomains: 'abc', attribution: ''
+    const tileUrl = options.tileLayerUrl || 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png';
+    const tileAttribution = options.tileAttribution || '© OpenStreetMap contributors';
+    global.L.tileLayer(tileUrl, {
+      maxZoom: Number(options.maxZoom) || 19,
+      subdomains: options.tileSubdomains || 'abc', attribution: tileAttribution
     }).addTo(map);
+    const attributionNode = container.querySelector('.pognali-map-attribution');
+    attributionNode.textContent = tileAttribution.replace(/<[^>]*>/g, '');
 
     const markerLayer = global.L.featureGroup().addTo(map);
     let activeCategory = 'Все';
