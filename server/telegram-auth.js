@@ -8,8 +8,9 @@ function verifyTelegramInitData(initData, botToken, nowSeconds = Math.floor(Date
   const receivedHash = params.get('hash');
   if (!receivedHash || !/^[a-f0-9]{64}$/i.test(receivedHash)) return { ok: false, error: 'Missing or invalid hash' };
   params.delete('hash');
-  params.delete('signature');
 
+  // Bot-token HMAC validation includes every initData field except "hash".
+  // The "signature" field is excluded only for Telegram's separate Ed25519 validation flow.
   const dataCheckString = [...params.entries()]
     .sort(([a], [b]) => a.localeCompare(b))
     .map(([key, value]) => key + '=' + value)
