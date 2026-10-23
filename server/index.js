@@ -59,7 +59,9 @@ app.post('/telegram/webhook', webhookRateLimit, async (req, res) => {
   if (text.toLowerCase().startsWith('/start') || text.toLowerCase().startsWith('/startapp')) {
     replyText = isEventStart
       ? 'Тебя пригласили на событие 👇 Открой карточку и присоединяйся!'
-      : 'Не листай чужую жизнь — давай строить свою. Найди событие или создай своё 👇';  } else if (message.location) {
+      : 'Не листай чужую жизнь — давай строить свою. Найди событие или создай своё 👇';  } else if (text.trim().toLowerCase() === '/id') {
+    replyText = 'Твой Telegram ID: ' + String(message.from?.id || message.chat?.id || 'не удалось определить') + '\\nСкопируй этот номер для настройки уведомлений администратора.';
+  } else if (message.location) {
     replyText = 'Спасибо! Открой Погнали — там можно выбрать события рядом и поставить точку на карте.';
   }
   try {
