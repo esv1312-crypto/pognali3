@@ -611,10 +611,17 @@ app.get('/share/:payload', async (req, res, next) => {
   const origin = `${req.protocol}://${req.get('host')}`;
   const cover = origin + '/pognali-share-cover.png?v=share-square-20261023';
   const botUsername = String(process.env.TELEGRAM_BOT_USERNAME || 'Pognali_pognali_bot').replace(/^@/, '');
+  // The inviter is carried in a short, URL-safe start payload so the bot can show who sent the invite.
+  const inviterFirstName = String(req.query.inviter || '').trim().split(/\\s+/)[0].replace(/[\\u0000-\\u001f\\u007f<>]/g, '');
+  let inviterPayload = '';
+  for (let length = Array.from(inviterFirstName).length; length > 0; length--) {
+    const encoded = Buffer.from(Array.from(inviterFirstName).slice(0, length).join('')).toString('base64url');
+    if (('event_' + eventId + '_i_' + encoded).length <= 64) { inviterPayload = '_i_' + encoded; break; }
+  }
   // Keep the reliable bot-chat fallback until the Main Mini App is explicitly configured in BotFather.
   // Once configured, set TELEGRAM_MAIN_MINI_APP_ENABLED=true in Render to open the exact event directly.
   const directMiniAppEnabled = String(process.env.TELEGRAM_MAIN_MINI_APP_ENABLED || '').toLowerCase() === 'true';
-  const deepLinkParam = 'event_' + eventId;
+  const deepLinkParam = 'event_' + eventId + inviterPayload;
   const botUrl = 'https://t.me/' + encodeURIComponent(botUsername) + (directMiniAppEnabled
     ? '?startapp=' + encodeURIComponent(deepLinkParam)
     : '?start=' + encodeURIComponent(deepLinkParam));
