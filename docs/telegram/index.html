@@ -876,7 +876,7 @@ map.on('contextmenu',ev=>{if(ev.originalEvent)ev.originalEvent.preventDefault();
 mapEl.addEventListener('touchstart',ev=>{if(!ev.touches||ev.touches.length!==1)return;const t=ev.touches[0];holdStart={x:t.clientX,y:t.clientY};const rect=mapEl.getBoundingClientRect(),point=map.unproject([t.clientX-rect.left,t.clientY-rect.top]);holdTimer=setTimeout(()=>askCreateAtMapPoint(point.lat,point.lng),650)},{passive:true});
 mapEl.addEventListener('touchmove',ev=>{if(!holdStart||!ev.touches||!ev.touches.length)return;const t=ev.touches[0];if(Math.hypot(t.clientX-holdStart.x,t.clientY-holdStart.y)>12)clearHold()},{passive:true});mapEl.addEventListener('touchend',clearHold,{passive:true});mapEl.addEventListener('touchcancel',clearHold,{passive:true});
 const updateMapState=()=>{const c=map.getCenter();lastMapView={lat:c.lat,lng:c.lng,zoom:map.getZoom()};mapViews[selectedFilter]=lastMapView;try{localStorage.setItem(KEY+'_map_views',JSON.stringify(mapViews))}catch(e){}const el=document.getElementById('map');if(el)el.classList.toggle('map-zoomed',map.getZoom()>=13.5);const scope=document.getElementById('mapScope');if(scope){scope.textContent=mapScopeLabel();scope.classList.toggle('world',!mapRadiusKm(map.getZoom())&&!!userGeo)}};
-map.on('moveend',updateMapState);map.on('load',()=>{if(!map)return;updateMapState();if(selectedFilter==='Мои'){const points=es.map(e=>[Number(e.lng),Number(e.lat)]).filter(([lng,lat])=>Number.isFinite(lat)&&Number.isFinite(lng));if(points.length===1){lastMapView={lat:points[0][1],lng:points[0][0],zoom:13};mapViews[selectedFilter]=lastMapView;map.jumpTo({center:points[0],zoom:13})}else if(points.length>1)map.fitBounds(points,{padding:{top:48,bottom:48,left:48,right:48},maxZoom:13})}if(!userGeo&&selectedFilter!=='Мои')requestUserLocation();else if(userGeo&&selectedFilter!=='Мои')drawUserLocation(userGeo.lat,userGeo.lng,false);refreshMainMapLayout(!!selectedDate)});
+map.on('moveend',updateMapState);map.on('load',()=>{if(!map)return;updateMapState();const points=es.map(e=>[Number(e.lng),Number(e.lat)]).filter(([lng,lat])=>Number.isFinite(lat)&&Number.isFinite(lng)&&Math.abs(lat)<=90&&Math.abs(lng)<=180);if(selectedFilter==='Мои'){if(points.length===1){lastMapView={lat:points[0][1],lng:points[0][0],zoom:13};mapViews[selectedFilter]=lastMapView;map.jumpTo({center:points[0],zoom:13})}else if(points.length>1)map.fitBounds(points,{padding:{top:48,bottom:48,left:48,right:48},maxZoom:13})}else if(API_MODE&&points.length&&!selectedCityPoint&&!userGeo&&(!savedView||savedView.zoom<5)){/* Первый запуск: не оставляем события Симферополя за кадром на мировом масштабе. */if(points.length===1)map.jumpTo({center:points[0],zoom:13});else map.fitBounds(points,{padding:{top:72,bottom:90,left:36,right:36},maxZoom:12})}if(!userGeo&&selectedFilter!=='Мои')requestUserLocation();else if(userGeo&&selectedFilter!=='Мои')drawUserLocation(userGeo.lat,userGeo.lng,false);refreshMainMapLayout(!!selectedDate)});
 markers=[];const occupied=new Map();es.forEach(e=>{let lat=Number(e.lat),lng=Number(e.lng);if(!Number.isFinite(lat)||!Number.isFinite(lng))return;const key=lat.toFixed(6)+','+lng.toFixed(6),n=occupied.get(key)||0;occupied.set(key,n+1);if(n>0){const angle=n*2.399963,radius=0.00035*Math.ceil((n+1)/2);lat+=Math.sin(angle)*radius;lng+=Math.cos(angle)*radius}
 const el=document.createElement('div');el.className='event-marker-wrap'+(eventState(e)==='STARTED'?' live':'');el.innerHTML=`<div class="event-pin" title="${esc(e.title)}"><span>${eventIcon(e.cat,e.title,e.emoji)}</span></div>${eventLabel(e.title,e.cat)?`<div class="event-label">${esc(eventLabel(e.title,e.cat))}</div>`:''}`;
 const popup=document.createElement('div');popup.className='eventmini';popup.innerHTML=`<h3>${esc(e.title)}</h3><div>${esc(fmt(e))}</div><div>${esc(displayPlace(e))}</div><div>${e.people.length}/${e.limit} ${T('Participants').toLowerCase()}</div><button type="button">${T('Open event')}</button>`;popup.querySelector('button').addEventListener('click',()=>openEvent(e.id));markers.push(new maplibregl.Marker({element:el,anchor:'center'}).setLngLat([lng,lat]).setPopup(new maplibregl.Popup({offset:24,maxWidth:'280px'}).setDOMContent(popup)).addTo(map))
@@ -1137,36 +1137,55 @@ let mainMapPopup=null;
 let pickerMap=null,pickerMarker=null,pickerLookupToken=0;
 function eventIcon(cat,title='',custom=''){
   if(custom) return custom;
-  const t=String(title||'').toLowerCase();
-  // Сначала определяем конкретное занятие по названию события,
-  // и только если не нашли — используем общую иконку категории.
+  const t=String(title||'').toLocaleLowerCase('ru');
+  // Сначала — смысл события: разные планы получают собственные узнаваемые маркеры.
   const specific=[
+    [/сам собирает движ|собирает движ/,'🪄'],
+    [/ночн|ночь|поздн/,'🌙'],
+    [/импульс|спонтан|кто свободен/,'⚡'],
     [/футбол|футбольн|5×5|5x5/,'⚽'],
-    [/забег|бег|бежим|пробежк|run/,'🏃'],
-    [/баскетбол|баскет/,'🏀'],
-    [/волейбол|волейб/,'🏐'],
-    [/теннис/,'🎾'],
-    [/велосипед|велопрогул|вело/,'🚴'],
-    [/лыж|сноуборд/,'⛷️'],
-    [/йог|растяжк/,'🧘'],
-    [/свидан|романт|влюбл|любов|пара|дейт/,'💑'],
-    [/кофе|кофейн|капучино|латте/,'☕'],
-    [/бар|пив|паб|выпив/,'🍻'],
-    [/ресторан|ужин|обед|еда|поесть/,'🍽️'],
-    [/кино|фильм|cinema/,'🎬'],
-    [/концерт|музык|музыка|джаз|рок/,'🎵'],
-    [/танц|дискотек/,'💃'],
-    [/вечерин|party/,'🥳'],
-    [/поход|треккинг|горы|пеший маршрут/,'🥾'],
-    [/путешеств|поездк|экскурс/,'🧳'],
-    [/фото|фотосесс|съёмк/,'📸'],
-    [/настолк|игр/,'🎲'],
-    [/учёб|учеб|лекц|курс|английск|математ/,'📚'],
-    [/прогул|парк|набережн|гулять/,'🚶'],
-    [/знаком|общен|поболт|встрет/,'👋']
+    [/пробежк|забег|лёгкая пробежка|бегом/,'🏃‍♂️'],
+    [/зарядк|разминк/,'🤸'],
+    [/тренировк|воркаут/,'🏋️'],
+    [/самооборон|единоборств|боев/,'🥋'],
+    [/велосипед|велопрогул|велозаезд/,'🚴‍♂️'],
+    [/шахмат/,'♟️'],
+    [/мафия/,'🕵️'],
+    [/квиз|викторин|вопросов/,'🧠'],
+    [/стратеги/,'♟️'],
+    [/настольн/,'🎲'],
+    [/кофе|капучино|латте/,'☕'],
+    [/завтрак/,'🥐'],
+    [/ужин|обед|поесть/,'🍜'],
+    [/пикник/,'🧺'],
+    [/чай|историями/,'🫖'],
+    [/английск|языков|разговорный клуб/,'🗣️'],
+    [/обмен навыками|научи/,'🛠️'],
+    [/книг|книголюб/,'📚'],
+    [/кино|фильм/,'🍿'],
+    [/музык|трек|концерт/,'🎧'],
+    [/рисуем|зарисовк|творческ/,'🖌️'],
+    [/фото|фотопрогул|съёмк/,'📷'],
+    [/закат/,'🌇'],
+    [/ботаническ|сад/,'🌿'],
+    [/салгир|набережн|реки/,'🌊'],
+    [/старому центру|центр.*пешком|город пешком/,'🏛️'],
+    [/тропа|поход|горы|маршрут/,'🥾'],
+    [/мраморное|выезд|доброе/,'🚙'],
+    [/идей|обсуждение|разговор/,'💡'],
+    [/кофе и знаком|знаком|новые люди/,'👋'],
+    [/прогул|парк|гулять/,'🚶‍♂️']
   ];
   for(const [re,icon] of specific) if(re.test(t)) return icon;
-  return ({'Спорт':'🏅','Прогулка':'🚶','Кино':'🎬','Кафе/бар':'🍻','Кафе/еда':'☕','Путешествие':'🧳','Вечеринка':'🥳','Учёба':'📚','Общение':'👋','Игры':'🎮','Настольные игры':'🎲','Мафия':'🕵️','Музыка/концерт':'🎵','Природа/поход':'🥾','Творчество':'🎨','Фото':'📸','Авто':'🚗','Шопинг':'🛍️','Знакомства':'💬','Другое':'✨'})[cat]||'📍';
+  const categoryIcons={
+    sport:'🏅',walk:'🚶‍♂️',outdoor:'🏞️',food:'🥗',social:'🫶',games:'🎮',
+    culture:'🎭',learning:'💡',spontaneous:'⚡',
+    'Спорт':'🏅','Прогулка':'🚶‍♂️','Кино':'🎬','Кафе/бар':'🍻','Кафе/еда':'🥗',
+    'Путешествие':'🧳','Вечеринка':'🎉','Учёба':'📚','Общение':'🫶','Игры':'🎮',
+    'Настольные игры':'🎲','Мафия':'🕵️','Музыка/концерт':'🎧','Природа/поход':'🥾',
+    'Творчество':'🖌️','Фото':'📷','Авто':'🚙','Шопинг':'🛍️','Знакомства':'👋','Другое':'✨'
+  };
+  return categoryIcons[cat]||'📍';
 }
 function initPickerMap(lat,lng,hasPoint){destroyPickerMap();pickerMap=new maplibregl.Map({container:'pickerMap',style:'https://tiles.openfreemap.org/styles/bright',center:[lng,lat],zoom:14,attributionControl:true,renderWorldCopies:true});pickerMap.addControl(new maplibregl.NavigationControl({showCompass:false}),'top-right');pickerMap.on('click',ev=>setPickerPoint(ev.lngLat.lat,ev.lngLat.lng,true));pickerMap.on('load',()=>{if(hasPoint)setPickerPoint(lat,lng,false);pickerMap.resize()});setTimeout(()=>{if(pickerMap)pickerMap.resize()},150);}
 async function reverseGeocode(lat,lng){
@@ -1419,7 +1438,7 @@ async function apiRequest(path,options={}){const tg=window.Telegram?.WebApp;cons
 async function updateUnreadBadge(){if(!API_MODE)return;const badge=document.getElementById('messageUnreadBadge');if(!badge)return;try{const result=await apiRequest('/messages/unread-count');const count=Math.max(0,Number(result.unreadCount)||0);badge.textContent=count>99?'99+':String(count);badge.classList.toggle('hidden',count===0);badge.setAttribute('aria-label',count+' непрочитанных сообщений')}catch(error){console.warn('Unread message count unavailable:',error.message)}}
 async function markMessagesRead(type,id){if(!API_MODE)return;try{await apiRequest('/messages/read',{method:'POST',body:JSON.stringify({type,conversation_id:String(id)})});await updateUnreadBadge()}catch(error){console.warn('Could not mark messages as read:',error.message)}finally{void updateUnreadBadge()}}
 function localUserId(remoteId){const tgId=String(window.Telegram?.WebApp?.initDataUnsafe?.user?.id||'');if(String(remoteId)===tgId)return 2;const id=1000000+(Number(remoteId)%900000000);return id===2?3:id}
-function mapApiEvent(x){const ownerIsMe=localUserId(x.creator_id)===2;let owner=localUserId(x.creator_id);const start=new Date(x.starts_at);const people=[owner];if(x.joined_by_me&&!ownerIsMe)people.push(2);const count=Math.max(1,Number(x.participants_count)||1);for(let i=0;people.length<count&&i<100;i++){let pid=500000000+i;if(pid===2||pid===owner||people.includes(pid))continue;people.push(pid)}return{id:Number(x.id),title:x.title,cat:x.category||'Другое',emoji:'',date:[start.getFullYear(),String(start.getMonth()+1).padStart(2,'0'),String(start.getDate()).padStart(2,'0')].join('-'),time:String(start.getHours()).padStart(2,'0')+':'+String(start.getMinutes()).padStart(2,'0'),place:x.address||x.city,country:'',city:x.city||'',lat:x.latitude!=null&&Number.isFinite(Number(x.latitude))?Number(x.latitude):null,lng:x.longitude!=null&&Number.isFinite(Number(x.longitude))?Number(x.longitude):null,limit:Number(x.capacity)||1000,desc:x.description||'',people,owner,status:x.status==='cancelled'||x.status==='completed'?'FINISHED':'ACTIVE',apiJoined:!!x.joined_by_me}}
+function mapApiEvent(x){const ownerIsMe=localUserId(x.creator_id)===2;let owner=localUserId(x.creator_id);const start=new Date(x.starts_at);const people=[owner];if(x.joined_by_me&&!ownerIsMe)people.push(2);const count=Math.max(1,Number(x.participants_count)||1);for(let i=0;people.length<count&&i<100;i++){let pid=500000000+i;if(pid===2||pid===owner||people.includes(pid))continue;people.push(pid)}return{id:Number(x.id),title:x.title,cat:x.category||'Другое',emoji:eventIcon(x.category||'Другое',x.title||''),date:[start.getFullYear(),String(start.getMonth()+1).padStart(2,'0'),String(start.getDate()).padStart(2,'0')].join('-'),time:String(start.getHours()).padStart(2,'0')+':'+String(start.getMinutes()).padStart(2,'0'),place:x.address||x.city,country:'',city:x.city||'',lat:x.latitude!=null&&Number.isFinite(Number(x.latitude))?Number(x.latitude):null,lng:x.longitude!=null&&Number.isFinite(Number(x.longitude))?Number(x.longitude):null,limit:Number(x.capacity)||1000,desc:x.description||'',people,owner,status:x.status==='cancelled'||x.status==='completed'?'FINISHED':'ACTIVE',apiJoined:!!x.joined_by_me}}
 async function refreshApiData(){if(!API_MODE)return;const [me,events]=await Promise.all([apiRequest('/me'),apiRequest('/events')]);const u=me.user||{};db.profile={...db.profile,name:u.display_name||[u.first_name,u.last_name].filter(Boolean).join(' ')||'Участник',birth:'',city:u.city||'',bio:u.bio||'',photo:u.photo_url||'',isAdmin:!!u.is_admin};db.users[2]={name:db.profile.name,city:db.profile.city,bio:db.profile.bio,photo:db.profile.photo};db.events=(events.events||[]).map(mapApiEvent);save();if(currentTab==='events')renderEvents();else if(currentTab==='mine')renderMine();else if(currentTab==='messages')renderMessagesTab();else if(currentTab==='profile')renderProfile()}
 function initTelegramMiniApp(){
   const tg=window.Telegram?.WebApp;
