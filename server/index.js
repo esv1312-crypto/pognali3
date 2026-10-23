@@ -2,11 +2,17 @@ const express = require('express');
 const fs = require('node:fs/promises');
 const path = require('node:path');
 const { Pool } = require('pg');
+const helmet = require('helmet');
+const { rateLimit } = require('express-rate-limit');
 const { verifyTelegramInitData } = require('./telegram-auth');
 
 const app = express();
 app.disable('x-powered-by');
+// Keep security headers without a restrictive CSP: the Mini App loads Telegram and MapLibre assets.
+app.use(helmet({ contentSecurityPolicy: false }));
 app.use(express.json({ limit: '64kb' }));
+const apiRateLimit = rateLimit({ windowMs: 15 * 60 * 1000, limit: 300, standardHeaders: 'draft-8', legacyHeaders: false, skip: req => req.path === '/health' });
+const webhookRateLimit = rateLimit({ windowMs: 60 * 1000, limit: 60, standardHeaders: 'draft-8', legacyHeaders: false });
 
 const pool = process.env.DATABASE_URL ? new Pool({
   connectionString: process.env.DATABASE_URL,
@@ -16,7 +22,7 @@ const pool = process.env.DATABASE_URL ? new Pool({
   connectionTimeoutMillis: 8000
 }) : null;
 
-app.post('/telegram/webhook', async (req, res) => {
+app.post('/telegram/webhook', webhookRateLimit, async (req, res) => {
   const expectedSecret = process.env.TELEGRAM_WEBHOOK_SECRET;
   if (!expectedSecret || req.get('x-telegram-bot-api-secret-token') !== expectedSecret) {
     return res.status(401).json({ error: 'Invalid webhook secret' });
@@ -71,6 +77,19 @@ function requireDatabase(_req, res, next) {
   next();
 }
 
+async function sendTelegramMessage(chatId, text, replyMarkup) {
+  const token = process.env.TELEGRAM_BOT_TOKEN;
+  if (!token || !chatId) return false;
+  try {
+    const response = await fetch('https://api.telegram.org/bot' + token + '/sendMessage', {
+      method: 'POST', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ chat_id: String(chatId), text, ...(replyMarkup ? { reply_markup: replyMarkup } : {}) })
+    });
+    if (!response.ok) { console.warn('Telegram notification was not delivered:', response.status); return false; }
+    return true;
+  } catch (error) { console.warn('Telegram notification failed:', error.message); return false; }
+}
+
 async function requireTelegram(req, res, next) {
   const token = process.env.TELEGRAM_BOT_TOKEN;
   if (!token) return res.status(503).json({ error: 'Telegram bot token is not configured on the server' });
@@ -99,7 +118,7 @@ async function requireTelegram(req, res, next) {
   }
 }
 
-app.use('/api', (req, res, next) => {
+app.use('/api', apiRateLimit, (req, res, next) => {
   if (req.path === '/health') return next();
   return requireDatabase(req, res, () => requireTelegram(req, res, next));
 });
@@ -273,6 +292,10 @@ app.post('/api/events/:id/messages', async (req, res) => {
     [req.params.id, req.telegramUser.id, body]
   );
   res.status(201).json({ message: result.rows[0] });
+  const recipients = await pool.query("SELECT ep.user_id FROM event_participants ep WHERE ep.event_id=$1 AND ep.status='joined' AND ep.user_id<>$2", [req.params.id, req.telegramUser.id]);
+  const eventTitle = await pool.query('SELECT title FROM events WHERE id=$1', [req.params.id]);
+  const title = eventTitle.rows[0]?.title || 'событие';
+  for (const recipient of recipients.rows) void sendTelegramMessage(recipient.user_id, '💬 Новое сообщение в чате события «' + title + '». Открой «Погнали», чтобы ответить.');
 });
 
 
@@ -373,8 +396,6 @@ app.post('/api/events/:id/join', async (req, res) => {
       await client.query('ROLLBACK'); return res.status(404).json({ error: 'Event not found' });
     }
     const source = ['share','organic'].includes(req.body?.source) ? req.body.source : 'organic';
-    const sourceColumn = await client.query("SELECT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema='public' AND table_name='event_participants' AND column_name='join_source') AS available");
-    const hasSourceColumn = sourceColumn.rows[0]?.available === true;
     const existing = await client.query(
       `SELECT status FROM event_participants WHERE event_id=$1 AND user_id=$2`,
       [req.params.id, req.telegramUser.id]
@@ -385,21 +406,17 @@ app.post('/api/events/:id/join', async (req, res) => {
         await client.query('ROLLBACK'); return res.status(409).json({ error: 'Event is full' });
       }
     }
-    if (hasSourceColumn) {
-      await client.query(
-        `INSERT INTO event_participants (event_id,user_id,status,join_source) VALUES ($1,$2,'joined',$3)
-         ON CONFLICT (event_id,user_id) DO UPDATE SET status='joined', joined_at=NOW(), join_source=EXCLUDED.join_source`,
-        [req.params.id, req.telegramUser.id, source]
-      );
-    } else {
-      await client.query(
-        `INSERT INTO event_participants (event_id,user_id,status) VALUES ($1,$2,'joined')
-         ON CONFLICT (event_id,user_id) DO UPDATE SET status='joined', joined_at=NOW()`,
-        [req.params.id, req.telegramUser.id]
-      );
-    }
+    await client.query(
+      `INSERT INTO event_participants (event_id,user_id,status,join_source) VALUES ($1,$2,'joined',$3)
+       ON CONFLICT (event_id,user_id) DO UPDATE SET status='joined', joined_at=NOW(), join_source=EXCLUDED.join_source`,
+      [req.params.id, req.telegramUser.id, source]
+    );
+    const eventInfo = await client.query('SELECT title, creator_id FROM events WHERE id=$1', [req.params.id]);
     await client.query('COMMIT');
     res.json({ joined: true, eventId: String(req.params.id) });
+    if (eventInfo.rowCount && String(eventInfo.rows[0].creator_id) !== String(req.telegramUser.id)) {
+      void sendTelegramMessage(eventInfo.rows[0].creator_id, '👋 На событие «' + eventInfo.rows[0].title + '» записался новый участник. Открой «Погнали», чтобы посмотреть участников.');
+    }
   } catch (error) {
     await client.query('ROLLBACK'); throw error;
   } finally { client.release(); }
