@@ -23,7 +23,7 @@ if (!['disable', 'require', 'verify-full'].includes(databaseSslMode)) throw new 
 const databaseSsl = databaseSslMode === 'disable' ? false : { rejectUnauthorized: databaseSslMode === 'verify-full' };
 // pg-connection-string URL sslmode can override the explicit TLS object; strip it so DATABASE_SSL is authoritative.
 const databaseConnectionString = process.env.DATABASE_URL
-  ? process.env.DATABASE_URL.replace(/([?&])sslmode=[^&]*/i, '').replace(/[?&]$/, '')
+  ? (() => { const url = new URL(process.env.DATABASE_URL); url.searchParams.delete('sslmode'); return url.toString(); })()
   : '';
 const pool = process.env.DATABASE_URL ? new Pool({
   connectionString: databaseConnectionString,
