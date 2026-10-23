@@ -1352,7 +1352,7 @@ function esc(s){return String(s??'').replace(/[&<>'"]/g,c=>({'&':'&amp;','<':'&l
 
 async function apiRequest(path,options={}){const tg=window.Telegram?.WebApp;const headers={'Content-Type':'application/json','X-Telegram-Init-Data':tg?.initData||''};const response=await fetch('/api'+path,{...options,headers:{...headers,...(options.headers||{})}});const payload=await response.json().catch(()=>({}));if(!response.ok)throw new Error(payload.error||('Ошибка сервера: '+response.status));return payload}
 async function updateUnreadBadge(){if(!API_MODE)return;const badge=document.getElementById('messageUnreadBadge');if(!badge)return;try{const result=await apiRequest('/messages/unread-count');const count=Math.max(0,Number(result.unreadCount)||0);badge.textContent=count>99?'99+':String(count);badge.classList.toggle('hidden',count===0);badge.setAttribute('aria-label',count+' непрочитанных сообщений')}catch(error){console.warn('Unread message count unavailable:',error.message)}}
-async function markMessagesRead(type,id){if(!API_MODE)return;try{await apiRequest('/messages/read',{method:'POST',body:JSON.stringify({type,conversation_id:String(id)})});await updateUnreadBadge()}catch(error){console.warn('Could not mark messages as read:',error.message)}}
+async function markMessagesRead(type,id){if(!API_MODE)return;try{await apiRequest('/messages/read',{method:'POST',body:JSON.stringify({type,conversation_id:String(id)})});await updateUnreadBadge()}catch(error){console.warn('Could not mark messages as read:',error.message)}finally{void updateUnreadBadge()}}
 function localUserId(remoteId){const tgId=String(window.Telegram?.WebApp?.initDataUnsafe?.user?.id||'');if(String(remoteId)===tgId)return 2;const id=1000000+(Number(remoteId)%900000000);return id===2?3:id}
 function mapApiEvent(x){const ownerIsMe=localUserId(x.creator_id)===2;let owner=localUserId(x.creator_id);const start=new Date(x.starts_at);const people=[owner];if(x.joined_by_me&&!ownerIsMe)people.push(2);const count=Math.max(1,Number(x.participants_count)||1);for(let i=0;people.length<count&&i<100;i++){let pid=500000000+i;if(pid===2||pid===owner||people.includes(pid))continue;people.push(pid)}return{id:Number(x.id),title:x.title,cat:x.category||'Другое',emoji:'',date:[start.getFullYear(),String(start.getMonth()+1).padStart(2,'0'),String(start.getDate()).padStart(2,'0')].join('-'),time:String(start.getHours()).padStart(2,'0')+':'+String(start.getMinutes()).padStart(2,'0'),place:x.address||x.city,country:'',city:x.city||'',lat:x.latitude!=null&&Number.isFinite(Number(x.latitude))?Number(x.latitude):null,lng:x.longitude!=null&&Number.isFinite(Number(x.longitude))?Number(x.longitude):null,limit:Number(x.capacity)||1000,desc:x.description||'',people,owner,status:x.status==='cancelled'||x.status==='completed'?'FINISHED':'ACTIVE',apiJoined:!!x.joined_by_me}}
 async function refreshApiData(){if(!API_MODE)return;const [me,events]=await Promise.all([apiRequest('/me'),apiRequest('/events')]);const u=me.user||{};db.profile={...db.profile,name:u.display_name||[u.first_name,u.last_name].filter(Boolean).join(' ')||'Участник',birth:'',city:u.city||'',bio:u.bio||'',photo:u.photo_url||''};db.users[2]={name:db.profile.name,city:db.profile.city,bio:db.profile.bio,photo:db.profile.photo};db.events=(events.events||[]).map(mapApiEvent);save();if(currentTab==='events')renderEvents();else if(currentTab==='mine')renderMine();else if(currentTab==='messages')renderMessagesTab();else if(currentTab==='profile')renderProfile()}
@@ -1380,7 +1380,13 @@ function initTelegramMiniApp(){
 }
 
 initTelegramMiniApp();
-if(API_MODE){updateUnreadBadge();setInterval(updateUnreadBadge,15000)}
+if(API_MODE){
+  updateUnreadBadge();
+  setInterval(updateUnreadBadge,15000);
+  window.addEventListener('focus',()=>void updateUnreadBadge());
+  window.addEventListener('pageshow',()=>void updateUnreadBadge());
+  document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')void updateUnreadBadge()});
+}
 renderEvents();
 updateLangLabel();
 setTimeout(localizeUI,0);
