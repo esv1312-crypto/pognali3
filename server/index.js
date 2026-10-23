@@ -62,10 +62,10 @@ app.post('/telegram/webhook', webhookRateLimit, async (req, res) => {
   const isEventStart = startPayload.startsWith('event_') && /^\d+$/.test(startPayload.slice(6));
   const appUrl = new URL(miniAppUrl);
   if (isEventStart) { appUrl.searchParams.set('startapp', startPayload); appUrl.searchParams.set('shared_event', startPayload); }
-  let replyMarkup = { inline_keyboard: [[{ text: '🚀 Открыть Погнали', web_app: { url: appUrl.toString() } }]] };
+  let replyMarkup = { inline_keyboard: [[{ text: 'Посмотреть событие', web_app: { url: appUrl.toString() } }]] };
   if (text.toLowerCase().startsWith('/start') || text.toLowerCase().startsWith('/startapp')) {
     replyText = isEventStart
-      ? 'Тебя пригласили на событие 👇 Открой карточку и присоединяйся!'
+      ? 'Тебя пригласили на событие 👇 Нажми кнопку «Посмотреть событие», чтобы открыть карточку.'
       : 'Не листай чужую жизнь — давай строить свою. Найди событие или создай своё 👇';  } else if (text.trim().toLowerCase() === '/id') {
     replyText = 'Твой Telegram ID: ' + String(message.from?.id || message.chat?.id || 'не удалось определить') + '\\nСкопируй этот номер для настройки уведомлений администратора.';
   } else if (message.location) {
@@ -639,7 +639,7 @@ app.get('/share/:payload', async (req, res, next) => {
 <meta property="og:image" content="${cover}"><meta property="og:image:secure_url" content="${cover}"><meta property="og:image:type" content="image/png"><meta property="og:image:width" content="1200"><meta property="og:image:height" content="630">
 <meta name="twitter:card" content="summary_large_image"><meta name="twitter:title" content="${safeTitle}"><meta name="twitter:description" content="${safeDescription}"><meta name="twitter:image" content="${cover}">
 <meta http-equiv="refresh" content="1;url=${safeBotUrl}">
-<style>body{margin:0;min-height:100vh;display:grid;place-items:center;background:#08152c;color:#fff;font:16px system-ui,sans-serif;text-align:center}.wrap{max-width:420px;padding:28px}.brand{font-size:32px;font-weight:850}.sub{color:#c5e7ff;line-height:1.5;margin:14px 0 24px}a{display:inline-block;background:#60bfff;color:#07172e;text-decoration:none;font-weight:800;padding:14px 22px;border-radius:15px}</style></head><body><main class="wrap"><div class="brand">🚀 ${safeTitle}</div><p class="sub">${safeDescription}</p><a href="${safeBotUrl}">Открыть событие</a></main><script>setTimeout(()=>{window.location.href=${JSON.stringify(botUrl)}},800)</script></body></html>`);
+<style>body{margin:0;min-height:100vh;display:grid;place-items:center;background:#08152c;color:#fff;font:16px system-ui,sans-serif;text-align:center}.wrap{max-width:420px;padding:28px}.brand{font-size:32px;font-weight:850}.sub{color:#c5e7ff;line-height:1.5;margin:14px 0 24px}a{display:inline-block;background:#60bfff;color:#07172e;text-decoration:none;font-weight:800;padding:14px 22px;border-radius:15px}</style></head><body><main class="wrap"><div class="brand">🚀 ${safeTitle}</div><p class="sub">${safeDescription}</p><a href="${safeBotUrl}">Посмотреть событие</a></main><script>setTimeout(()=>{window.location.href=${JSON.stringify(botUrl)}},800)</script></body></html>`);
 });
 app.use(express.static(webRoot));
 app.get('/{*splat}', (req, res, next) => {
