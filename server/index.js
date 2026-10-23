@@ -547,6 +547,30 @@ app.use((err, _req, res, _next) => {
 });
 
 const webRoot = path.resolve(process.env.WEB_ROOT || 'docs/telegram');
+
+// Public share landing page: Telegram reads Open Graph metadata and cover image,
+// while people who tap the link are forwarded to the matching event in the bot.
+app.get('/share/:payload', (req, res, next) => {
+  const match = String(req.params.payload || '').match(/^event_(\\d+)$/);
+  if (!match) return next();
+  const eventId = match[1];
+  const origin = `${req.protocol}://${req.get('host')}`;
+  const cover = origin + '/pognali-share-cover.svg';
+  const botUsername = String(process.env.TELEGRAM_BOT_USERNAME || 'Pognali_pognali_bot').replace(/^@/, '');
+  const botUrl = 'https://t.me/' + encodeURIComponent(botUsername) + '?start=' + encodeURIComponent('event_' + eventId);
+  const title = 'Погнали — жизнь начинается здесь';
+  const description = 'Тебя пригласили на событие. Открой «Погнали», посмотри детали и присоединяйся в реальной жизни.';
+  res.set('Cache-Control', 'public, max-age=300');
+  res.type('html').send(`<!doctype html><html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>${title}</title><meta name="description" content="${description}">
+<meta property="og:type" content="website"><meta property="og:site_name" content="Погнали"><meta property="og:title" content="${title}">
+<meta property="og:description" content="${description}"><meta property="og:url" content="${origin}/share/event_${eventId}">
+<meta property="og:image" content="${cover}"><meta property="og:image:secure_url" content="${cover}"><meta property="og:image:type" content="image/svg+xml"><meta property="og:image:width" content="1200"><meta property="og:image:height" content="630">
+<meta name="twitter:card" content="summary_large_image"><meta name="twitter:title" content="${title}"><meta name="twitter:description" content="${description}"><meta name="twitter:image" content="${cover}">
+<meta http-equiv="refresh" content="2;url=${botUrl}">
+<style>body{margin:0;min-height:100vh;display:grid;place-items:center;background:#08152c;color:#fff;font:16px system-ui,sans-serif;text-align:center}.wrap{max-width:420px;padding:28px}.brand{font-size:32px;font-weight:850}.sub{color:#c5e7ff;line-height:1.5;margin:14px 0 24px}a{display:inline-block;background:#60bfff;color:#07172e;text-decoration:none;font-weight:800;padding:14px 22px;border-radius:15px}</style></head><body><main class="wrap"><div class="brand">🚀 Погнали</div><p class="sub">Тебя пригласили на событие.<br>Сейчас откроем карточку в Telegram.</p><a href="${botUrl}">Открыть событие</a></main><script>setTimeout(()=>{window.location.href=${JSON.stringify(botUrl)}},900)</script></body></html>`);
+});
+
 app.use(express.static(webRoot));
 app.get('/{*splat}', (req, res, next) => {
   if (req.path.startsWith('/api/')) return next();
