@@ -1388,7 +1388,7 @@ function initTelegramMiniApp(){
       if(name&&db.profile&&(!db.profile.name||db.profile.name==='Стас'))db.profile.name=name;
       if(u.photo_url&&db.profile&&!db.profile.photo)db.profile.telegramPhoto=u.photo_url;
     }
-    if(API_MODE)refreshApiData().then(()=>openSharedEventFromStartParam()).catch(e=>{console.error('Pognali API:',e);showToast(e.message||'Сервер пока не настроен','error')});else setTimeout(openSharedEventFromStartParam,0);
+    if(API_MODE)refreshApiData().catch(e=>{console.error('Pognali API:',e);showToast(e.message||'Сервер пока не настроен','error')}).finally(()=>openSharedEventFromStartParam());else setTimeout(openSharedEventFromStartParam,0);
   }catch(e){console.warn('Telegram Mini App initialization:',e)}
 }
 
