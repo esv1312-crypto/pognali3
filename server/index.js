@@ -55,7 +55,7 @@ app.post('/telegram/webhook', webhookRateLimit, async (req, res) => {
   const inlineQuery = req.body?.inline_query;
   if (inlineQuery) {
     const query = String(inlineQuery.query || '').trim();
-    const match = query.match(/^event_(\\d+)(?:_i_([A-Za-z0-9_-]+))?$/);
+    const match = query.match(/^event_(\d+)(?:_i_([A-Za-z0-9_-]+))?$/);
     let results = [];
     if (match && pool) {
       try {
@@ -65,7 +65,7 @@ app.post('/telegram/webhook', webhookRateLimit, async (req, res) => {
           const when = event.starts_at ? new Date(event.starts_at).toLocaleString('ru-RU', { dateStyle: 'medium', timeStyle: 'short', timeZone: 'Europe/Moscow' }) : '';
           const place = [event.address, event.city].filter(Boolean).join(', ');
           const detail = [when, place, event.description].filter(Boolean).join(' · ').slice(0, 350);
-          const caption = (['🚀 ' + event.title, 'Пойдём вместе?', [when, place].filter(Boolean).join(' · '), event.description, 'Жми «Открыть событие» и присоединяйся!'].filter(Boolean).join('\\n\\n')).slice(0, 1024);
+          const caption = (['🚀 ' + event.title, 'Пойдём вместе?', [when, place].filter(Boolean).join(' · '), event.description, 'Жми «Открыть событие» и присоединяйся!'].filter(Boolean).join('\n\n')).slice(0, 1024);
           const botUsername = String(process.env.TELEGRAM_BOT_USERNAME || 'Pognali_pognali_bot').replace(/^@/, '').trim();
           const startUrl = 'https://t.me/' + botUsername + '?startapp=' + encodeURIComponent(query);
           const origin = new URL(miniAppUrl).origin;
