@@ -18,6 +18,8 @@ const apiRateLimit = rateLimit({ windowMs: 15 * 60 * 1000, limit: 1500, standard
 // Per-account protection after Telegram initData is verified; the IP limit above is only a broad safety net.
 const authenticatedApiRateLimit = rateLimit({ windowMs: 15 * 60 * 1000, limit: 600, keyGenerator: req => String(req.telegramUser.id), standardHeaders: 'draft-8', legacyHeaders: false });
 const webhookRateLimit = rateLimit({ windowMs: 60 * 1000, limit: 60, standardHeaders: 'draft-8', legacyHeaders: false });
+const ADMIN_TELEGRAM_IDS = new Set(String(process.env.ADMIN_TELEGRAM_IDS || '172790098').split(',').map(id => id.trim()).filter(id => /^\d+$/.test(id)));
+function isAdminTelegramUser(id) { return ADMIN_TELEGRAM_IDS.has(String(id)); }
 
 const databaseSslMode = String(process.env.DATABASE_SSL || (String(process.env.DATABASE_URL || '').includes('localhost') ? 'disable' : 'verify-full')).toLowerCase();
 if (!['disable', 'require', 'verify-full'].includes(databaseSslMode)) throw new Error('DATABASE_SSL must be one of: disable, require, verify-full');
@@ -182,7 +184,7 @@ app.get('/api/me', async (req, res) => {
     'SELECT id, username, first_name, last_name, display_name, photo_url, city, bio, created_at FROM users WHERE id=$1',
     [req.telegramUser.id]
   );
-  res.json({ user: result.rows[0] });
+  res.json({ user: { ...result.rows[0], is_admin: isAdminTelegramUser(req.telegramUser.id) } });
 });
 
 app.patch('/api/me', async (req, res) => {
@@ -302,9 +304,19 @@ app.patch('/api/events/:id', async (req, res) => {
 });
 
 app.delete('/api/events/:id', async (req, res) => {
+  if (isAdminTelegramUser(req.telegramUser.id)) {
+    // Keep the event and its report/audit history; moderation removes it from public listings.
+    const result = await pool.query(
+      "UPDATE events SET status='cancelled', updated_at=NOW() WHERE id=$1 AND status='published' RETURNING id, creator_id",
+      [req.params.id]
+    );
+    if (!result.rowCount) return res.status(404).json({ error: 'Event not found or already removed' });
+    res.json({ deleted: true, moderated: true, eventId: String(req.params.id) });
+    return;
+  }
   const result = await pool.query('DELETE FROM events WHERE id=$1 AND creator_id=$2 RETURNING id', [req.params.id, req.telegramUser.id]);
   if (!result.rowCount) return res.status(404).json({ error: 'Event not found or you are not its organizer' });
-  res.json({ deleted: true, eventId: String(req.params.id) });
+  res.json({ deleted: true, moderated: false, eventId: String(req.params.id) });
 });
 
 app.post('/api/events/:id/finish', async (req, res) => {
