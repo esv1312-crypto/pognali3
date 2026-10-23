@@ -1141,8 +1141,8 @@ async function setPickerPoint(lat,lng,lookupPlace=true){
   if(pickerMarker) pickerMarker.setLngLat([lng,lat]); else pickerMarker=new maplibregl.Marker({draggable:true,color:'#2588ee'}).setLngLat([lng,lat]).addTo(pickerMap);
   if(!pickerMarker._pognaliDragBound){pickerMarker.on('dragend',()=>{const p=pickerMarker.getLngLat();setPickerPoint(p.lat,p.lng,true)});pickerMarker._pognaliDragBound=true}
   pickerMap.panTo([lng,lat]);
-  if(lookupPlace){const info=await reverseGeocode(lat,lng);if(lookupToken!==pickerLookupToken)return;placeEl.value=info.place;if(countryEl)countryEl.value=info.country||'';if(cityEl)cityEl.value=info.city||'';statusEl.textContent=info.country&&info.city?'Место определено':'Адрес определён, но страна/город не найдены';pickerMarker.bindPopup('📍 '+info.place).openPopup();}
-  else if(pickerMarker){pickerMarker.bindPopup('📍 '+(placeEl.value.trim()||'Точка выбрана'));}
+  if(lookupPlace){const info=await reverseGeocode(lat,lng);if(lookupToken!==pickerLookupToken)return;placeEl.value=info.place;if(countryEl)countryEl.value=info.country||'';if(cityEl)cityEl.value=info.city||'';statusEl.textContent=info.country&&info.city?'Место определено':'Адрес определён, но страна/город не найдены';pickerMarker.setPopup(new maplibregl.Popup({offset:25}).setText('📍 '+info.place));pickerMarker.togglePopup();}
+  else if(pickerMarker){pickerMarker.setPopup(new maplibregl.Popup({offset:25}).setText('📍 '+(placeEl.value.trim()||'Точка выбрана')));}
 }
 function useMyDemoLocation(){setPickerPoint(44.9521,34.1024);}
 let placeSearchResults=[];
