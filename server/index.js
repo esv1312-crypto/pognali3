@@ -36,6 +36,39 @@ const pool = process.env.DATABASE_URL ? new Pool({
   connectionTimeoutMillis: 8000
 }) : null;
 
+// Temporary, opt-in API timing diagnostics. Enable only during a controlled investigation.
+const poolDiagnosticsEnabled = String(process.env.PG_POOL_DIAGNOSTICS || '').toLowerCase() === 'true';
+function getPoolSnapshot() {
+  return pool ? { total: pool.totalCount, idle: pool.idleCount, waiting: pool.waitingCount } : { configured: false };
+}
+if (pool && poolDiagnosticsEnabled) {
+  pool.on('error', error => console.warn('[db-pool-error]', JSON.stringify({
+    code: error.code || null,
+    message: error.message,
+    pool: getPoolSnapshot()
+  })));
+}
+if (poolDiagnosticsEnabled) {
+  app.use((req, res, next) => {
+    if (!req.path.startsWith('/api/')) return next();
+    const started = performance.now();
+    res.once('finish', () => {
+      const durationMs = Math.round(performance.now() - started);
+      const poolState = getPoolSnapshot();
+      if (durationMs >= 500 || poolState.waiting > 0 || res.statusCode >= 500) {
+        console.warn('[api-request-timing]', JSON.stringify({
+          method: req.method,
+          path: req.path,
+          status: res.statusCode,
+          durationMs,
+          pool: poolState
+        }));
+      }
+    });
+    next();
+  });
+}
+
 app.get('/config', (_req, res) => {
   const botUsername = String(process.env.TELEGRAM_BOT_USERNAME || '').replace(/^@/, '').trim();
   res.set('Cache-Control', 'public, max-age=300');
