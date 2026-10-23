@@ -568,7 +568,71 @@ body{background:var(--pg-bg)!important}
 }
 
 </style>
-<style id="pognali-unread-badge">.nav .unread-badge{position:absolute;top:2px;left:calc(50% + 8px);min-width:18px;height:18px;padding:0 4px;display:inline-flex;align-items:center;justify-content:center;border:2px solid #fff;border-radius:999px;background:#e53935;color:#fff;font-size:10px;font-weight:900;line-height:1;box-shadow:0 1px 4px #0002;z-index:2}.nav .unread-badge.hidden{display:none!important}.nav.active .unread-badge{border-color:#17191d}</style></head>
+<style id="pognali-unread-badge">.nav .unread-badge{position:absolute;top:2px;left:calc(50% + 8px);min-width:18px;height:18px;padding:0 4px;display:inline-flex;align-items:center;justify-content:center;border:2px solid #fff;border-radius:999px;background:#e53935;color:#fff;font-size:10px;font-weight:900;line-height:1;box-shadow:0 1px 4px #0002;z-index:2}.nav .unread-badge.hidden{display:none!important}.nav.active .unread-badge{border-color:#17191d}</style><style id="pognali-night-impulse">
+:root{--night-bg:#111311;--night-panel:#1b1e1a;--night-panel-2:#222620;--night-line:#343a30;--night-text:#f4f6ef;--night-muted:#a4ac9c;--night-lime:#d5ff45;--night-safe-top:env(safe-area-inset-top,0px);--night-safe-bottom:env(safe-area-inset-bottom,0px)}
+html,body{background:var(--night-bg)!important;color:var(--night-text)!important}
+body{background:radial-gradient(ellipse at 90% 0%,#29331a 0,transparent 31%),var(--night-bg)!important}
+.app{background:var(--night-bg)!important;border-color:#262b23!important;box-shadow:0 10px 50px #0005!important}
+.top{padding-top:calc(10px + var(--night-safe-top))!important;background:#151714f5!important;border-color:var(--night-line)!important;color:var(--night-text)!important}
+.logo-btn{background:var(--night-lime)!important;color:#151710!important;box-shadow:0 5px 18px #d5ff4525!important;border-radius:14px!important}
+.life-tagline{color:var(--night-muted)!important}
+.pill,.iconbtn{background:var(--night-panel-2)!important;color:var(--night-text)!important;border:1px solid var(--night-line)!important}
+.content{background:var(--night-bg)!important;color:var(--night-text)!important}
+.preview-banner{background:#302a16!important;color:#ffe79a!important;border-color:#5a4b1b!important}
+.bottomnav{background:#151714f7!important;border-color:var(--night-line)!important;box-shadow:0 -6px 22px #0004!important;padding-bottom:calc(7px + var(--night-safe-bottom))!important}
+.nav{color:#929b89!important}.nav.active{color:var(--night-lime)!important;background:#282d21!important}
+.nav.active b{background:var(--night-lime)!important;color:#171a12!important;box-shadow:0 3px 12px #d5ff4520!important}
+.nav.create-nav{background:var(--night-lime)!important;color:#171a12!important;box-shadow:0 5px 16px #d5ff4522!important}
+.nav.create-nav b{background:transparent!important;color:#171a12!important}.nav.create-nav span{color:#171a12!important}
+.list,.mine-wrap,.section,.profile{background:var(--night-bg)!important;color:var(--night-text)!important}
+.list{padding:14px 12px 24px!important}
+.list .filter,.filter{background:#20231e!important;color:#c9d0c2!important;border-color:#383d33!important;box-shadow:none!important}
+.list .filter.active,.filter.active,.date-filter.active{background:var(--night-lime)!important;color:#171a12!important;border-color:var(--night-lime)!important}
+.list .filter.active .filter-count{color:#171a12!important}
+.list-intro h2,.mine-head h2,.mine-section-title h3,.section h2,.profile h2{color:var(--night-text)!important}
+.list-intro p,.mine-sub,.meta,.muted{color:var(--night-muted)!important}
+.list-intro-count,.tag,.mine-section-title span{background:#252920!important;color:#cbd3c2!important;border-color:#3a4134!important}
+.event-card,.mine-card,.card{background:linear-gradient(150deg,#20231e,#191c18)!important;border-color:#363c31!important;color:var(--night-text)!important;box-shadow:0 8px 24px #0003!important}
+.event-card-accent,.mine-card:before{background:var(--night-lime)!important}
+.event-card-title,.mine-title h4,.card h3,.eventmini h3{color:var(--night-text)!important}
+.event-card-icon,.mine-icon{background:#2b3025!important;color:var(--night-lime)!important}
+.event-card .meta,.mine-meta,.mine-people{color:#bdc5b5!important}
+.event-card .event-badge,.interest-tag{background:#2a3023!important;color:#d8e4c7!important}
+.primary,.eventmini button{background:var(--night-lime)!important;color:#171a12!important;box-shadow:0 5px 15px #d5ff451a!important}
+.secondary,.avatarPick,.mine-people-btn,.list-viewtoggle{background:#292d26!important;color:var(--night-text)!important;border-color:#3a4035!important}
+.danger{background:#4a2523!important;color:#ffb7ad!important}
+.field label{color:#bac3b1!important}
+.field input,.field textarea,.field select,input,textarea,select,.age-select{background:#20241e!important;color:var(--night-text)!important;border-color:#41483a!important}
+input::placeholder,textarea::placeholder{color:#818b79!important}
+input:focus,textarea:focus,select:focus{outline:2px solid #d5ff4540!important;border-color:var(--night-lime)!important}
+.empty{color:var(--night-muted)!important}.modal{background:#000b!important}
+.sheet{background:#1b1e1a!important;color:var(--night-text)!important;border-color:#3a4035!important}
+.close{background:#2b3026!important;color:var(--night-text)!important}
+.msg{background:#2a2e27!important;color:var(--night-text)!important}.msg.me{background:var(--night-lime)!important;color:#171a12!important}
+.participant-row,.question-box,.social-note,.public-note{background:#242820!important;color:var(--night-text)!important;border-color:#3a4035!important}
+.participant-sub,.question-meta{color:var(--night-muted)!important}
+.calendar-panel{background:#1b1e1a!important;border-color:#3a4035!important;color:var(--night-text)!important}
+.calendar-head button,.calendar-foot button,.cal-day{background:#292e25!important;color:var(--night-text)!important}
+.cal-day.active{background:var(--night-lime)!important;color:#171a12!important}
+.viewtoggle{background:#20231e!important}.viewtoggle button{color:var(--night-text)!important}
+.viewtoggle .active{background:var(--night-lime)!important;color:#171a12!important}
+.my-location-btn,.map-scope,.live-map-hint{background:#1e221b!important;color:var(--night-text)!important;border-color:#424a38!important}
+.map-scope.world{background:var(--night-lime)!important;color:#171a12!important;border-color:var(--night-lime)!important}
+.maplibregl-popup-content{background:#20241e!important;color:var(--night-text)!important}
+.maplibregl-popup-close-button{color:var(--night-text)!important}.maplibregl-ctrl-group{background:#20241e!important}
+.maplibregl-ctrl-group button{filter:invert(.88) hue-rotate(35deg)}
+.event-pin{border-color:#d5ff45!important}.event-label{background:#171a12!important;color:var(--night-lime)!important}
+.create-hero{position:relative;overflow:hidden;margin:3px 0 18px;padding:22px 19px 18px;border-radius:24px;background:var(--night-lime);color:#171a12;box-shadow:0 12px 28px #d5ff4512}
+.create-hero:after{content:"✳";position:absolute;right:13px;top:-23px;font-size:124px;line-height:1;font-weight:900;color:#171a1210;pointer-events:none}
+.create-hero-kicker{position:relative;z-index:1;font-size:10px;font-weight:950;letter-spacing:1.8px;text-transform:uppercase;opacity:.68;margin-bottom:9px}
+.create-hero h2{position:relative;z-index:1;font-size:25px;line-height:1.04;letter-spacing:-.9px;font-weight:950;margin:0 0 9px;max-width:290px;color:#171a12}
+.create-hero p{position:relative;z-index:1;font-size:13px;line-height:1.4;font-weight:600;margin:0 0 17px;max-width:280px;color:#303723}
+.create-hero button{position:relative;z-index:1;display:inline-flex;align-items:center;justify-content:center;gap:8px;background:#171a12;color:var(--night-lime);padding:13px 16px;border-radius:13px;font-weight:900;font-size:13px;box-shadow:0 5px 13px #171a121c}
+.create-hero button:active{transform:scale(.98)}
+.create-hero-foot{position:relative;z-index:1;margin-top:13px;font-size:10px;font-weight:800;letter-spacing:.2px;color:#353d27}
+@media(min-width:600px){.app{background:var(--night-bg)!important}}
+</style>
+</head>
 <body>
 <div class="app">
 <header class="top"><button class="logo-btn" type="button" onclick="go('events')" aria-label="Погнали — открыть события"><span class="logo-emoji">🚀</span><span>Погнали</span></button><div class="life-tagline">Жизнь начинается здесь <b>→</b></div><div class="spacer"></div><button class="pill lang-btn" onclick="openLanguage()" aria-label="Выбрать язык">🌐 <span id="langLabel">RU</span> ▾</button></header>
@@ -735,7 +799,7 @@ function seedDemoEvents(){
 seedDemoEvents();
 db.events.forEach(e=>{if(!e.country&&e.city==='Симферополь')e.country='Россия';if(!e.city&&e.place) e.city=e.place;});
 save();
-let currentTab='events', map, markers=[]; let selectedFilter=API_MODE?'Мир':'Рядом', eventView='map', liveOnly=false; let selectedDate=null, calendarOpen=false, calendarMonth=new Date(2026,8,1); let lastMapView=null; let mapViews={Мир:null,Рядом:null,Мои:null}; try{mapViews={...mapViews,...(JSON.parse(localStorage.getItem(KEY+'_map_views')||'{}')||{})}}catch(e){} let userLocationMarker=null; let userLocationRequested=false; let userGeo=null;
+let currentTab='events', map, markers=[]; let selectedFilter=API_MODE?'Мир':'Рядом', eventView='list', liveOnly=false; let selectedDate=null, calendarOpen=false, calendarMonth=new Date(2026,8,1); let lastMapView=null; let mapViews={Мир:null,Рядом:null,Мои:null}; try{mapViews={...mapViews,...(JSON.parse(localStorage.getItem(KEY+'_map_views')||'{}')||{})}}catch(e){} let userLocationMarker=null; let userLocationRequested=false; let userGeo=null;
 const NEARBY_RADIUS_KM=200; const MAP_RADIUS_LEVELS=[{minZoom:13,km:25},{minZoom:11,km:50},{minZoom:9,km:150},{minZoom:7,km:600}];
 function mapRadiusKm(zoom){for(const x of MAP_RADIUS_LEVELS)if(zoom>=x.minZoom)return x.km;return null}
 function mapScopeLabel(){if(selectedFilter==='Мир')return '🌍 Весь мир';if(selectedFilter==='Рядом')return userGeo?`📍 Рядом · ${NEARBY_RADIUS_KM} км`:'📍 Включи геолокацию';return '🙋 Мои события'}
@@ -797,7 +861,7 @@ function toggleCalendar(){calendarOpen=!calendarOpen;if(calendarOpen&&selectedDa
 function moveCalendar(delta){calendarMonth=new Date(calendarMonth.getFullYear(),calendarMonth.getMonth()+delta,1);if(eventView==='list')renderList();else renderEvents()}
 function pickCalendarDate(key){selectedDate=key;calendarOpen=false;lastMapView=null;if(eventView==='list')renderList();else renderEvents()}
 function clearCalendarDate(){selectedDate=null;calendarOpen=false;liveOnly=false;if(map){const c=map.getCenter();lastMapView={lat:c.lat,lng:c.lng,zoom:map.getZoom()};mapViews[selectedFilter]=lastMapView;}selectedFilter='Рядом';lastMapView=mapViews['Рядом']||null;if(eventView==='list')renderList();else renderEvents()}
-function renderList(){destroyMainMap();eventView='list';let n=filtered().length;let title=selectedFilter==='Мои'?'Мои события':(selectedFilter==='Рядом'?'События рядом':'События по всему миру');let sub=selectedDate?`На выбранную дату ${n} ${n===1?'событие':'событий'}`:(selectedFilter==='Мир'?'Выбирай, присоединяйся или придумай своё':(n?`Сейчас по этому фильтру ${n} ${n===1?'событие':'события/событий'}`:'Пока здесь тихо — самое время что-нибудь придумать'));document.getElementById('content').innerHTML=`<div class="list"><div class="filters" style="position:static;display:flex">${renderFilters()}<button type="button" class="filter${liveOnly?' active':''}" onclick="toggleLiveNow()">🟢 Идёт сейчас${liveOnly?' ✓':''}<span class="filter-count">${filtered().filter(e=>isEventOngoingNow(e)).length}</span></button></div><div class="viewtoggle list-viewtoggle"><button id="mapbtn" onclick="switchView('map')">Карта</button><button id="listbtn" class="active" onclick="switchView('list')">Список</button></div>${calendarOpen?calendarHTML():''}<div class="list-intro"><div><h2>${title}</h2><p>${sub}</p></div><span class="list-intro-count">${n} ${n===1?'событие':'событий'}</span></div>${filtered().map(eventCard).join('')||'<div class="empty"><b>Пока здесь тихо.</b><br>Самое время придумать, чем заняться.</div>'}</div>`}
+function renderList(){destroyMainMap();eventView='list';let n=filtered().length;let title=selectedFilter==='Мои'?'Мои события':(selectedFilter==='Рядом'?'События рядом':'События по всему миру');let sub=selectedDate?`На выбранную дату ${n} ${n===1?'событие':'событий'}`:(selectedFilter==='Мир'?'Выбирай, присоединяйся или придумай своё':(n?`Сейчас по этому фильтру ${n} ${n===1?'событие':'события/событий'}`:'Пока здесь тихо — самое время что-нибудь придумать'));document.getElementById('content').innerHTML=`<div class="list"><div class="filters" style="position:static;display:flex">${renderFilters()}<button type="button" class="filter${liveOnly?' active':''}" onclick="toggleLiveNow()">🟢 Идёт сейчас${liveOnly?' ✓':''}<span class="filter-count">${filtered().filter(e=>isEventOngoingNow(e)).length}</span></button></div><div class="viewtoggle list-viewtoggle"><button id="mapbtn" onclick="switchView('map')">Карта</button><button id="listbtn" class="active" onclick="switchView('list')">Список</button></div>${calendarOpen?calendarHTML():''}<div class="create-hero"><div class="create-hero-kicker">ПОГНАЛИ · ЖИВАЯ ЖИЗНЬ</div><h2>Есть идея? Собери своих на сегодня</h2><p>Придумай встречу, позови людей и пусть день станет интереснее.</p><button type="button" onclick="go(&#39;create&#39;)">Создать событие <span aria-hidden="true">＋</span></button><div class="create-hero-foot">ТВОЙ ПЛАН. ТВОИ ЛЮДИ. РЕАЛЬНАЯ ЖИЗНЬ.</div></div><div class="list-intro"><div><h2>${title}</h2><p>${sub}</p></div><span class="list-intro-count">${n} ${n===1?'событие':'событий'}</span></div>${filtered().map(eventCard).join('')||'<div class="empty"><b>Пока здесь тихо.</b><br>Самое время придумать, чем заняться.</div>'}</div>`}
 function switchView(v){if(v==='list')renderList();else renderEvents()}
 function initMap(){
 if(map){try{map.remove()}catch(e){}map=null}if(mainMapPopup){try{mainMapPopup.remove()}catch(e){}mainMapPopup=null}if(userLocationMarker){try{userLocationMarker.remove()}catch(e){}userLocationMarker=null}
