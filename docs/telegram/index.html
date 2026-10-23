@@ -1378,7 +1378,8 @@ function initTelegramMiniApp(){
     const urlParams=new URLSearchParams(window.location.search);
     const hashParams=new URLSearchParams(String(window.location.hash||'').replace(/^#/, '') );
     const initDataParams=new URLSearchParams(String(tg.initData||''));
-     const initDataStartParam=new URLSearchParams(initDataParams.get('tgWebAppData')||'').get('start_param')||'';
+     // Telegram sends start_param directly inside WebApp.initData; it is not nested in tgWebAppData.
+     const initDataStartParam=initDataParams.get('start_param')||'';
      const startParam=tg.initDataUnsafe?.start_param||initDataStartParam||urlParams.get('shared_event')||urlParams.get('event_id')||urlParams.get('startapp')||urlParams.get('tgWebAppStartParam')||hashParams.get('shared_event')||hashParams.get('event_id')||hashParams.get('startapp')||hashParams.get('tgWebAppStartParam')||'';
     window.POGNALI_TELEGRAM_CONTEXT={platform:tg.platform||'unknown',version:tg.version||'',initData:tg.initData||'',user:tg.initDataUnsafe?.user||null,startParam};
     if(tg.initDataUnsafe?.user){
