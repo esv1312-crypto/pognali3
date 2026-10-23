@@ -748,10 +748,10 @@ function seedDemoEvents(){
 seedDemoEvents();
 db.events.forEach(e=>{if(!e.country&&e.city==='Симферополь')e.country='Россия';if(!e.city&&e.place) e.city=e.place;});
 save();
-let currentTab='events', map, markers=[]; let selectedFilter=API_MODE?'Мир':'Рядом', eventView='list'; let selectedDate=null, calendarOpen=false, calendarMonth=new Date(new Date().getFullYear(),new Date().getMonth(),1); let lastMapView=null; let mapViews={Мир:null,Рядом:null,Мои:null}; let selectedCity=localStorage.getItem(KEY+'_selected_city')||''; let selectedCityPoint=null; try{selectedCityPoint=JSON.parse(localStorage.getItem(KEY+'_selected_city_point')||'null')}catch(e){} try{mapViews={...mapViews,...(JSON.parse(localStorage.getItem(KEY+'_map_views')||'{}')||{})}}catch(e){} let userLocationMarker=null; let userLocationRequested=false; let userGeo=null;
-const NEARBY_RADIUS_KM=200; const MAP_RADIUS_LEVELS=[{minZoom:13,km:25},{minZoom:11,km:50},{minZoom:9,km:150},{minZoom:7,km:600}];
+let currentTab='events', map, markers=[]; let selectedFilter=API_MODE?'Мир':'Рядом', eventView='list'; let selectedDate=null, calendarOpen=false, calendarMonth=new Date(new Date().getFullYear(),new Date().getMonth(),1); let lastMapView=null; let mapViews={Мир:null,Рядом:null,Мои:null}; let selectedCity=localStorage.getItem(KEY+'_selected_city')||''; let selectedCityPoint=null; try{selectedCityPoint=JSON.parse(localStorage.getItem(KEY+'_selected_city_point')||'null')}catch(e){} try{mapViews={...mapViews,...(JSON.parse(localStorage.getItem(KEY+'_map_views')||'{}')||{})}}catch(e){} let userLocationMarker=null; let userLocationRequested=false; let userGeo=null; let userGeoCity='';
+const NEARBY_RADIUS_KM=150; const MAP_RADIUS_LEVELS=[{minZoom:13,km:25},{minZoom:11,km:50},{minZoom:9,km:150},{minZoom:7,km:600}];
 function mapRadiusKm(zoom){for(const x of MAP_RADIUS_LEVELS)if(zoom>=x.minZoom)return x.km;return null}
-function mapScopeLabel(){if(selectedCity&&selectedFilter==='Мир')return '🏙️ '+selectedCity;if(selectedFilter==='Мир')return '🏙️ Выбери город';if(selectedFilter==='Рядом')return userGeo?`📍 Рядом · ${NEARBY_RADIUS_KM} км`:(selectedCityPoint?`📍 Рядом с ${selectedCity||'выбранным городом'} · ${NEARBY_RADIUS_KM} км`:'📍 Выбери город');return '🙋 Мои события'}
+function mapScopeLabel(){if(selectedCity&&selectedFilter==='Мир')return '🏙️ '+selectedCity;if(selectedFilter==='Мир')return '🏙️ Выбери город';if(selectedFilter==='Рядом')return userGeo?`📍 ${userGeoCity||'Ваше местоположение'} · радиус ${NEARBY_RADIUS_KM} км`:'📍 Разреши геолокацию для поиска рядом';return '🙋 Мои события'}
 function save(){localStorage.setItem(KEY,JSON.stringify(db))}
 function age(b){if(!b)return '';let d=new Date(b),n=new Date();let a=n.getFullYear()-d.getFullYear();if(n<new Date(n.getFullYear(),d.getMonth(),d.getDate()))a--;return a}
 function fmt(e){return new Date(e.date+'T12:00:00').toLocaleDateString(LOCALES[getLang()]||'ru-RU',{day:'numeric',month:'long'})+' · '+e.time}
@@ -772,11 +772,10 @@ function distanceKm(a,b,c,d){const R=6371,rad=Math.PI/180;const dLat=(c-a)*rad,d
 function filtered(filter=selectedFilter,includeDate=true){
   let es=db.events.filter(isVisibleEvent);
   if(includeDate&&selectedDate) es=es.filter(e=>e.date===selectedDate);
-  // Выбранный город задаёт базовую область для календаря и городского/личного списка.
-  // «Рядом» остаётся географическим фильтром с центром в геолокации или выбранном городе.
+  // Город ограничивает режим «Мир» и личный список. «Рядом» всегда использует только GPS устройства.
   if(selectedCity && (filter==='Мир'||filter==='Мои')) es=es.filter(e=>String(e.city||'').trim().toLocaleLowerCase()===selectedCity.toLocaleLowerCase());
   if(filter==='Рядом'){
-    const origin=userGeo||selectedCityPoint;
+    const origin=userGeo;
     if(!origin) return [];
     es=es.filter(e=>Number.isFinite(+e.lat)&&Number.isFinite(+e.lng)&&distanceKm(origin.lat,origin.lng,+e.lat,+e.lng)<=NEARBY_RADIUS_KM);
   } else if(filter==='Мои'){
@@ -847,12 +846,21 @@ function clearSelectedCity(){
   closeModal();if(eventView==='list')renderList();else renderEvents();
 }
 
-function setFilter(x){
+async function setFilter(x){
   if(map) { const c=map.getCenter(); lastMapView={lat:c.lat,lng:c.lng,zoom:map.getZoom()}; mapViews[selectedFilter]=lastMapView; }
-  // Повторное нажатие «Рядом» снимает географический фильтр и возвращает город/все события.
+  // Повторное нажатие «Рядом» выключает GPS-фильтр и возвращает городской режим.
   if(x==='Рядом'&&selectedFilter==='Рядом')x='Мир';
   selectedDate=null;calendarOpen=false;selectedFilter=x;lastMapView=mapViews[x]||null;
-  if(eventView==='list')renderList();else renderEvents()
+  if(eventView==='list')renderList();else renderEvents();
+  if(x!=='Рядом')return;
+  if(userGeo){void updateUserGeoCity(userGeo);return;}
+  userLocationRequested=true;
+  const scope=document.getElementById('mapScope');if(scope)scope.textContent='📍 Определяем ваше местоположение…';
+  const loc=await resolveDeviceLocation();
+  if(!loc){userLocationRequested=false;const el=document.getElementById('mapScope');if(el)el.textContent='📍 Разреши геолокацию для поиска рядом';showToast('Не удалось определить местоположение. Разреши доступ к GPS.','error');if(eventView==='list')renderList();else renderEvents();return;}
+  userGeo=loc;userLocationRequested=true;lastMapView={lat:loc.lat,lng:loc.lng,zoom:10};mapViews['Рядом']=lastMapView;
+  await updateUserGeoCity(loc);
+  if(eventView==='list')renderList();else renderEvents();
 }
 function toggleCalendar(){calendarOpen=!calendarOpen;if(calendarOpen){const d=selectedDate?new Date(selectedDate+'T12:00:00'):new Date();calendarMonth=new Date(d.getFullYear(),d.getMonth(),1)}if(eventView==='list')renderList();else renderEvents()}
 function moveCalendar(delta){calendarMonth=new Date(calendarMonth.getFullYear(),calendarMonth.getMonth()+delta,1);if(eventView==='list')renderList();else renderEvents()}
@@ -923,8 +931,9 @@ async function requestUserLocation(){
   const loc=await resolveDeviceLocation();
   if(loc){
     userGeo=loc;
+    void updateUserGeoCity(loc);
     if(map)drawUserLocation(loc.lat,loc.lng,false);
-    if(selectedFilter==='Рядом')renderEventsMarkersOnly();
+    if(selectedFilter==='Рядом'){if(eventView==='list')renderList();else renderEventsMarkersOnly()}
     refreshMainMapLayout(!!selectedDate);
     const scope=document.getElementById('mapScope');
     if(scope)scope.textContent=mapScopeLabel();
@@ -932,12 +941,23 @@ async function requestUserLocation(){
   }
   userLocationRequested=false;
   const scope=document.getElementById('mapScope');
-  if(scope)scope.textContent='📍 Разреши геолокацию или выбери город вручную';
+  if(scope)scope.textContent='📍 Разреши геолокацию для поиска рядом';
+  if(selectedFilter==='Рядом')showToast('Чтобы показать события рядом, разреши доступ к местоположению','error');
+}
+async function updateUserGeoCity(loc){
+  try{
+    const info=await reverseGeocode(loc.lat,loc.lng);
+    if(!userGeo||Math.abs(userGeo.lat-loc.lat)>0.0001||Math.abs(userGeo.lng-loc.lng)>0.0001)return;
+    userGeoCity=info.city||info.place||'';
+    const scope=document.getElementById('mapScope');if(scope)scope.textContent=mapScopeLabel();
+    if(selectedFilter==='Рядом'&&eventView==='list')renderList();
+  }catch(e){}
 }
 async function centerOnMyLocation(){
   if(!map)return;
   const apply=(lat,lng)=>{
     userGeo={lat,lng};userLocationRequested=true;
+    void updateUserGeoCity(userGeo);
     lastMapView={lat,lng,zoom:14};mapViews[selectedFilter]=lastMapView;
     drawUserLocation(lat,lng,true);
     const scope=document.getElementById('mapScope');if(scope)scope.textContent=mapScopeLabel();
