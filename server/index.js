@@ -309,6 +309,22 @@ app.patch('/api/me', async (req, res) => {
   res.json({ user: result.rows[0] });
 });
 
+async function buildEventsPayload(city, category, limit) {
+  const result = await pool.query(
+    `SELECT e.*, COALESCE(u.display_name, u.first_name) AS creator_first_name, u.username AS creator_username,
+       COUNT(ep.user_id) FILTER (WHERE ep.status='joined')::int AS participants_count
+     FROM events e JOIN users u ON u.id=e.creator_id
+     LEFT JOIN event_participants ep ON ep.event_id=e.id
+     WHERE e.status='published' AND e.starts_at >= NOW() - INTERVAL '12 hours'
+       AND ($1='' OR LOWER(e.city)=LOWER($1)) AND ($2='' OR e.category=$2)
+     GROUP BY e.id, u.id ORDER BY e.starts_at ASC LIMIT $3`,
+    [city, category, limit]
+  );
+  const json = Buffer.from(JSON.stringify({ events: result.rows }));
+  const gz = await new Promise((resolve, reject) => zlib.gzip(json, { level: 6 }, (error, buffer) => error ? reject(error) : resolve(buffer)));
+  return { json, gz };
+}
+
 app.get('/api/events', async (req, res) => {
   const city = typeof req.query.city === 'string' ? req.query.city.trim().slice(0, 120) : '';
   const category = typeof req.query.category === 'string' ? req.query.category.trim().slice(0, 40) : '';
@@ -316,34 +332,28 @@ app.get('/api/events', async (req, res) => {
   const key = `${city.toLowerCase()}|${category}|${limit}`;
   let entry = eventsCache.get(key);
   if (!entry || Date.now() - entry.at > EVENTS_TTL_MS) {
-    entry = {
-      at: Date.now(),
-      rows: pool.query(
-        `SELECT e.*, COALESCE(u.display_name, u.first_name) AS creator_first_name, u.username AS creator_username,
-           COUNT(ep.user_id) FILTER (WHERE ep.status='joined')::int AS participants_count
-         FROM events e JOIN users u ON u.id=e.creator_id
-         LEFT JOIN event_participants ep ON ep.event_id=e.id
-         WHERE e.status='published' AND e.starts_at >= NOW() - INTERVAL '12 hours'
-           AND ($1='' OR LOWER(e.city)=LOWER($1)) AND ($2='' OR e.category=$2)
-         GROUP BY e.id, u.id ORDER BY e.starts_at ASC LIMIT $3`,
-        [city, category, limit]
-      ).then(result => result.rows)
-    };
-    if (eventsCache.size > 200) eventsCache.clear();
+    entry = { at: Date.now(), payload: buildEventsPayload(city, category, limit) };
+    if (eventsCache.size >= 200) eventsCache.clear();
     eventsCache.set(key, entry);
-    entry.rows.catch(() => { if (eventsCache.get(key) === entry) eventsCache.delete(key); });
+    entry.payload.catch(() => {
+      if (eventsCache.get(key) === entry) eventsCache.delete(key);
+    });
   }
-  const rows = await entry.rows;
-  const eventIds = rows.map(row => row.id);
-  const mine = eventIds.length
-    ? await pool.query(
-        `SELECT event_id FROM event_participants
-         WHERE user_id=$1 AND status='joined' AND event_id = ANY($2::int[])`,
-        [req.telegramUser.id, eventIds]
-      )
-    : { rows: [] };
-  const joined = new Set(mine.rows.map(row => String(row.event_id)));
-  res.json({ events: rows.map(row => ({ ...row, joined_by_me: joined.has(String(row.id)) })) });
+  const { json, gz } = await entry.payload;
+  res.set({ 'Content-Type': 'application/json; charset=utf-8', Vary: 'Accept-Encoding', 'Cache-Control': 'private, no-cache' });
+  if (req.acceptsEncodings('gzip')) {
+    res.set('Content-Encoding', 'gzip');
+    return res.send(gz);
+  }
+  return res.send(json);
+});
+
+app.get('/api/events/joined-ids', async (req, res) => {
+  const mine = await pool.query(
+    `SELECT event_id FROM event_participants WHERE user_id=$1 AND status='joined'`,
+    [req.telegramUser.id]
+  );
+  res.json({ ids: mine.rows.map(row => String(row.event_id)) });
 });
 
 app.get('/api/events/:id', async (req, res) => {
