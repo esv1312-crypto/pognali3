@@ -55,6 +55,54 @@ input:focus,textarea:focus,select:focus{outline:3px solid #8d72ff35;border-color
 .sheet{border:1px solid #f0eaff;box-shadow:0 -12px 50px #33215b20}
 @media(min-width:600px){.app{margin:16px auto;height:calc(100dvh - 32px);border-radius:28px;overflow:hidden}}
 
+
+/* Pognali visual consistency pass: remove leftover light-theme cards inside the Night Impulse UI. */
+.profile .field,
+.profile .message-section{
+  background:rgba(17,31,50,.94)!important;
+  border:1px solid #304965!important;
+  box-shadow:0 8px 24px rgba(0,0,0,.12)!important;
+}
+.profile .field label,
+.profile .message-section h3{
+  color:#a8d8ff!important;
+}
+.profile .field input,
+.profile .field textarea,
+.profile .field select{
+  background:#0d192a!important;
+  color:#e4efff!important;
+  border:1px solid #355171!important;
+}
+.cat-choice{
+  background:linear-gradient(145deg,#172940,#102036)!important;
+  border:1px solid #304965!important;
+  box-shadow:0 5px 16px rgba(0,0,0,.12)!important;
+}
+.cat-choice .cat-name{color:#dbeaff!important}
+.cat-choice.active{
+  background:linear-gradient(135deg,#398df0,#65b9ff)!important;
+  border-color:#81caff!important;
+  box-shadow:0 7px 18px rgba(57,141,240,.22)!important;
+}
+.cat-choice.active .cat-name{color:#071526!important}
+#content .notice{
+  background:rgba(18,31,49,.92)!important;
+  color:#c5d8ee!important;
+  border:1px solid #355171!important;
+}
+.message-section button.primary,
+.message-section button.full{
+  background:linear-gradient(135deg,#65b9ff,#398df0)!important;
+  color:#071526!important;
+  border:1px solid #81caff!important;
+  box-shadow:0 5px 16px rgba(57,141,240,.18)!important;
+}
+@media(max-width:390px){
+  .life-tagline{font-size:10px!important;letter-spacing:-.2px!important}
+  .cat-choice{min-height:78px!important}
+}
+
 </style>
 <style id="pognali-polish-v2">
 /* Полировка списка событий: чёткие отдельные карточки, воздух и социальные акценты */
