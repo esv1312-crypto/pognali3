@@ -21,8 +21,12 @@ const webhookRateLimit = rateLimit({ windowMs: 60 * 1000, limit: 60, standardHea
 const databaseSslMode = String(process.env.DATABASE_SSL || (String(process.env.DATABASE_URL || '').includes('localhost') ? 'disable' : 'verify-full')).toLowerCase();
 if (!['disable', 'require', 'verify-full'].includes(databaseSslMode)) throw new Error('DATABASE_SSL must be one of: disable, require, verify-full');
 const databaseSsl = databaseSslMode === 'disable' ? false : { rejectUnauthorized: databaseSslMode === 'verify-full' };
+// pg-connection-string URL sslmode can override the explicit TLS object; strip it so DATABASE_SSL is authoritative.
+const databaseConnectionString = process.env.DATABASE_URL
+  ? process.env.DATABASE_URL.replace(/([?&])sslmode=[^&]*/i, '').replace(/[?&]$/, '')
+  : '';
 const pool = process.env.DATABASE_URL ? new Pool({
-  connectionString: process.env.DATABASE_URL,
+  connectionString: databaseConnectionString,
   ssl: databaseSsl,
   max: Number(process.env.PG_POOL_MAX || 5),
   idleTimeoutMillis: 30000,
