@@ -1,0 +1,131 @@
+name: Pognali bounded production load test
+
+on:
+  push:
+    branches:
+      - ops/load-test-*
+    paths:
+      - .github/workflows/pognali-load-test.yml
+
+permissions:
+  contents: write
+
+concurrency:
+  group: pognali-production-load-test
+  cancel-in-progress: false
+
+jobs:
+  load-test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Run bounded stepped test against health endpoint
+        env:
+          TARGET_URL: https://pognali-telegram-mini-app.onrender.com/api/health
+        run: |
+          node <<'NODE'
+          const fs = require('node:fs');
+          const sleep = ms => new Promise(r => setTimeout(r, ms));
+          const target = process.env.TARGET_URL;
+          const results = [];
+          async function request() {
+            const started = performance.now();
+            try {
+              const response = await fetch(target, { signal: AbortSignal.timeout(5000), headers: { 'cache-control': 'no-cache' } });
+              await response.arrayBuffer();
+              return { ms: performance.now() - started, ok: response.status === 200, status: response.status };
+            } catch (error) {
+              return { ms: performance.now() - started, ok: false, status: 'ERR', error: String(error) };
+            }
+          }
+          function percentile(values, p) {
+            if (!values.length) return 0;
+            const sorted = [...values].sort((a,b) => a-b);
+            return Math.round(sorted[Math.min(sorted.length - 1, Math.ceil(p * sorted.length) - 1)]);
+          }
+          (async () => {
+            const warm = await request();
+            if (!warm.ok) throw new Error('Health endpoint warm-up failed: ' + JSON.stringify(warm));
+            for (const vus of [10, 25, 50, 100]) {
+              const durationMs = 12000;
+              const stageStarted = new Date().toISOString();
+              const end = Date.now() + durationMs;
+              const samples = [];
+              await Promise.all(Array.from({ length: vus }, async () => {
+                while (Date.now() < end) {
+                  samples.push(await request());
+                  await sleep(1000);
+                }
+              }));
+              const latencies = samples.map(x => x.ms);
+              const failures = samples.filter(x => !x.ok);
+              const stage = {
+                vus, startedAt: stageStarted, requests: samples.length, failures: failures.length,
+                errorRatePct: +(100 * failures.length / Math.max(1, samples.length)).toFixed(2),
+                p50Ms: percentile(latencies, .50), p95Ms: percentile(latencies, .95),
+                p99Ms: percentile(latencies, .99), maxMs: Math.round(Math.max(0, ...latencies)),
+                statuses: [...new Set(samples.map(x => String(x.status)))],
+                sampleErrors: failures.slice(0, 3).map(x => x.error || ('HTTP ' + x.status))
+              };
+              results.push(stage);
+              console.log(JSON.stringify(stage));
+              if (stage.errorRatePct >= 5 || stage.p95Ms >= 1500) {
+                console.log('STOP: safety threshold reached; higher stages skipped.');
+                break;
+              }
+            }
+            const report = [
+              '# Погнали — отчёт нагрузочного теста',
+              '',
+              '- Цель: Render production API, публичный endpoint `/api/health`.',
+              '- Endpoint выполняет `SELECT 1` в PostgreSQL; тест не использует Telegram-авторизацию и не изменяет данные.',
+              '- Профиль: 10 → 25 → 50 → 100 одновременных workers, каждый делает не более примерно 1 запроса/с; этап 12 секунд.',
+              '- Остановка: ошибки ≥5% или p95 ≥1500 мс. Максимум теста ограничен 100 workers.',
+              '- Это тест доступности сервера и round-trip до БД, а не полная симуляция действий пользователей в приложении.',
+              '',
+              '| Одновременные workers | Запросы | Ошибки | Ошибки % | p50 | p95 | p99 | Максимум | HTTP-статусы |',
+              '|---:|---:|---:|---:|---:|---:|---:|---:|---|',
+              ...results.map(r => `| ${r.vus} | ${r.requests} | ${r.failures} | ${r.errorRatePct}% | ${r.p50Ms} ms | ${r.p95Ms} ms | ${r.p99Ms} ms | ${r.maxMs} ms | ${r.statuses.join(', ')} |`),
+              '',
+              results.length && results[results.length - 1].vus === 100 && results[results.length - 1].errorRatePct < 5 && results[results.length - 1].p95Ms < 1500
+                ? '**Итог:** прошёл все ступени до 100 workers на health endpoint. Это не означает 100 одновременных полноценных пользователей; нужна отдельная проверка защищённых API-сценариев.'
+                : '**Итог:** тест остановлен на первой ступени, достигшей порога ошибок/задержки, либо health endpoint не прошёл проверку. Не масштабировать аудиторию до разбора причины.',
+              '',
+              'Результаты основаны на запросах из GitHub Actions runner; сетевой путь отличается от мобильного клиента.'
+            ].join('\n') + '\n';
+            fs.writeFileSync(process.env.RUNNER_TEMP + '/pognali-load-report.md', report);
+            fs.writeFileSync(process.env.RUNNER_TEMP + '/pognali-load-results.json', JSON.stringify(results, null, 2));
+          })().catch(e => { console.error(e); process.exit(1); });
+          NODE
+
+      - name: Save report back to the test branch
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          BRANCH: ${{ github.ref_name }}
+        run: |
+          if [ ! -f "$RUNNER_TEMP/pognali-load-report.md" ]; then
+            printf '# Погнали — отчёт нагрузочного теста\n\nТест не создал отчёт. Откройте логи GitHub Actions для диагностики.\n' > "$RUNNER_TEMP/pognali-load-report.md"
+          fi
+          node <<'NODE'
+          const fs = require('node:fs');
+          const repo = process.env.REPO;
+          const branch = process.env.BRANCH;
+          const token = process.env.GH_TOKEN;
+          const path = 'LOAD_TEST_RESULTS.md';
+          const api = 'https://api.github.com/repos/' + repo + '/contents/' + path;
+          const headers = { 'authorization': 'Bearer ' + token, 'accept': 'application/vnd.github+json', 'x-github-api-version': '2022-11-28', 'content-type': 'application/json' };
+          (async () => {
+            let sha;
+            const existing = await fetch(api + '?ref=' + encodeURIComponent(branch), { headers });
+            if (existing.ok) sha = (await existing.json()).sha;
+            else if (existing.status !== 404) throw new Error('Cannot read existing report: HTTP ' + existing.status);
+            const content = fs.readFileSync(process.env.RUNNER_TEMP + '/pognali-load-report.md', 'utf8');
+            const body = { message: 'Add bounded production load test results', content: Buffer.from(content).toString('base64'), branch };
+            if (sha) body.sha = sha;
+            const saved = await fetch(api, { method: 'PUT', headers, body: JSON.stringify(body) });
+            if (!saved.ok) throw new Error('Cannot save report: HTTP ' + saved.status + ' ' + await saved.text());
+            console.log('Report saved to ' + api + '?ref=' + branch);
+          })().catch(e => { console.error(e); process.exit(1); });
+          NODE
