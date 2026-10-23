@@ -36,6 +36,57 @@ const pool = process.env.DATABASE_URL ? new Pool({
   connectionTimeoutMillis: 8000
 }) : null;
 
+// Temporary, low-noise diagnostics: never log SQL text, user data, tokens, or query parameters.
+// This branch is intended for review/testing; diagnostics are not deployed automatically here.
+if (pool) {
+  const originalPoolQuery = pool.query.bind(pool);
+  pool.query = function (...args) {
+    const startedAt = performance.now();
+    const sql = typeof args[0] === 'string' ? args[0] : String(args[0]?.text || '');
+    const operation = (sql.match(/^\\s*(SELECT|INSERT|UPDATE|DELETE|BEGIN|COMMIT|ROLLBACK|WITH)/i)?.[1] || 'OTHER').toUpperCase();
+    const pending = originalPoolQuery(...args);
+    if (!pending || typeof pending.then !== 'function') return pending;
+    return pending.then(result => {
+      const elapsedMs = Math.round(performance.now() - startedAt);
+      if (elapsedMs >= 300) {
+        console.warn('[db-timing]', JSON.stringify({
+          operation, elapsedMs, outcome: 'ok',
+          poolTotal: pool.totalCount, poolIdle: pool.idleCount, poolWaiting: pool.waitingCount
+        }));
+      }
+      return result;
+    }, error => {
+      const elapsedMs = Math.round(performance.now() - startedAt);
+      console.warn('[db-timing]', JSON.stringify({
+        operation, elapsedMs, outcome: 'error', errorCode: error.code || 'unknown',
+        poolTotal: pool.totalCount, poolIdle: pool.idleCount, poolWaiting: pool.waitingCount
+      }));
+      throw error;
+    });
+  };
+  pool.on('error', error => {
+    console.error('[db-pool-error]', JSON.stringify({ errorCode: error.code || 'unknown', message: error.message }));
+  });
+}
+
+// Log slow API requests with pool pressure, without recording query strings or personal data.
+app.use((req, res, next) => {
+  if (!req.path.startsWith('/api/')) return next();
+  const startedAt = performance.now();
+  res.on('finish', () => {
+    const elapsedMs = Math.round(performance.now() - startedAt);
+    if (elapsedMs >= 750) {
+      console.warn('[api-timing]', JSON.stringify({
+        method: req.method, route: req.route?.path || req.path,
+        status: res.statusCode, elapsedMs,
+        poolTotal: pool?.totalCount ?? 0, poolIdle: pool?.idleCount ?? 0,
+        poolWaiting: pool?.waitingCount ?? 0
+      }));
+    }
+  });
+  next();
+});
+
 app.get('/config', (_req, res) => {
   const botUsername = String(process.env.TELEGRAM_BOT_USERNAME || '').replace(/^@/, '').trim();
   res.set('Cache-Control', 'public, max-age=300');
