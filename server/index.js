@@ -461,6 +461,51 @@ app.get('/api/my/events', async (req, res) => {
   res.json({ events: result.rows });
 });
 
+// Moderation API: requires both a valid Telegram session and a separately configured admin token.
+function requireAdmin(req, res, next) {
+  const configured = process.env.ADMIN_API_TOKEN;
+  const supplied = req.get('x-admin-token') || '';
+  if (!configured) return res.status(503).json({ error: 'Admin moderation is not configured' });
+  if (supplied.length !== configured.length || !require('node:crypto').timingSafeEqual(Buffer.from(supplied), Buffer.from(configured))) {
+    return res.status(403).json({ error: 'Admin access denied' });
+  }
+  next();
+}
+
+app.get('/api/admin/reports', requireAdmin, async (req, res) => {
+  const status = ['open', 'reviewing', 'resolved', 'dismissed'].includes(String(req.query.status || 'open'))
+    ? String(req.query.status || 'open') : 'open';
+  const limit = Math.min(100, Math.max(1, Number.parseInt(req.query.limit, 10) || 50));
+  const result = await pool.query(
+    `SELECT r.id, r.event_id, r.reporter_id, r.reason, r.details, r.status, r.created_at,
+            e.title AS event_title, e.city AS event_city, e.starts_at AS event_starts_at,
+            e.status AS event_status, e.creator_id,
+            COALESCE(u.display_name, u.first_name, u.username, r.reporter_id::text) AS reporter_name
+     FROM event_reports r
+     JOIN events e ON e.id = r.event_id
+     LEFT JOIN users u ON u.id = r.reporter_id
+     WHERE r.status = $1
+     ORDER BY r.created_at DESC
+     LIMIT $2`,
+    [status, limit]
+  );
+  res.json({ reports: result.rows });
+});
+
+app.patch('/api/admin/reports/:id', requireAdmin, async (req, res) => {
+  const id = String(req.params.id || '');
+  const status = String(req.body?.status || '');
+  if (!/^[1-9]\\d{0,18}$/.test(id) || !['open', 'reviewing', 'resolved', 'dismissed'].includes(status)) {
+    return res.status(400).json({ error: 'A valid report ID and status are required' });
+  }
+  const result = await pool.query(
+    'UPDATE event_reports SET status = $2 WHERE id = $1 RETURNING id, event_id, status',
+    [id, status]
+  );
+  if (!result.rowCount) return res.status(404).json({ error: 'Report not found' });
+  res.json({ report: result.rows[0] });
+});
+
 app.use((err, _req, res, _next) => {
   console.error('Unhandled API error:', err.message);
   if (res.headersSent) return;
