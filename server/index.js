@@ -374,6 +374,18 @@ async function recordEventShareAction(eventId, userId, action) {
   await pool.query('INSERT INTO event_share_events (event_id,user_id,action) VALUES ($1,$2,$3)', [eventId,userId,action]);
   return true;
 }
+app.post('/api/events/:id/reports', async (req, res) => {
+  const reason = typeof req.body?.reason === 'string' ? req.body.reason.trim().slice(0, 40) : '';
+  const details = typeof req.body?.details === 'string' ? req.body.details.trim().slice(0, 1000) : '';
+  const allowedReasons = new Set(['spam', 'fake', 'inappropriate', 'unsafe', 'other']);
+  if (!allowedReasons.has(reason)) return res.status(400).json({ error: 'Choose a valid report reason' });
+  const event = await pool.query('SELECT id, creator_id, status FROM events WHERE id = $1', [req.params.id]);
+  if (!event.rowCount || event.rows[0].status !== 'published') return res.status(404).json({ error: 'Event not found' });
+  if (String(event.rows[0].creator_id) === String(req.telegramUser.id)) return res.status(400).json({ error: 'You cannot report your own event' });
+  const result = await pool.query('INSERT INTO event_reports (event_id, reporter_id, reason, details) VALUES ($1, $2, $3, $4) ON CONFLICT (event_id, reporter_id) DO UPDATE SET reason = EXCLUDED.reason, details = EXCLUDED.details, created_at = NOW() RETURNING id', [req.params.id, req.telegramUser.id, reason, details || null]);
+  res.status(201).json({ reported: true, reportId: result.rows[0].id });
+});
+
 app.post('/api/events/:id/share', async (req, res) => {
   const event = await pool.query("SELECT id FROM events WHERE id=$1 AND status='published'", [req.params.id]);
   if (!event.rowCount) return res.status(404).json({ error: 'Event not found or no longer available' });
