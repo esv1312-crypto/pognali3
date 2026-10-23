@@ -748,7 +748,7 @@ function seedDemoEvents(){
 seedDemoEvents();
 db.events.forEach(e=>{if(!e.country&&e.city==='Симферополь')e.country='Россия';if(!e.city&&e.place) e.city=e.place;});
 save();
-let currentTab='events', map, markers=[]; let selectedFilter=API_MODE?'Мир':'Рядом', eventView='list'; let selectedDate=null, calendarOpen=false, calendarMonth=new Date(2026,8,1); let lastMapView=null; let mapViews={Мир:null,Рядом:null,Мои:null}; let selectedCity=localStorage.getItem(KEY+'_selected_city')||''; let selectedCityPoint=null; try{selectedCityPoint=JSON.parse(localStorage.getItem(KEY+'_selected_city_point')||'null')}catch(e){} try{mapViews={...mapViews,...(JSON.parse(localStorage.getItem(KEY+'_map_views')||'{}')||{})}}catch(e){} let userLocationMarker=null; let userLocationRequested=false; let userGeo=null;
+let currentTab='events', map, markers=[]; let selectedFilter=API_MODE?'Мир':'Рядом', eventView='list'; let selectedDate=null, calendarOpen=false, calendarMonth=new Date(new Date().getFullYear(),new Date().getMonth(),1); let lastMapView=null; let mapViews={Мир:null,Рядом:null,Мои:null}; let selectedCity=localStorage.getItem(KEY+'_selected_city')||''; let selectedCityPoint=null; try{selectedCityPoint=JSON.parse(localStorage.getItem(KEY+'_selected_city_point')||'null')}catch(e){} try{mapViews={...mapViews,...(JSON.parse(localStorage.getItem(KEY+'_map_views')||'{}')||{})}}catch(e){} let userLocationMarker=null; let userLocationRequested=false; let userGeo=null;
 const NEARBY_RADIUS_KM=200; const MAP_RADIUS_LEVELS=[{minZoom:13,km:25},{minZoom:11,km:50},{minZoom:9,km:150},{minZoom:7,km:600}];
 function mapRadiusKm(zoom){for(const x of MAP_RADIUS_LEVELS)if(zoom>=x.minZoom)return x.km;return null}
 function mapScopeLabel(){if(selectedCity)return '🏙️ '+selectedCity;if(selectedFilter==='Мир')return '🏙️ Выбери город';if(selectedFilter==='Рядом')return userGeo?`📍 Рядом · ${NEARBY_RADIUS_KM} км`:'📍 Выбери город';return '🙋 Мои события'}
@@ -761,9 +761,10 @@ function parseDateInput(value){const v=String(value||'').trim();let m=v.match(/^
 function formatDateInput(el){let d=el.value.replace(/\D/g,'').slice(0,8);if(d.length>4)d=d.slice(0,2)+'.'+d.slice(2,4)+'.'+d.slice(4);else if(d.length>2)d=d.slice(0,2)+'.'+d.slice(2);el.value=d}
 function formatTimeInput(el){let d=el.value.replace(/\D/g,'').slice(0,4);if(d.length>2)d=d.slice(0,2)+':'+d.slice(2);el.value=d}
 function eventStart(e){const m=String(e.time||'00:00').match(/^(\d{1,2}):(\d{2})$/);if(!m)return new Date(e.date+'T00:00:00');return new Date(e.date+'T'+String(m[1]).padStart(2,'0')+':'+m[2]+':00')}
-function eventState(e){
+function eventState(e,now=new Date()){
   if(e.status==='FINISHED')return 'FINISHED';
-  return eventStart(e)<=new Date()?'STARTED':'ACTIVE';
+  if(eventStart(e)>now)return 'ACTIVE';
+  return isEventOngoingNow(e,now)?'STARTED':'FINISHED';
 }
 function isVisibleEvent(e){return eventState(e)!=='FINISHED'}
 function isEventOngoingNow(e,now=new Date()){if(e.status==='FINISHED'||eventStart(e)>now)return false;const explicitEnd=e.endAt||e.end_at||e.endDateTime||e.end_datetime;if(explicitEnd){const end=new Date(explicitEnd);if(Number.isFinite(end.getTime()))return now<end}const endDate=e.endDate||e.end_date;if(endDate){const endTime=e.endTime||e.end_time||'23:59';const end=new Date(String(endDate)+'T'+String(endTime)+':00');if(Number.isFinite(end.getTime()))return now<end}const duration=Number(e.durationMinutes||e.duration_minutes||e.duration);const minutes=Number.isFinite(duration)&&duration>0?duration:180;return now<new Date(eventStart(e).getTime()+minutes*60000)}
@@ -848,7 +849,7 @@ function setFilter(x){
   selectedDate=null;calendarOpen=false;selectedFilter=x;lastMapView=mapViews[x]||null;
   if(eventView==='list')renderList();else renderEvents()
 }
-function toggleCalendar(){calendarOpen=!calendarOpen;if(calendarOpen&&selectedDate){const d=new Date(selectedDate+'T12:00:00');calendarMonth=new Date(d.getFullYear(),d.getMonth(),1)}if(eventView==='list')renderList();else renderEvents()}
+function toggleCalendar(){calendarOpen=!calendarOpen;if(calendarOpen){const d=selectedDate?new Date(selectedDate+'T12:00:00'):new Date();calendarMonth=new Date(d.getFullYear(),d.getMonth(),1)}if(eventView==='list')renderList();else renderEvents()}
 function moveCalendar(delta){calendarMonth=new Date(calendarMonth.getFullYear(),calendarMonth.getMonth()+delta,1);if(eventView==='list')renderList();else renderEvents()}
 function pickCalendarDate(key){selectedDate=key;calendarOpen=false;lastMapView=null;if(eventView==='list')renderList();else renderEvents()}
 function clearCalendarDate(){selectedDate=null;calendarOpen=false;if(map){const c=map.getCenter();lastMapView={lat:c.lat,lng:c.lng,zoom:map.getZoom()};mapViews[selectedFilter]=lastMapView;}selectedFilter='Рядом';lastMapView=mapViews['Рядом']||null;if(eventView==='list')renderList();else renderEvents()}
