@@ -748,10 +748,10 @@ function seedDemoEvents(){
 seedDemoEvents();
 db.events.forEach(e=>{if(!e.country&&e.city==='Симферополь')e.country='Россия';if(!e.city&&e.place) e.city=e.place;});
 save();
-let currentTab='events', map, markers=[]; let selectedFilter=API_MODE?'Мир':'Рядом', eventView='list', liveOnly=false; let selectedDate=null, calendarOpen=false, calendarMonth=new Date(2026,8,1); let lastMapView=null; let mapViews={Мир:null,Рядом:null,Мои:null}; try{mapViews={...mapViews,...(JSON.parse(localStorage.getItem(KEY+'_map_views')||'{}')||{})}}catch(e){} let userLocationMarker=null; let userLocationRequested=false; let userGeo=null;
+let currentTab='events', map, markers=[]; let selectedFilter=API_MODE?'Мир':'Рядом', eventView='list', liveOnly=false; let selectedDate=null, calendarOpen=false, calendarMonth=new Date(2026,8,1); let lastMapView=null; let mapViews={Мир:null,Рядом:null,Мои:null}; let selectedCity=localStorage.getItem(KEY+'_selected_city')||''; let selectedCityPoint=null; try{mapViews={...mapViews,...(JSON.parse(localStorage.getItem(KEY+'_map_views')||'{}')||{})}}catch(e){} let userLocationMarker=null; let userLocationRequested=false; let userGeo=null;
 const NEARBY_RADIUS_KM=200; const MAP_RADIUS_LEVELS=[{minZoom:13,km:25},{minZoom:11,km:50},{minZoom:9,km:150},{minZoom:7,km:600}];
 function mapRadiusKm(zoom){for(const x of MAP_RADIUS_LEVELS)if(zoom>=x.minZoom)return x.km;return null}
-function mapScopeLabel(){if(selectedFilter==='Мир')return '🌍 Весь мир';if(selectedFilter==='Рядом')return userGeo?`📍 Рядом · ${NEARBY_RADIUS_KM} км`:'📍 Включи геолокацию';return '🙋 Мои события'}
+function mapScopeLabel(){if(selectedCity)return '🏙️ '+selectedCity;if(selectedFilter==='Мир')return '🏙️ Выбери город';if(selectedFilter==='Рядом')return userGeo?`📍 Рядом · ${NEARBY_RADIUS_KM} км`:'📍 Выбери город';return '🙋 Мои события'}
 function save(){localStorage.setItem(KEY,JSON.stringify(db))}
 function age(b){if(!b)return '';let d=new Date(b),n=new Date();let a=n.getFullYear()-d.getFullYear();if(n<new Date(n.getFullYear(),d.getMonth(),d.getDate()))a--;return a}
 function fmt(e){return new Date(e.date+'T12:00:00').toLocaleDateString(LOCALES[getLang()]||'ru-RU',{day:'numeric',month:'long'})+' · '+e.time}
@@ -772,6 +772,7 @@ function filtered(filter=selectedFilter){
   let es=db.events.filter(isVisibleEvent);
   if(liveOnly) es=es.filter(e=>isEventOngoingNow(e));
   if(selectedDate) es=es.filter(e=>e.date===selectedDate);
+  if(selectedCity && filter==='Мир') es=es.filter(e=>String(e.city||'').trim().toLocaleLowerCase()===selectedCity.toLocaleLowerCase());
   if(filter==='Рядом'){
     if(!userGeo) return [];
     es=es.filter(e=>Number.isFinite(+e.lat)&&Number.isFinite(+e.lng)&&distanceKm(userGeo.lat,userGeo.lng,+e.lat,+e.lng)<=NEARBY_RADIUS_KM);
@@ -795,11 +796,54 @@ function calendarHTML(){
   const wd={ru:['Пн','Вт','Ср','Чт','Пт','Сб','Вс'],en:['Mon','Tue','Wed','Thu','Fri','Sat','Sun'],es:['Lun','Mar','Mié','Jue','Vie','Sáb','Dom'],it:['Lun','Mar','Mer','Gio','Ven','Sab','Dom'],de:['Mo','Di','Mi','Do','Fr','Sa','So'],fr:['Lun','Mar','Mer','Jeu','Ven','Sam','Dim']}[getLang()]||['Пн','Вт','Ср','Чт','Пт','Сб','Вс'];
   return `<div class="calendar-panel"><div class="calendar-head"><button onclick="moveCalendar(-1)">‹</button><b>${monthTitle()}</b><button onclick="moveCalendar(1)">›</button></div><div class="calendar-week">${wd.map(x=>`<span>${x}</span>`).join('')}</div><div class="calendar-grid">${cells}</div><div class="calendar-foot"><button onclick="clearCalendarDate()">${translateText('Все даты')}</button></div></div>`;
 }
-function renderFilters(){return ['Мир','Рядом','Мои'].map(x=>`<button class="filter ${x===selectedFilter&&!selectedDate?'active':''}" onclick="setFilter('${x}')">${filterLabel(x)}</button>`).join('')+`<button class="filter date-filter ${selectedDate||calendarOpen?'active':''}" onclick="toggleCalendar()">📅 ${translateText('Календарь')}${selectedDate?`<span class="filter-count">${filtered().length}</span>`:''}</button>`}
+function renderFilters(){return `<button class="filter ${selectedCity?'active':''}" onclick="openCityPicker()">🏙️ ${esc(selectedCity||'Выбрать город')} ▾</button>`+['Рядом','Мои'].map(x=>`<button class="filter ${x===selectedFilter&&!selectedDate?'active':''}" onclick="setFilter('${x}')">${filterLabel(x)}</button>`).join('')+`<button class="filter date-filter ${selectedDate||calendarOpen?'active':''}" onclick="toggleCalendar()">📅 ${translateText('Календарь')}${selectedDate?`<span class="filter-count">${filtered().length}</span>`:''}</button>`}
 function destroyMainMap(){if(mainMapPopup){try{mainMapPopup.remove()}catch(e){}mainMapPopup=null;}if(map){try{map.remove()}catch(e){}map=null;}markers=[];userLocationMarker=null;}
 function destroyPickerMap(){if(pickerMarker){try{pickerMarker.remove()}catch(e){}pickerMarker=null;}if(pickerMap){try{pickerMap.remove()}catch(e){}pickerMap=null;}}
 function refreshMainMapLayout(fitToEvents=false){if(!map)return;const targetMap=map;const run=()=>{if(!targetMap||map!==targetMap)return;try{targetMap.resize();if(fitToEvents){const points=filtered().map(e=>[Number(e.lng),Number(e.lat)]).filter(([lng,lat])=>Number.isFinite(lat)&&Number.isFinite(lng));if(points.length===1)targetMap.jumpTo({center:points[0],zoom:13});else if(points.length>1)targetMap.fitBounds(points,{padding:{top:42,bottom:72,left:42,right:42},maxZoom:13})}}catch(e){}};requestAnimationFrame(run);setTimeout(run,120);setTimeout(run,320)}
 function renderEvents(){destroyMainMap();document.getElementById('content').innerHTML=`<div class="mapwrap"><div id="map" class="map"></div><div class="filters">${renderFilters()}</div>${calendarOpen?calendarHTML():''}<button class="my-location-btn" onclick="centerOnMyLocation()" aria-label="Моё местоположение" title="Моё местоположение">⌖</button><div id="mapScope" class="map-scope">📍 Определяем город…</div><button type="button" class="live-map-hint${liveOnly?' active':''}" onclick="toggleLiveNow()" aria-pressed="${liveOnly?'true':'false'}">🟢 Идёт сейчас${liveOnly?' ✓':''}</button><div class="viewtoggle"><button id="mapbtn" class="active" onclick="switchView('map')">Карта</button><button id="listbtn" onclick="switchView('list')">Список</button></div></div>`;initMap()}
+
+async function openCityPicker(){
+  openModal('<button class="close" onclick="closeModal()">✕</button><h2>Выбрать город</h2><p class="meta">Введи город — покажем события в нём.</p><div class="field"><label>Город</label><input id="cityQuery" value="'+esc(selectedCity)+'" placeholder="Например, Екатеринбург" autocomplete="off" oninput="searchCitySuggestions()"></div><div id="citySuggestions"><button class="secondary full" onclick="useCityQuery()">Найти город</button></div><button class="secondary full" style="margin-top:8px" onclick="clearSelectedCity()">Сбросить город</button>');
+  setTimeout(()=>document.getElementById('cityQuery')?.focus(),100);
+}
+let citySearchTimer=null;
+function searchCitySuggestions(){
+  clearTimeout(citySearchTimer);
+  const input=document.getElementById('cityQuery'),out=document.getElementById('citySuggestions');
+  if(!input||!out)return;
+  const q=input.value.trim();
+  if(q.length<2){out.innerHTML='<div class="meta">Введи хотя бы 2 символа</div>';return}
+  out.innerHTML='<div class="meta">Ищем город…</div>';
+  citySearchTimer=setTimeout(()=>findCityOptions(q),350);
+}
+async function findCityOptions(q){
+  const out=document.getElementById('citySuggestions');if(!out)return;
+  try{
+    const res=await fetch('https://nominatim.openstreetmap.org/search?format=jsonv2&addressdetails=1&limit=6&featuretype=city&q='+encodeURIComponent(q),{headers:{'Accept-Language':'ru'}});
+    if(!res.ok)throw new Error('search failed');
+    const rows=await res.json();
+    const options=rows.filter(x=>x.type==='city'||x.type==='town'||x.type==='village'||x.class==='place'||x.addresstype==='city'||x.addresstype==='town');
+    out.innerHTML=options.length?options.map((x,i)=>'<button class="secondary full" style="display:block;text-align:left;margin-top:7px" onclick="selectCityOption('+i+')">'+esc(x.name||x.display_name.split(',')[0])+'<small style="display:block;font-weight:400;opacity:.7;margin-top:3px">'+esc(x.display_name)+'</small></button>').join(''):'<div class="meta">Город не найден. Попробуй написать название и страну.</div>';
+    window.__pognaliCityResults=options;
+  }catch(e){out.innerHTML='<button class="primary full" onclick="useCityQuery()">Использовать название и найти ещё раз</button><div class="meta" style="margin-top:8px">Поиск временно недоступен. Попробуй ещё раз.</div>'}
+}
+function selectCityOption(i){
+  const x=(window.__pognaliCityResults||[])[i];if(!x)return;
+  selectedCity=x.name||x.display_name.split(',')[0];
+  selectedCityPoint={lat:Number(x.lat),lng:Number(x.lon)};
+  localStorage.setItem(KEY+'_selected_city',selectedCity);
+  selectedFilter='Мир';selectedDate=null;calendarOpen=false;lastMapView=null;mapViews.Мир=null;
+  closeModal();if(eventView==='list')renderList();else renderEvents();
+}
+function useCityQuery(){
+  const q=document.getElementById('cityQuery')?.value.trim();if(!q)return;
+  findCityOptions(q);
+}
+function clearSelectedCity(){
+  selectedCity='';selectedCityPoint=null;localStorage.removeItem(KEY+'_selected_city');
+  closeModal();if(eventView==='list')renderList();else renderEvents();
+}
+
 function setFilter(x){
   if(map) { const c=map.getCenter(); lastMapView={lat:c.lat,lng:c.lng,zoom:map.getZoom()}; mapViews[selectedFilter]=lastMapView; }
   selectedDate=null;calendarOpen=false;selectedFilter=x;lastMapView=mapViews[x]||null;
@@ -824,8 +868,8 @@ targetMap.setLayoutProperty(layer.id,'text-field',['coalesce',['get','name:ru'],
 }
 function initMap(){
 if(map){try{map.remove()}catch(e){}map=null}if(mainMapPopup){try{mainMapPopup.remove()}catch(e){}mainMapPopup=null}if(userLocationMarker){try{userLocationMarker.remove()}catch(e){}userLocationMarker=null}
-const es=filtered(),worldMode=selectedFilter==='Мир',savedView=selectedDate?null:(mapViews[selectedFilter]||lastMapView),initialView=savedView?[savedView.lng,savedView.lat]:(userGeo?[userGeo.lng,userGeo.lat]:[MAP_CENTER.lng,MAP_CENTER.lat]);
-map=new maplibregl.Map({container:'map',style:'https://tiles.openfreemap.org/styles/bright',center:initialView,zoom:savedView?savedView.zoom:(worldMode?2:9),attributionControl:true,renderWorldCopies:true});map.on('style.load',()=>localizeMapLabelsRu(map));map.addControl(new maplibregl.NavigationControl({showCompass:false}),'top-right');
+const es=filtered(),worldMode=selectedFilter==='Мир'&&!selectedCity,savedView=selectedDate?null:(mapViews[selectedFilter]||lastMapView),initialView=savedView?[savedView.lng,savedView.lat]:(selectedCityPoint?[selectedCityPoint.lng,selectedCityPoint.lat]:(userGeo?[userGeo.lng,userGeo.lat]:[MAP_CENTER.lng,MAP_CENTER.lat]));
+map=new maplibregl.Map({container:'map',style:'https://tiles.openfreemap.org/styles/bright',center:initialView,zoom:savedView?savedView.zoom:(worldMode?2:(selectedCityPoint?11:9)),attributionControl:true,renderWorldCopies:true});map.on('style.load',()=>localizeMapLabelsRu(map));map.addControl(new maplibregl.NavigationControl({showCompass:false}),'top-right');
 let holdTimer=null,holdStart=null;const mapEl=map.getContainer(),clearHold=()=>{if(holdTimer){clearTimeout(holdTimer);holdTimer=null}holdStart=null};
 map.on('contextmenu',ev=>{if(ev.originalEvent)ev.originalEvent.preventDefault();askCreateAtMapPoint(ev.lngLat.lat,ev.lngLat.lng)});
 mapEl.addEventListener('touchstart',ev=>{if(!ev.touches||ev.touches.length!==1)return;const t=ev.touches[0];holdStart={x:t.clientX,y:t.clientY};const rect=mapEl.getBoundingClientRect(),point=map.unproject([t.clientX-rect.left,t.clientY-rect.top]);holdTimer=setTimeout(()=>askCreateAtMapPoint(point.lat,point.lng),650)},{passive:true});
