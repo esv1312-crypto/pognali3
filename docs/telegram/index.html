@@ -1359,7 +1359,12 @@ function mapApiEvent(x){const ownerIsMe=localUserId(x.creator_id)===2;let owner=
 async function refreshApiData(){if(!API_MODE)return;const [me,events]=await Promise.all([apiRequest('/me'),apiRequest('/events')]);const u=me.user||{};db.profile={...db.profile,name:u.display_name||[u.first_name,u.last_name].filter(Boolean).join(' ')||'Участник',birth:'',city:u.city||'',bio:u.bio||'',photo:u.photo_url||''};db.users[2]={name:db.profile.name,city:db.profile.city,bio:db.profile.bio,photo:db.profile.photo};db.events=(events.events||[]).map(mapApiEvent);save();if(currentTab==='events')renderEvents();else if(currentTab==='mine')renderMine();else if(currentTab==='messages')renderMessagesTab();else if(currentTab==='profile')renderProfile()}
 function initTelegramMiniApp(){
   const tg=window.Telegram?.WebApp;
-  if(!tg)return;
+  if(!tg){
+    const params=new URLSearchParams(window.location.search);
+    const startParam=params.get('startapp')||params.get('tgWebAppStartParam')||'';
+    if(startParam)window.POGNALI_TELEGRAM_CONTEXT={startParam};
+    return;
+  }
   try{
     tg.ready();tg.expand();
     if(tg.setHeaderColor)tg.setHeaderColor('#f5f3ef');
@@ -1369,7 +1374,10 @@ function initTelegramMiniApp(){
     document.documentElement.style.setProperty('--tg-viewport-height',(tg.viewportStableHeight||tg.viewportHeight||window.innerHeight)+'px');
     tg.onEvent?.('viewportChanged',()=>document.documentElement.style.setProperty('--tg-viewport-height',(tg.viewportStableHeight||tg.viewportHeight||window.innerHeight)+'px'));
     // Telegram identity is UI context only. A production backend must verify initData server-side.
-    window.POGNALI_TELEGRAM_CONTEXT={platform:tg.platform||'unknown',version:tg.version||'',initData:tg.initData||'',user:tg.initDataUnsafe?.user||null,startParam:tg.initDataUnsafe?.start_param||''};
+    const urlParams=new URLSearchParams(window.location.search);
+    const hashParams=new URLSearchParams(String(window.location.hash||'').replace(/^#/,'').replace(/^.*?\\?/,'') );
+    const startParam=tg.initDataUnsafe?.start_param||urlParams.get('startapp')||urlParams.get('tgWebAppStartParam')||hashParams.get('tgWebAppStartParam')||'';
+    window.POGNALI_TELEGRAM_CONTEXT={platform:tg.platform||'unknown',version:tg.version||'',initData:tg.initData||'',user:tg.initDataUnsafe?.user||null,startParam};
     if(tg.initDataUnsafe?.user){
       const u=tg.initDataUnsafe.user;
       const name=[u.first_name,u.last_name].filter(Boolean).join(' ').trim();
