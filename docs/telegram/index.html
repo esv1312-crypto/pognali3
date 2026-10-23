@@ -1375,7 +1375,7 @@ function initTelegramMiniApp(){
     tg.onEvent?.('viewportChanged',()=>document.documentElement.style.setProperty('--tg-viewport-height',(tg.viewportStableHeight||tg.viewportHeight||window.innerHeight)+'px'));
     // Telegram identity is UI context only. A production backend must verify initData server-side.
     const urlParams=new URLSearchParams(window.location.search);
-    const hashParams=new URLSearchParams(String(window.location.hash||'').replace(/^#/,'').replace(/^.*?\\?/,'') );
+    const hashParams=new URLSearchParams(String(window.location.hash||'').replace(/^#/, '') );
     const startParam=tg.initDataUnsafe?.start_param||urlParams.get('startapp')||urlParams.get('tgWebAppStartParam')||hashParams.get('tgWebAppStartParam')||'';
     window.POGNALI_TELEGRAM_CONTEXT={platform:tg.platform||'unknown',version:tg.version||'',initData:tg.initData||'',user:tg.initDataUnsafe?.user||null,startParam};
     if(tg.initDataUnsafe?.user){
