@@ -43,7 +43,7 @@ if (pool) {
   pool.query = function (...args) {
     const startedAt = performance.now();
     const sql = typeof args[0] === 'string' ? args[0] : String(args[0]?.text || '');
-    const operation = (sql.match(/^\\s*(SELECT|INSERT|UPDATE|DELETE|BEGIN|COMMIT|ROLLBACK|WITH)/i)?.[1] || 'OTHER').toUpperCase();
+    const operation = (sql.match(/^\s*(SELECT|INSERT|UPDATE|DELETE|BEGIN|COMMIT|ROLLBACK|WITH)/i)?.[1] || 'OTHER').toUpperCase();
     const pending = originalPoolQuery(...args);
     if (!pending || typeof pending.then !== 'function') return pending;
     return pending.then(result => {
