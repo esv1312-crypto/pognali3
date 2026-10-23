@@ -82,7 +82,7 @@ app.post('/telegram/webhook', webhookRateLimit, async (req, res) => {
         const when = event.starts_at ? new Date(event.starts_at).toLocaleString('ru-RU', { dateStyle: 'medium', timeStyle: 'short', timeZone: 'Europe/Moscow' }) : '';
         const place = [event.address, event.city].filter(Boolean).join(', ');
         const caption = ('🚀 ' + event.title + '\n' + [when, place, event.description].filter(Boolean).join('\n\n') + '\n\nОткрой карточку события и присоединяйся!').slice(0, 1024);
-        const photoUrl = new URL('/pognali-share-cover.png?v=fb4feaa41db7da0dabd92e9852499534556b476a', miniAppUrl).toString();
+        const photoUrl = new URL('/pognali-share-cover.png?v=share-fit-20261023', miniAppUrl).toString();
         response = await fetch('https://api.telegram.org/bot' + token + '/sendPhoto', {
           method: 'POST',
           headers: { 'content-type': 'application/json' },
@@ -587,12 +587,27 @@ const webRoot = path.resolve(process.env.WEB_ROOT || 'docs/telegram');
 
 app.get('/pognali-share-cover.png', async (_req, res) => {
   try {
-    // Use the exact image uploaded for Pognali event invitations.
-    const png = await fs.readFile(path.join(webRoot, 'file_00000000c5a081f488c652aeb4ab4bfa.png'));
+    // Telegram displays link previews in a wide frame. Preserve the entire square invitation
+    // by centering it on a matching blurred background instead of cropping its text.
+    const source = await fs.readFile(path.join(webRoot, 'file_00000000c5a081f488c652aeb4ab4bfa.png'));
+    const background = await sharp(source)
+      .resize(1200, 630, { fit: 'cover' })
+      .blur(24)
+      .modulate({ brightness: 0.42 })
+      .png()
+      .toBuffer();
+    const foreground = await sharp(source)
+      .resize(630, 630, { fit: 'contain' })
+      .png()
+      .toBuffer();
+    const png = await sharp(background)
+      .composite([{ input: foreground, left: 285, top: 0 }])
+      .png()
+      .toBuffer();
     res.set('Cache-Control', 'public, max-age=86400');
     res.type('png').send(png);
   } catch (error) {
-    console.error('Could not load Pognali share cover:', error.message);
+    console.error('Could not generate Pognali share cover:', error.message);
     res.status(503).send('Share cover temporarily unavailable');
   }
 });
@@ -603,7 +618,7 @@ app.get('/share/:payload', async (req, res, next) => {
   if (!match) return next();
   const eventId = match[1];
   const origin = `${req.protocol}://${req.get('host')}`;
-  const cover = origin + '/pognali-share-cover.png?v=fb4feaa41db7da0dabd92e9852499534556b476a';
+  const cover = origin + '/pognali-share-cover.png?v=share-fit-20261023';
   const botUsername = String(process.env.TELEGRAM_BOT_USERNAME || 'Pognali_pognali_bot').replace(/^@/, '');
   // Keep the reliable bot-chat fallback until the Main Mini App is explicitly configured in BotFather.
   // Once configured, set TELEGRAM_MAIN_MINI_APP_ENABLED=true in Render to open the exact event directly.
@@ -635,8 +650,8 @@ app.get('/share/:payload', async (req, res, next) => {
   res.type('html').send(`<!doctype html><html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>${safeTitle}</title><meta name="description" content="${safeDescription}">
 <meta property="og:type" content="website"><meta property="og:site_name" content="Погнали"><meta property="og:title" content="${safeTitle}">
-<meta property="og:description" content="${safeDescription}"><meta property="og:url" content="${origin}/share/event_${eventId}?v=fb4feaa41db7da0dabd92e9852499534556b476a">
-<meta property="og:image" content="${cover}"><meta property="og:image:secure_url" content="${cover}"><meta property="og:image:type" content="image/png"><meta property="og:image:width" content="1254"><meta property="og:image:height" content="1254">
+<meta property="og:description" content="${safeDescription}"><meta property="og:url" content="${origin}/share/event_${eventId}?v=share-fit-20261023">
+<meta property="og:image" content="${cover}"><meta property="og:image:secure_url" content="${cover}"><meta property="og:image:type" content="image/png"><meta property="og:image:width" content="1200"><meta property="og:image:height" content="630">
 <meta name="twitter:card" content="summary_large_image"><meta name="twitter:title" content="${safeTitle}"><meta name="twitter:description" content="${safeDescription}"><meta name="twitter:image" content="${cover}">
 <meta http-equiv="refresh" content="1;url=${safeBotUrl}">
 <style>body{margin:0;min-height:100vh;display:grid;place-items:center;background:#08152c;color:#fff;font:16px system-ui,sans-serif;text-align:center}.wrap{max-width:420px;padding:28px}.brand{font-size:32px;font-weight:850}.sub{color:#c5e7ff;line-height:1.5;margin:14px 0 24px}a{display:inline-block;background:#60bfff;color:#07172e;text-decoration:none;font-weight:800;padding:14px 22px;border-radius:15px}</style></head><body><main class="wrap"><div class="brand">🚀 ${safeTitle}</div><p class="sub">${safeDescription}</p><a href="${safeBotUrl}">Посмотреть событие</a></main><script>setTimeout(()=>{window.location.href=${JSON.stringify(botUrl)}},800)</script></body></html>`);
