@@ -6,6 +6,8 @@ const out = 'test-results/pognali-visual';
 fs.mkdirSync(out, { recursive: true });
 
 test('capture real Pognali UI and inspect responsive layout', async ({ browser }) => {
+  // Three viewport runs, navigation captures, and external map tiles can exceed Playwright's 30s default.
+  test.setTimeout(120000);
   const errors = [];
   const report = { testedAt: new Date().toISOString(), pages: [], pageErrors: errors };
   const devices = [
