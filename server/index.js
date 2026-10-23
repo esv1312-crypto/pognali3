@@ -13,14 +13,17 @@ app.disable('x-powered-by');
 // Keep security headers without a restrictive CSP: the Mini App loads Telegram and MapLibre assets.
 app.use(helmet({ contentSecurityPolicy: false }));
 app.use(express.json({ limit: '64kb' }));
-const apiRateLimit = rateLimit({ windowMs: 15 * 60 * 1000, limit: 1000, standardHeaders: 'draft-8', legacyHeaders: false, skip: req => req.path === '/health' });
+const apiRateLimit = rateLimit({ windowMs: 15 * 60 * 1000, limit: 1500, standardHeaders: 'draft-8', legacyHeaders: false, skip: req => req.path === '/health' });
 // Per-account protection after Telegram initData is verified; the IP limit above is only a broad safety net.
-const authenticatedApiRateLimit = rateLimit({ windowMs: 15 * 60 * 1000, limit: 1000, keyGenerator: req => String(req.telegramUser.id), standardHeaders: 'draft-8', legacyHeaders: false });
+const authenticatedApiRateLimit = rateLimit({ windowMs: 15 * 60 * 1000, limit: 600, keyGenerator: req => String(req.telegramUser.id), standardHeaders: 'draft-8', legacyHeaders: false });
 const webhookRateLimit = rateLimit({ windowMs: 60 * 1000, limit: 60, standardHeaders: 'draft-8', legacyHeaders: false });
 
+const databaseSslMode = String(process.env.DATABASE_SSL || (String(process.env.DATABASE_URL || '').includes('localhost') ? 'disable' : 'verify-full')).toLowerCase();
+if (!['disable', 'require', 'verify-full'].includes(databaseSslMode)) throw new Error('DATABASE_SSL must be one of: disable, require, verify-full');
+const databaseSsl = databaseSslMode === 'disable' ? false : { rejectUnauthorized: databaseSslMode === 'verify-full' };
 const pool = process.env.DATABASE_URL ? new Pool({
   connectionString: process.env.DATABASE_URL,
-  ssl: process.env.DATABASE_SSL === 'disable' ? false : (process.env.DATABASE_URL.includes('localhost') ? false : { rejectUnauthorized: false }),
+  ssl: databaseSsl,
   max: Number(process.env.PG_POOL_MAX || 5),
   idleTimeoutMillis: 30000,
   connectionTimeoutMillis: 8000
@@ -89,7 +92,7 @@ app.get('/api/health', async (_req, res) => {
 });
 
 function requireDatabase(_req, res, next) {
-  if (!pool) return res.status(503).json({ error: 'Database is not configured yet' });
+  if (!pool) return res.status(503).json({ error: 'Сервис временно недоступен. Попробуй ещё раз позже.' });
   next();
 }
 
@@ -115,7 +118,7 @@ async function requireTelegram(req, res, next) {
     let initDataKeys = [];
     try { initDataKeys = [...new URLSearchParams(initData).keys()].sort(); } catch {}
     console.warn('Telegram initData rejected:', JSON.stringify({ reason: auth.error, initDataPresent: Boolean(initData), initDataLength: initData.length, keys: initDataKeys }));
-    return res.status(401).json({ error: auth.error });
+    return res.status(401).json({ error: auth.error === 'Telegram login expired; reopen the Mini App' ? 'Сессия Telegram устарела. Открой приложение заново.' : 'Не удалось подтвердить вход через Telegram. Открой приложение заново.' });
   }
   req.telegramUser = auth.user;
   try {
@@ -130,7 +133,7 @@ async function requireTelegram(req, res, next) {
     next();
   } catch (error) {
     console.error('User upsert failed:', error.message);
-    res.status(503).json({ error: 'Database temporarily unavailable' });
+    res.status(503).json({ error: 'База данных временно недоступна. Попробуй ещё раз чуть позже.' });
   }
 }
 
@@ -530,7 +533,7 @@ app.patch('/api/admin/reports/:id', requireAdmin, async (req, res) => {
 app.use((err, _req, res, _next) => {
   console.error('Unhandled API error:', err.message);
   if (res.headersSent) return;
-  res.status(500).json({ error: 'Something went wrong. Please try again.' });
+  res.status(500).json({ error: 'Что-то пошло не так. Попробуй ещё раз.' });
 });
 
 const webRoot = path.resolve(process.env.WEB_ROOT || 'docs/telegram');
