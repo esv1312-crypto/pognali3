@@ -570,7 +570,7 @@ app.get('/share/:payload', (req, res, next) => {
   const origin = `${req.protocol}://${req.get('host')}`;
   const cover = origin + '/pognali-share-cover.png';
   const botUsername = String(process.env.TELEGRAM_BOT_USERNAME || 'Pognali_pognali_bot').replace(/^@/, '');
-  const botUrl = 'https://t.me/' + encodeURIComponent(botUsername) + '?start=' + encodeURIComponent('event_' + eventId);
+  const botUrl = 'https://t.me/' + encodeURIComponent(botUsername) + '?startapp=' + encodeURIComponent('event_' + eventId);
   const title = 'Погнали — жизнь начинается здесь';
   const description = 'Тебя пригласили на событие. Открой «Погнали», посмотри детали и присоединяйся в реальной жизни.';
   res.set('Cache-Control', 'public, max-age=300');
@@ -581,7 +581,7 @@ app.get('/share/:payload', (req, res, next) => {
 <meta property="og:image" content="${cover}"><meta property="og:image:secure_url" content="${cover}"><meta property="og:image:type" content="image/png"><meta property="og:image:width" content="1200"><meta property="og:image:height" content="630">
 <meta name="twitter:card" content="summary_large_image"><meta name="twitter:title" content="${title}"><meta name="twitter:description" content="${description}"><meta name="twitter:image" content="${cover}">
 <meta http-equiv="refresh" content="2;url=${botUrl}">
-<style>body{margin:0;min-height:100vh;display:grid;place-items:center;background:#08152c;color:#fff;font:16px system-ui,sans-serif;text-align:center}.wrap{max-width:420px;padding:28px}.brand{font-size:32px;font-weight:850}.sub{color:#c5e7ff;line-height:1.5;margin:14px 0 24px}a{display:inline-block;background:#60bfff;color:#07172e;text-decoration:none;font-weight:800;padding:14px 22px;border-radius:15px}</style></head><body><main class="wrap"><div class="brand">🚀 Погнали</div><p class="sub">Тебя пригласили на событие.<br>Сейчас откроем карточку в Telegram.</p><a href="${botUrl}">Открыть событие</a></main><script>setTimeout(()=>{window.location.href=${JSON.stringify(botUrl)}},900)</script></body></html>`);
+<style>body{margin:0;min-height:100vh;display:grid;place-items:center;background:#08152c;color:#fff;font:16px system-ui,sans-serif;text-align:center}.wrap{max-width:420px;padding:28px}.brand{font-size:32px;font-weight:850}.sub{color:#c5e7ff;line-height:1.5;margin:14px 0 24px}a{display:inline-block;background:#60bfff;color:#07172e;text-decoration:none;font-weight:800;padding:14px 22px;border-radius:15px}</style></head><body><main class="wrap"><div class="brand">🚀 Погнали</div><p class="sub">Тебя пригласили на событие.<br>Открываем «Погнали» и карточку события.</p><a href="${botUrl}">Открыть событие</a></main><script>setTimeout(()=>{window.location.href=${JSON.stringify(botUrl)}},900)</script></body></html>`);
 });
 
 app.use(express.static(webRoot));
