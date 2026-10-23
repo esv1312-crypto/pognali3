@@ -22,6 +22,12 @@ const pool = process.env.DATABASE_URL ? new Pool({
   connectionTimeoutMillis: 8000
 }) : null;
 
+app.get('/config', (_req, res) => {
+  const botUsername = String(process.env.TELEGRAM_BOT_USERNAME || '').replace(/^@/, '').trim();
+  res.set('Cache-Control', 'public, max-age=300');
+  res.json({ botUsername });
+});
+
 app.post('/telegram/webhook', webhookRateLimit, async (req, res) => {
   const expectedSecret = process.env.TELEGRAM_WEBHOOK_SECRET;
   if (!expectedSecret || req.get('x-telegram-bot-api-secret-token') !== expectedSecret) {
