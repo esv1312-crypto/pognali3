@@ -551,7 +551,7 @@ const webRoot = path.resolve(process.env.WEB_ROOT || 'docs/telegram');
 // Public share landing page: Telegram reads Open Graph metadata and cover image,
 // while people who tap the link are forwarded to the matching event in the bot.
 app.get('/share/:payload', (req, res, next) => {
-  const match = String(req.params.payload || '').match(/^event_(\\d+)$/);
+  const match = String(req.params.payload || '').match(/^event_(\d+)$/);
   if (!match) return next();
   const eventId = match[1];
   const origin = `${req.protocol}://${req.get('host')}`;
