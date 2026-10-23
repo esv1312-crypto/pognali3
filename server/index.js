@@ -70,12 +70,36 @@ app.post('/telegram/webhook', webhookRateLimit, async (req, res) => {
     replyText = 'Спасибо! Открой Погнали — там можно выбрать события рядом и поставить точку на карте.';
   }
   try {
-    const response = await fetch('https://api.telegram.org/bot' + token + '/sendMessage', {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ chat_id: chatId, text: replyText, reply_markup: replyMarkup })
-    });
+    let response;
+    if (isEventStart) {
+      const eventId = startPayload.slice(6);
+      const found = await pool.query("SELECT title, description, category, city, address, starts_at FROM events WHERE id=$1 AND status='published'", [eventId]);
+      const event = found.rows[0];
+      if (event) {
+        const escapeHtml = value => String(value ?? '').replace(/[&<>"']/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
+        const when = event.starts_at ? new Date(event.starts_at).toLocaleString('ru-RU', { dateStyle: 'medium', timeStyle: 'short', timeZone: 'Europe/Moscow' }) : '';
+        const place = [event.address, event.city].filter(Boolean).join(', ');
+        const caption = ('🚀 ' + event.title + '\n' + [when, place, event.description].filter(Boolean).join('\n\n') + '\n\nОткрой карточку события и присоединяйся!').slice(0, 1024);
+        const photoUrl = new URL('/pognali-share-cover.png', miniAppUrl).toString();
+        response = await fetch('https://api.telegram.org/bot' + token + '/sendPhoto', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ chat_id: chatId, photo: photoUrl, caption, reply_markup: replyMarkup })
+        });
+      } else {
+        replyText = 'Не нашёл это событие — возможно, оно уже завершилось или удалено. Открой «Погнали» и выбери другое 👇';
+      }
+    }
+    if (!response) {
+      response = await fetch('https://api.telegram.org/bot' + token + '/sendMessage', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ chat_id: chatId, text: replyText, reply_markup: replyMarkup })
+      });
+    }
     if (!response.ok) throw new Error('Telegram Bot API returned ' + response.status);
+    const result = await response.json().catch(() => null);
+    if (result && result.ok === false) throw new Error(result.description || 'Telegram Bot API returned an unsuccessful response');
     res.json({ ok: true });
   } catch (error) {
     console.error('Telegram webhook delivery failed:', error.message);
@@ -561,29 +585,45 @@ app.get('/pognali-share-cover.png', async (_req, res) => {
   }
 });
 
-// Public share landing page: Telegram reads Open Graph metadata and cover image,
-// while people who tap the link are forwarded to the matching event in the bot.
-app.get('/share/:payload', (req, res, next) => {
+// Public share landing page: Open Graph preview uses the real event details and the shared Pognali cover.
+app.get('/share/:payload', async (req, res, next) => {
   const match = String(req.params.payload || '').match(/^event_(\d+)$/);
   if (!match) return next();
   const eventId = match[1];
   const origin = `${req.protocol}://${req.get('host')}`;
   const cover = origin + '/pognali-share-cover.png';
   const botUsername = String(process.env.TELEGRAM_BOT_USERNAME || 'Pognali_pognali_bot').replace(/^@/, '');
-  const botUrl = 'https://t.me/' + encodeURIComponent(botUsername) + '?startapp=' + encodeURIComponent('event_' + eventId);
-  const title = 'Погнали — жизнь начинается здесь';
-  const description = 'Тебя пригласили на событие. Открой «Погнали», посмотри детали и присоединяйся в реальной жизни.';
-  res.set('Cache-Control', 'public, max-age=300');
+  // Use /start as a reliable fallback: the bot replies with the event details and an Open Mini App button.
+  // For one-tap direct opening, the bot's Main Mini App must be configured in BotFather.
+  const botUrl = 'https://t.me/' + encodeURIComponent(botUsername) + '?start=' + encodeURIComponent('event_' + eventId);
+  let event = null;
+  if (pool) {
+    try {
+      const result = await pool.query("SELECT title, description, category, city, address, starts_at FROM events WHERE id=$1 AND status='published'", [eventId]);
+      event = result.rows[0] || null;
+    } catch (error) {
+      console.warn('Could not load event share metadata:', error.message);
+    }
+  }
+  if (!event) return res.status(404).type('text').send('Событие не найдено или уже недоступно.');
+  const escapeHtml = value => String(value ?? '').replace(/[&<>"']/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
+  const title = (String(event.title || 'Событие') + ' — Погнали').slice(0, 180);
+  const when = event.starts_at ? new Date(event.starts_at).toLocaleString('ru-RU', { dateStyle: 'medium', timeStyle: 'short', timeZone: 'Europe/Moscow' }) : '';
+  const place = [event.address, event.city].filter(Boolean).join(', ');
+  const detail = [when, place, String(event.description || '').trim()].filter(Boolean).join(' · ');
+  const description = (detail || 'Тебя пригласили на событие. Открой карточку и присоединяйся!').slice(0, 500);
+  const safeTitle = escapeHtml(title);
+  const safeDescription = escapeHtml(description);
+  const safeBotUrl = escapeHtml(botUrl);
+  res.set('Cache-Control', 'public, max-age=60');
   res.type('html').send(`<!doctype html><html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>${title}</title><meta name="description" content="${description}">
-<meta property="og:type" content="website"><meta property="og:site_name" content="Погнали"><meta property="og:title" content="${title}">
-<meta property="og:description" content="${description}"><meta property="og:url" content="${origin}/share/event_${eventId}">
+<title>${safeTitle}</title><meta name="description" content="${safeDescription}">
+<meta property="og:type" content="website"><meta property="og:site_name" content="Погнали"><meta property="og:title" content="${safeTitle}">
+<meta property="og:description" content="${safeDescription}"><meta property="og:url" content="${origin}/share/event_${eventId}">
 <meta property="og:image" content="${cover}"><meta property="og:image:secure_url" content="${cover}"><meta property="og:image:type" content="image/png"><meta property="og:image:width" content="1200"><meta property="og:image:height" content="630">
-<meta name="twitter:card" content="summary_large_image"><meta name="twitter:title" content="${title}"><meta name="twitter:description" content="${description}"><meta name="twitter:image" content="${cover}">
-<meta http-equiv="refresh" content="2;url=${botUrl}">
-<style>body{margin:0;min-height:100vh;display:grid;place-items:center;background:#08152c;color:#fff;font:16px system-ui,sans-serif;text-align:center}.wrap{max-width:420px;padding:28px}.brand{font-size:32px;font-weight:850}.sub{color:#c5e7ff;line-height:1.5;margin:14px 0 24px}a{display:inline-block;background:#60bfff;color:#07172e;text-decoration:none;font-weight:800;padding:14px 22px;border-radius:15px}</style></head><body><main class="wrap"><div class="brand">🚀 Погнали</div><p class="sub">Тебя пригласили на событие.<br>Сейчас откроем карточку в Telegram.</p><a href="${botUrl}">Открыть событие</a></main><script>setTimeout(()=>{window.location.href=${JSON.stringify(botUrl)}},900)</script></body></html>`);
+<meta name="twitter:card" content="summary_large_image"><meta name="twitter:title" content="${safeTitle}"><meta name="twitter:description" content="${safeDescription}"><meta name="twitter:image" content="${cover}">
+<style>body{margin:0;min-height:100vh;display:grid;place-items:center;background:#08152c;color:#fff;font:16px system-ui,sans-serif;text-align:center}.wrap{max-width:420px;padding:28px}.brand{font-size:32px;font-weight:850}.sub{color:#c5e7ff;line-height:1.5;margin:14px 0 24px}a{display:inline-block;background:#60bfff;color:#07172e;text-decoration:none;font-weight:800;padding:14px 22px;border-radius:15px}</style></head><body><main class="wrap"><div class="brand">🚀 ${safeTitle}</div><p class="sub">${safeDescription}</p><a href="${safeBotUrl}">Открыть событие</a></main></body></html>`);
 });
-
 app.use(express.static(webRoot));
 app.get('/{*splat}', (req, res, next) => {
   if (req.path.startsWith('/api/')) return next();
