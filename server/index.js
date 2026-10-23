@@ -570,7 +570,7 @@ app.get('/share/:payload', (req, res, next) => {
   const origin = `${req.protocol}://${req.get('host')}`;
   const cover = origin + '/pognali-share-cover.png';
   const botUsername = String(process.env.TELEGRAM_BOT_USERNAME || 'Pognali_pognali_bot').replace(/^@/, '');
-  const botUrl = 'https://t.me/' + encodeURIComponent(botUsername) + '?start=' + encodeURIComponent('event_' + eventId);
+  const botUrl = 'https://t.me/' + encodeURIComponent(botUsername) + '?startapp=' + encodeURIComponent('event_' + eventId);
   const title = 'Погнали — жизнь начинается здесь';
   const description = 'Тебя пригласили на событие. Открой «Погнали», посмотри детали и присоединяйся в реальной жизни.';
   res.set('Cache-Control', 'public, max-age=300');
