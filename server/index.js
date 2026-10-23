@@ -587,12 +587,12 @@ const webRoot = path.resolve(process.env.WEB_ROOT || 'docs/telegram');
 
 app.get('/pognali-share-cover.png', async (_req, res) => {
   try {
-    const svg = await fs.readFile(path.join(webRoot, 'pognali-share-cover.svg'));
-    const png = await sharp(svg).png().toBuffer();
+    // Use the exact image uploaded for Pognali event invitations.
+    const png = await fs.readFile(path.join(webRoot, 'file_00000000c5a081f488c652aeb4ab4bfa.png'));
     res.set('Cache-Control', 'public, max-age=86400');
     res.type('png').send(png);
   } catch (error) {
-    console.error('Could not render Pognali share cover:', error.message);
+    console.error('Could not load Pognali share cover:', error.message);
     res.status(503).send('Share cover temporarily unavailable');
   }
 });
