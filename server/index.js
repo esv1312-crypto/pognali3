@@ -146,6 +146,19 @@ app.post('/telegram/webhook', webhookRateLimit, async (req, res) => {
         replyText = 'Не нашёл это событие — возможно, оно уже завершилось или удалено. Открой «Погнали» и выбери другое 👇';
       }
     }
+    if (!response && (text.toLowerCase().startsWith('/start') || text.toLowerCase().startsWith('/startapp'))) {
+      const welcomePhoto = new URL('/pognali-share-cover.png?v=share-square-20261023', miniAppUrl).toString();
+      response = await fetch('https://api.telegram.org/bot' + token + '/sendPhoto', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          chat_id: chatId,
+          photo: welcomePhoto,
+          caption: '🚀 Погнали!\\n\\nНе листай чужую жизнь — давай строить свою.\\n\\nНаходи людей, выбирай планы и присоединяйся к событиям рядом.',
+          reply_markup: replyMarkup
+        })
+      });
+    }
     if (!response) {
       response = await fetch('https://api.telegram.org/bot' + token + '/sendMessage', {
         method: 'POST',
