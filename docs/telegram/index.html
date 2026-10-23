@@ -1391,7 +1391,7 @@ function initTelegramMiniApp(){
 initTelegramMiniApp();
 if(API_MODE){
   updateUnreadBadge();
-  setInterval(updateUnreadBadge,15000);
+  setInterval(updateUnreadBadge,30000);
   window.addEventListener('focus',()=>void updateUnreadBadge());
   window.addEventListener('pageshow',()=>void updateUnreadBadge());
   document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')void updateUnreadBadge()});
