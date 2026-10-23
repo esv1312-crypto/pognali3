@@ -748,7 +748,7 @@ function seedDemoEvents(){
 seedDemoEvents();
 db.events.forEach(e=>{if(!e.country&&e.city==='Симферополь')e.country='Россия';if(!e.city&&e.place) e.city=e.place;});
 save();
-let currentTab='events', map, markers=[]; let selectedFilter=API_MODE?'Мир':'Рядом', eventView='list', liveOnly=false; let selectedDate=null, calendarOpen=false, calendarMonth=new Date(2026,8,1); let lastMapView=null; let mapViews={Мир:null,Рядом:null,Мои:null}; let selectedCity=localStorage.getItem(KEY+'_selected_city')||''; let selectedCityPoint=null; try{mapViews={...mapViews,...(JSON.parse(localStorage.getItem(KEY+'_map_views')||'{}')||{})}}catch(e){} let userLocationMarker=null; let userLocationRequested=false; let userGeo=null;
+let currentTab='events', map, markers=[]; let selectedFilter=API_MODE?'Мир':'Рядом', eventView='list', liveOnly=false; let selectedDate=null, calendarOpen=false, calendarMonth=new Date(2026,8,1); let lastMapView=null; let mapViews={Мир:null,Рядом:null,Мои:null}; let selectedCity=localStorage.getItem(KEY+'_selected_city')||''; let selectedCityPoint=null; try{selectedCityPoint=JSON.parse(localStorage.getItem(KEY+'_selected_city_point')||'null')}catch(e){} try{mapViews={...mapViews,...(JSON.parse(localStorage.getItem(KEY+'_map_views')||'{}')||{})}}catch(e){} let userLocationMarker=null; let userLocationRequested=false; let userGeo=null;
 const NEARBY_RADIUS_KM=200; const MAP_RADIUS_LEVELS=[{minZoom:13,km:25},{minZoom:11,km:50},{minZoom:9,km:150},{minZoom:7,km:600}];
 function mapRadiusKm(zoom){for(const x of MAP_RADIUS_LEVELS)if(zoom>=x.minZoom)return x.km;return null}
 function mapScopeLabel(){if(selectedCity)return '🏙️ '+selectedCity;if(selectedFilter==='Мир')return '🏙️ Выбери город';if(selectedFilter==='Рядом')return userGeo?`📍 Рядом · ${NEARBY_RADIUS_KM} км`:'📍 Выбери город';return '🙋 Мои события'}
@@ -831,7 +831,7 @@ function selectCityOption(i){
   const x=(window.__pognaliCityResults||[])[i];if(!x)return;
   selectedCity=x.name||x.display_name.split(',')[0];
   selectedCityPoint={lat:Number(x.lat),lng:Number(x.lon)};
-  localStorage.setItem(KEY+'_selected_city',selectedCity);
+  localStorage.setItem(KEY+'_selected_city',selectedCity);localStorage.setItem(KEY+'_selected_city_point',JSON.stringify(selectedCityPoint));
   selectedFilter='Мир';selectedDate=null;calendarOpen=false;lastMapView=null;mapViews.Мир=null;
   closeModal();if(eventView==='list')renderList();else renderEvents();
 }
@@ -840,7 +840,7 @@ function useCityQuery(){
   findCityOptions(q);
 }
 function clearSelectedCity(){
-  selectedCity='';selectedCityPoint=null;localStorage.removeItem(KEY+'_selected_city');
+  selectedCity='';selectedCityPoint=null;localStorage.removeItem(KEY+'_selected_city');localStorage.removeItem(KEY+'_selected_city_point');
   closeModal();if(eventView==='list')renderList();else renderEvents();
 }
 
