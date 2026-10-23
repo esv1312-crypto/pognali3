@@ -605,9 +605,13 @@ app.get('/share/:payload', async (req, res, next) => {
   const origin = `${req.protocol}://${req.get('host')}`;
   const cover = origin + '/pognali-share-cover.png';
   const botUsername = String(process.env.TELEGRAM_BOT_USERNAME || 'Pognali_pognali_bot').replace(/^@/, '');
-  // Use /start as a reliable fallback: the bot replies with the event details and an Open Mini App button.
-  // For one-tap direct opening, the bot's Main Mini App must be configured in BotFather.
-  const botUrl = 'https://t.me/' + encodeURIComponent(botUsername) + '?start=' + encodeURIComponent('event_' + eventId);
+  // Keep the reliable bot-chat fallback until the Main Mini App is explicitly configured in BotFather.
+  // Once configured, set TELEGRAM_MAIN_MINI_APP_ENABLED=true in Render to open the exact event directly.
+  const directMiniAppEnabled = String(process.env.TELEGRAM_MAIN_MINI_APP_ENABLED || '').toLowerCase() === 'true';
+  const deepLinkParam = 'event_' + eventId;
+  const botUrl = 'https://t.me/' + encodeURIComponent(botUsername) + (directMiniAppEnabled
+    ? '?startapp=' + encodeURIComponent(deepLinkParam)
+    : '?start=' + encodeURIComponent(deepLinkParam));
   let event = null;
   if (pool) {
     try {
