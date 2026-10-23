@@ -154,7 +154,7 @@ app.post('/telegram/webhook', webhookRateLimit, async (req, res) => {
         body: JSON.stringify({
           chat_id: chatId,
           photo: welcomePhoto,
-          caption: '🚀 Погнали!\\n\\nНе листай чужую жизнь — давай строить свою.\\n\\nНаходи людей, выбирай планы и присоединяйся к событиям рядом.',
+          caption: '🚀 Погнали!\n\nНе листай чужую жизнь — давай строить свою.\n\nНаходи людей, выбирай планы и присоединяйся к событиям рядом.',
           reply_markup: replyMarkup
         })
       });
