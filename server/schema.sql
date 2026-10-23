@@ -85,6 +85,19 @@ CREATE TABLE IF NOT EXISTS event_contact_messages (
 CREATE INDEX IF NOT EXISTS event_contact_messages_conversation_idx ON event_contact_messages(conversation_id,created_at);
 
 
+-- Event reports for moderation
+CREATE TABLE IF NOT EXISTS event_reports (
+ id BIGSERIAL PRIMARY KEY,
+ event_id BIGINT NOT NULL REFERENCES events(id) ON DELETE CASCADE,
+ reporter_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+ reason TEXT NOT NULL CHECK (reason IN ('spam','fake','inappropriate','unsafe','other')),
+ details TEXT CHECK (details IS NULL OR char_length(details) <= 1000),
+ status TEXT NOT NULL DEFAULT 'open' CHECK (status IN ('open','reviewing','resolved','dismissed')),
+ created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+ UNIQUE(event_id, reporter_id)
+);
+CREATE INDEX IF NOT EXISTS event_reports_status_created_idx ON event_reports(status, created_at DESC);
+
 -- Event sharing attribution and share/open analytics.
 ALTER TABLE event_participants ADD COLUMN IF NOT EXISTS join_source TEXT NOT NULL DEFAULT 'organic';
 CREATE INDEX IF NOT EXISTS event_participants_source_idx ON event_participants (event_id, join_source) WHERE status = 'joined';
