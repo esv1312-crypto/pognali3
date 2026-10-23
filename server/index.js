@@ -635,7 +635,7 @@ app.get('/share/:payload', async (req, res, next) => {
   res.type('html').send(`<!doctype html><html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>${safeTitle}</title><meta name="description" content="${safeDescription}">
 <meta property="og:type" content="website"><meta property="og:site_name" content="Погнали"><meta property="og:title" content="${safeTitle}">
-<meta property="og:description" content="${safeDescription}"><meta property="og:url" content="${origin}/share/event_${eventId}">
+<meta property="og:description" content="${safeDescription}"><meta property="og:url" content="${origin}/share/event_${eventId}?v=fb4feaa41db7da0dabd92e9852499534556b476a">
 <meta property="og:image" content="${cover}"><meta property="og:image:secure_url" content="${cover}"><meta property="og:image:type" content="image/png"><meta property="og:image:width" content="1254"><meta property="og:image:height" content="1254">
 <meta name="twitter:card" content="summary_large_image"><meta name="twitter:title" content="${safeTitle}"><meta name="twitter:description" content="${safeDescription}"><meta name="twitter:image" content="${cover}">
 <meta http-equiv="refresh" content="1;url=${safeBotUrl}">
