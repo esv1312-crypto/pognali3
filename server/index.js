@@ -104,7 +104,11 @@ async function sendTelegramMessage(chatId, text, replyMarkup) {
       method: 'POST', headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ chat_id: String(chatId), text, ...(replyMarkup ? { reply_markup: replyMarkup } : {}) })
     });
-    if (!response.ok) { console.warn('Telegram notification was not delivered:', response.status); return false; }
+    const result = await response.json().catch(() => null);
+    if (!response.ok || !result?.ok) {
+      console.warn('Telegram notification was not delivered:', response.status, result?.description || 'Telegram API returned an unsuccessful response');
+      return false;
+    }
     return true;
   } catch (error) { console.warn('Telegram notification failed:', error.message); return false; }
 }
