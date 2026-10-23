@@ -59,7 +59,7 @@ app.post('/telegram/webhook', webhookRateLimit, async (req, res) => {
   const startPayload = String(startParts[0] || '').toLowerCase() === '/start' ? (startParts[1] || '') : '';
   const isEventStart = startPayload.startsWith('event_') && /^\d+$/.test(startPayload.slice(6));
   const appUrl = new URL(miniAppUrl);
-  if (isEventStart) appUrl.searchParams.set('startapp', startPayload);
+  if (isEventStart) { appUrl.searchParams.set('startapp', startPayload); appUrl.searchParams.set('shared_event', startPayload); }
   let replyMarkup = { inline_keyboard: [[{ text: '🚀 Открыть Погнали', web_app: { url: appUrl.toString() } }]] };
   if (text.toLowerCase().startsWith('/start') || text.toLowerCase().startsWith('/startapp')) {
     replyText = isEventStart
