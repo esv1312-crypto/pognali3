@@ -798,7 +798,7 @@ function calendarHTML(){
   const wd={ru:['Пн','Вт','Ср','Чт','Пт','Сб','Вс'],en:['Mon','Tue','Wed','Thu','Fri','Sat','Sun'],es:['Lun','Mar','Mié','Jue','Vie','Sáb','Dom'],it:['Lun','Mar','Mer','Gio','Ven','Sab','Dom'],de:['Mo','Di','Mi','Do','Fr','Sa','So'],fr:['Lun','Mar','Mer','Jeu','Ven','Sam','Dim']}[getLang()]||['Пн','Вт','Ср','Чт','Пт','Сб','Вс'];
   return `<div class="calendar-panel"><div class="calendar-head"><button onclick="moveCalendar(-1)">‹</button><b>${monthTitle()}</b><button onclick="moveCalendar(1)">›</button></div><div class="calendar-week">${wd.map(x=>`<span>${x}</span>`).join('')}</div><div class="calendar-grid">${cells}</div><div class="calendar-foot"><button onclick="clearCalendarDate()">${translateText('Все даты')}</button></div></div>`;
 }
-function renderFilters(){return `<button class="filter ${selectedCity?'active':''}" onclick="openCityPicker()">🏙️ ${esc(selectedCity||'Выбрать город')} ▾</button>`+['Рядом','Мои'].map(x=>`<button class="filter ${x===selectedFilter&&!selectedDate?'active':''}" onclick="setFilter('${x}')">${filterLabel(x)}</button>`).join('')+`<button class="filter date-filter ${selectedDate||calendarOpen?'active':''}" onclick="toggleCalendar()">📅 ${translateText('Календарь')}${selectedDate?`<span class="filter-count">${filtered().length}</span>`:''}</button>`}
+function renderFilters(){return `<button class="filter ${selectedCity&&selectedFilter==='Мир'?'active':''}" onclick="openCityPicker()">🏙️ ${esc(selectedCity||'Выбрать город')} ▾</button>`+`<button class="filter ${selectedFilter==='Мир'&&!selectedDate?'active':''}" onclick="setFilter('Мир')">${selectedCity?'🏙️ '+esc(selectedCity):'🌍 Все события'}</button>`+['Рядом','Мои'].map(x=>`<button class="filter ${x===selectedFilter&&!selectedDate?'active':''}" onclick="setFilter('${x}')">${filterLabel(x)}</button>`).join('')+`<button class="filter date-filter ${selectedDate||calendarOpen?'active':''}" onclick="toggleCalendar()">📅 ${translateText('Календарь')}${selectedDate?`<span class="filter-count">${filtered().length}</span>`:''}</button>`}
 function destroyMainMap(){if(mainMapPopup){try{mainMapPopup.remove()}catch(e){}mainMapPopup=null;}if(map){try{map.remove()}catch(e){}map=null;}markers=[];userLocationMarker=null;}
 function destroyPickerMap(){if(pickerMarker){try{pickerMarker.remove()}catch(e){}pickerMarker=null;}if(pickerMap){try{pickerMap.remove()}catch(e){}pickerMap=null;}}
 function refreshMainMapLayout(fitToEvents=false){if(!map)return;const targetMap=map;const run=()=>{if(!targetMap||map!==targetMap)return;try{targetMap.resize();if(fitToEvents){const points=filtered().map(e=>[Number(e.lng),Number(e.lat)]).filter(([lng,lat])=>Number.isFinite(lat)&&Number.isFinite(lng));if(points.length===1)targetMap.jumpTo({center:points[0],zoom:13});else if(points.length>1)targetMap.fitBounds(points,{padding:{top:42,bottom:72,left:42,right:42},maxZoom:13})}}catch(e){}};requestAnimationFrame(run);setTimeout(run,120);setTimeout(run,320)}
@@ -848,6 +848,8 @@ function clearSelectedCity(){
 
 function setFilter(x){
   if(map) { const c=map.getCenter(); lastMapView={lat:c.lat,lng:c.lng,zoom:map.getZoom()}; mapViews[selectedFilter]=lastMapView; }
+  // Повторное нажатие «Рядом» снимает географический фильтр и возвращает город/все события.
+  if(x==='Рядом'&&selectedFilter==='Рядом')x='Мир';
   selectedDate=null;calendarOpen=false;selectedFilter=x;lastMapView=mapViews[x]||null;
   if(eventView==='list')renderList();else renderEvents()
 }
