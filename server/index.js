@@ -21,7 +21,8 @@ app.use(express.json({ limit: '64kb' }));
 
 // Cache shared event-list data briefly; every API write invalidates it before route handlers run.
 const eventsCache = new Map();
-const EVENTS_TTL_MS = Math.max(0, Number(process.env.EVENTS_CACHE_TTL_MS || 5000));
+const configuredEventsTtl = Number(process.env.EVENTS_CACHE_TTL_MS);
+const EVENTS_TTL_MS = Number.isFinite(configuredEventsTtl) && configuredEventsTtl >= 0 ? Math.min(configuredEventsTtl, 60000) : 5000;
 app.use('/api', (req, res, next) => {
   if (req.method !== 'GET' && req.method !== 'HEAD') res.on('finish', () => eventsCache.clear());
   next();
