@@ -4,6 +4,7 @@ const path = require('node:path');
 const { Pool } = require('pg');
 const helmet = require('helmet');
 const { rateLimit } = require('express-rate-limit');
+const sharp = require('sharp');
 const { verifyTelegramInitData } = require('./telegram-auth');
 
 const app = express();
@@ -548,6 +549,18 @@ app.use((err, _req, res, _next) => {
 
 const webRoot = path.resolve(process.env.WEB_ROOT || 'docs/telegram');
 
+app.get('/pognali-share-cover.png', async (_req, res) => {
+  try {
+    const svg = await fs.readFile(path.join(webRoot, 'pognali-share-cover.svg'));
+    const png = await sharp(svg).png().toBuffer();
+    res.set('Cache-Control', 'public, max-age=86400');
+    res.type('png').send(png);
+  } catch (error) {
+    console.error('Could not render Pognali share cover:', error.message);
+    res.status(503).send('Share cover temporarily unavailable');
+  }
+});
+
 // Public share landing page: Telegram reads Open Graph metadata and cover image,
 // while people who tap the link are forwarded to the matching event in the bot.
 app.get('/share/:payload', (req, res, next) => {
@@ -555,7 +568,7 @@ app.get('/share/:payload', (req, res, next) => {
   if (!match) return next();
   const eventId = match[1];
   const origin = `${req.protocol}://${req.get('host')}`;
-  const cover = origin + '/pognali-share-cover.svg';
+  const cover = origin + '/pognali-share-cover.png';
   const botUsername = String(process.env.TELEGRAM_BOT_USERNAME || 'Pognali_pognali_bot').replace(/^@/, '');
   const botUrl = 'https://t.me/' + encodeURIComponent(botUsername) + '?start=' + encodeURIComponent('event_' + eventId);
   const title = 'Погнали — жизнь начинается здесь';
@@ -565,7 +578,7 @@ app.get('/share/:payload', (req, res, next) => {
 <title>${title}</title><meta name="description" content="${description}">
 <meta property="og:type" content="website"><meta property="og:site_name" content="Погнали"><meta property="og:title" content="${title}">
 <meta property="og:description" content="${description}"><meta property="og:url" content="${origin}/share/event_${eventId}">
-<meta property="og:image" content="${cover}"><meta property="og:image:secure_url" content="${cover}"><meta property="og:image:type" content="image/svg+xml"><meta property="og:image:width" content="1200"><meta property="og:image:height" content="630">
+<meta property="og:image" content="${cover}"><meta property="og:image:secure_url" content="${cover}"><meta property="og:image:type" content="image/png"><meta property="og:image:width" content="1200"><meta property="og:image:height" content="630">
 <meta name="twitter:card" content="summary_large_image"><meta name="twitter:title" content="${title}"><meta name="twitter:description" content="${description}"><meta name="twitter:image" content="${cover}">
 <meta http-equiv="refresh" content="2;url=${botUrl}">
 <style>body{margin:0;min-height:100vh;display:grid;place-items:center;background:#08152c;color:#fff;font:16px system-ui,sans-serif;text-align:center}.wrap{max-width:420px;padding:28px}.brand{font-size:32px;font-weight:850}.sub{color:#c5e7ff;line-height:1.5;margin:14px 0 24px}a{display:inline-block;background:#60bfff;color:#07172e;text-decoration:none;font-weight:800;padding:14px 22px;border-radius:15px}</style></head><body><main class="wrap"><div class="brand">🚀 Погнали</div><p class="sub">Тебя пригласили на событие.<br>Сейчас откроем карточку в Telegram.</p><a href="${botUrl}">Открыть событие</a></main><script>setTimeout(()=>{window.location.href=${JSON.stringify(botUrl)}},900)</script></body></html>`);
