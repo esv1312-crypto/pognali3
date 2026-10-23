@@ -1362,7 +1362,7 @@ function initTelegramMiniApp(){
   if(!tg){
     const params=new URLSearchParams(window.location.search);
     const hashParams=new URLSearchParams(String(window.location.hash||'').replace(/^#/,''));
-     const startParam=params.get('startapp')||params.get('tgWebAppStartParam')||hashParams.get('startapp')||hashParams.get('tgWebAppStartParam')||'';
+     const startParam=params.get('shared_event')||params.get('event_id')||params.get('startapp')||params.get('tgWebAppStartParam')||hashParams.get('shared_event')||hashParams.get('event_id')||hashParams.get('startapp')||hashParams.get('tgWebAppStartParam')||'';
     if(startParam)window.POGNALI_TELEGRAM_CONTEXT={startParam};
     return;
   }
@@ -1379,7 +1379,7 @@ function initTelegramMiniApp(){
     const hashParams=new URLSearchParams(String(window.location.hash||'').replace(/^#/, '') );
     const initDataParams=new URLSearchParams(String(tg.initData||''));
      const initDataStartParam=new URLSearchParams(initDataParams.get('tgWebAppData')||'').get('start_param')||'';
-     const startParam=tg.initDataUnsafe?.start_param||initDataStartParam||urlParams.get('startapp')||urlParams.get('tgWebAppStartParam')||hashParams.get('startapp')||hashParams.get('tgWebAppStartParam')||'';
+     const startParam=tg.initDataUnsafe?.start_param||initDataStartParam||urlParams.get('shared_event')||urlParams.get('event_id')||urlParams.get('startapp')||urlParams.get('tgWebAppStartParam')||hashParams.get('shared_event')||hashParams.get('event_id')||hashParams.get('startapp')||hashParams.get('tgWebAppStartParam')||'';
     window.POGNALI_TELEGRAM_CONTEXT={platform:tg.platform||'unknown',version:tg.version||'',initData:tg.initData||'',user:tg.initDataUnsafe?.user||null,startParam};
     if(tg.initDataUnsafe?.user){
       const u=tg.initDataUnsafe.user;
