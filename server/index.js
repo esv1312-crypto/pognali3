@@ -7,11 +7,15 @@ const { rateLimit } = require('express-rate-limit');
 const { verifyTelegramInitData } = require('./telegram-auth');
 
 const app = express();
+// Render sits behind a trusted reverse proxy; use its forwarded client IP for the fallback IP limiter.
+app.set('trust proxy', 1);
 app.disable('x-powered-by');
 // Keep security headers without a restrictive CSP: the Mini App loads Telegram and MapLibre assets.
 app.use(helmet({ contentSecurityPolicy: false }));
 app.use(express.json({ limit: '64kb' }));
-const apiRateLimit = rateLimit({ windowMs: 15 * 60 * 1000, limit: 300, standardHeaders: 'draft-8', legacyHeaders: false, skip: req => req.path === '/health' });
+const apiRateLimit = rateLimit({ windowMs: 15 * 60 * 1000, limit: 1000, standardHeaders: 'draft-8', legacyHeaders: false, skip: req => req.path === '/health' });
+// Per-account protection after Telegram initData is verified; the IP limit above is only a broad safety net.
+const authenticatedApiRateLimit = rateLimit({ windowMs: 15 * 60 * 1000, limit: 1000, keyGenerator: req => String(req.telegramUser.id), standardHeaders: 'draft-8', legacyHeaders: false });
 const webhookRateLimit = rateLimit({ windowMs: 60 * 1000, limit: 60, standardHeaders: 'draft-8', legacyHeaders: false });
 
 const pool = process.env.DATABASE_URL ? new Pool({
@@ -126,7 +130,7 @@ async function requireTelegram(req, res, next) {
 
 app.use('/api', apiRateLimit, (req, res, next) => {
   if (req.path === '/health') return next();
-  return requireDatabase(req, res, () => requireTelegram(req, res, next));
+  return requireDatabase(req, res, () => requireTelegram(req, res, () => authenticatedApiRateLimit(req, res, next)));
 });
 
 app.get('/api/me', async (req, res) => {
@@ -389,7 +393,18 @@ app.post('/api/events/:id/reports', async (req, res) => {
   if (!event.rowCount || event.rows[0].status !== 'published') return res.status(404).json({ error: 'Event not found' });
   if (String(event.rows[0].creator_id) === String(req.telegramUser.id)) return res.status(400).json({ error: 'You cannot report your own event' });
   const result = await pool.query('INSERT INTO event_reports (event_id, reporter_id, reason, details) VALUES ($1, $2, $3, $4) ON CONFLICT (event_id, reporter_id) DO UPDATE SET reason = EXCLUDED.reason, details = EXCLUDED.details, created_at = NOW() RETURNING id', [req.params.id, req.telegramUser.id, reason, details || null]);
-  res.status(201).json({ reported: true, reportId: result.rows[0].id });
+  const reportId = result.rows[0].id;
+  const adminChatId = process.env.ADMIN_TELEGRAM_CHAT_ID;
+  if (adminChatId) {
+    const eventInfo = await pool.query('SELECT title, city FROM events WHERE id=$1', [req.params.id]);
+    const reporter = req.telegramUser.username ? '@' + req.telegramUser.username : [req.telegramUser.first_name, req.telegramUser.last_name].filter(Boolean).join(' ') || String(req.telegramUser.id);
+    const reasonLabels = { spam: 'Спам или реклама', fake: 'Обман или фальшивое событие', inappropriate: 'Неприемлемый контент', unsafe: 'Опасное событие', other: 'Другое' };
+    const note = '🚨 Новая жалоба на событие\n' + 'Жалоба №' + reportId + '\n' + 'Событие: ' + (eventInfo.rows[0]?.title || ('#' + req.params.id)) + '\n' + 'Город: ' + (eventInfo.rows[0]?.city || 'не указан') + '\n' + 'Причина: ' + reasonLabels[reason] + '\n' + 'От: ' + reporter + '\n' + (details ? 'Подробности: ' + details.slice(0, 700) + '\n' : '') + 'Статус: open';
+    void sendTelegramMessage(adminChatId, note).then(delivered => { if (!delivered) console.warn('Admin report notification was not delivered; check ADMIN_TELEGRAM_CHAT_ID and that the admin started the bot.'); });
+  } else {
+    console.warn('Report saved without Telegram notification: ADMIN_TELEGRAM_CHAT_ID is not configured.');
+  }
+  res.status(201).json({ reported: true, reportId });
 });
 
 app.post('/api/events/:id/share', async (req, res) => {
