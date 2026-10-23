@@ -279,7 +279,7 @@ app.patch('/api/me', async (req, res) => {
 app.get('/api/events', async (req, res) => {
   const city = typeof req.query.city === 'string' ? req.query.city.trim().slice(0, 120) : '';
   const category = typeof req.query.category === 'string' ? req.query.category.trim().slice(0, 40) : '';
-  const limit = Math.min(100, Math.max(1, Number.parseInt(req.query.limit, 10) || 40));
+  const limit = Math.min(500, Math.max(1, Number.parseInt(req.query.limit, 10) || 100));
   const result = await pool.query(
     `SELECT e.*, COALESCE(u.display_name, u.first_name) AS creator_first_name, u.username AS creator_username,
        COUNT(ep.user_id) FILTER (WHERE ep.status='joined')::int AS participants_count,
