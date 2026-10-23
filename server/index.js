@@ -36,6 +36,26 @@ const pool = process.env.DATABASE_URL ? new Pool({
   connectionTimeoutMillis: 8000
 }) : null;
 
+// Opt-in performance diagnostics. Enable with POGNALI_PERF_DIAGNOSTICS=true.
+if (String(process.env.POGNALI_PERF_DIAGNOSTICS || '').toLowerCase() === 'true') {
+  if (pool) {
+    pool.on('error', error => console.error('[perf] postgres pool error:', error.message));
+    pool.on('connect', () => console.log('[perf] pool connect', JSON.stringify({ total: pool.totalCount, idle: pool.idleCount, waiting: pool.waitingCount })));
+    pool.on('remove', () => console.log('[perf] pool remove', JSON.stringify({ total: pool.totalCount, idle: pool.idleCount, waiting: pool.waitingCount })));
+  }
+  app.use((req, res, next) => {
+    const started = performance.now();
+    res.once('finish', () => {
+      const elapsedMs = Math.round(performance.now() - started);
+      if (elapsedMs >= 500) console.warn('[perf] slow request', JSON.stringify({
+        method: req.method, path: req.path, status: res.statusCode, elapsedMs,
+        pool: pool ? { total: pool.totalCount, idle: pool.idleCount, waiting: pool.waitingCount } : null
+      }));
+    });
+    next();
+  });
+}
+
 app.get('/config', (_req, res) => {
   const botUsername = String(process.env.TELEGRAM_BOT_USERNAME || '').replace(/^@/, '').trim();
   res.set('Cache-Control', 'public, max-age=300');
