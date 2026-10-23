@@ -331,7 +331,7 @@ app.get('/api/events', async (req, res) => {
   const limit = Math.min(500, Math.max(1, Number.parseInt(req.query.limit, 10) || 100));
   const key = `${city.toLowerCase()}|${category}|${limit}`;
   let entry = eventsCache.get(key);
-  if (!entry || Date.now() - entry.at > EVENTS_TTL_MS) {
+  if (EVENTS_TTL_MS === 0 || !entry || Date.now() - entry.at > EVENTS_TTL_MS) {
     entry = { at: Date.now(), payload: buildEventsPayload(city, category, limit) };
     if (eventsCache.size >= 200) eventsCache.clear();
     eventsCache.set(key, entry);
