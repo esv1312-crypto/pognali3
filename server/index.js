@@ -52,6 +52,54 @@ app.post('/telegram/webhook', webhookRateLimit, async (req, res) => {
   if (!token || !miniAppUrl || !miniAppUrl.startsWith('https://')) {
     return res.status(503).json({ error: 'Bot token or HTTPS Mini App URL is not configured' });
   }
+  const inlineQuery = req.body?.inline_query;
+  if (inlineQuery) {
+    const query = String(inlineQuery.query || '').trim();
+    const match = query.match(/^event_(\\d+)(?:_i_([A-Za-z0-9_-]+))?$/);
+    let results = [];
+    if (match && pool) {
+      try {
+        const found = await pool.query("SELECT title, description, city, address, starts_at FROM events WHERE id=$1 AND status='published'", [match[1]]);
+        const event = found.rows[0];
+        if (event) {
+          const when = event.starts_at ? new Date(event.starts_at).toLocaleString('ru-RU', { dateStyle: 'medium', timeStyle: 'short', timeZone: 'Europe/Moscow' }) : '';
+          const place = [event.address, event.city].filter(Boolean).join(', ');
+          const detail = [when, place, event.description].filter(Boolean).join(' · ').slice(0, 350);
+          const caption = (['🚀 ' + event.title, 'Пойдём вместе?', [when, place].filter(Boolean).join(' · '), event.description, 'Жми «Открыть событие» и присоединяйся!'].filter(Boolean).join('\\n\\n')).slice(0, 1024);
+          const botUsername = String(process.env.TELEGRAM_BOT_USERNAME || 'Pognali_pognali_bot').replace(/^@/, '').trim();
+          const startUrl = 'https://t.me/' + botUsername + '?startapp=' + encodeURIComponent(query);
+          const origin = new URL(miniAppUrl).origin;
+          const photoUrl = origin + '/pognali-share-cover.jpg?v=share-square-20261023';
+          results = [{
+            type: 'photo',
+            id: 'pognali-event-' + String(match[1]),
+            photo_url: photoUrl,
+            thumbnail_url: photoUrl,
+            photo_width: 1254,
+            photo_height: 1254,
+            title: '🚀 ' + String(event.title).slice(0, 120),
+            description: detail || 'Пойдём вместе? Открой событие в Погнали.',
+            caption,
+            reply_markup: { inline_keyboard: [[{ text: 'Открыть событие', url: startUrl }]] }
+          }];
+        }
+      } catch (error) {
+        console.error('Telegram inline invitation lookup failed:', error.message);
+      }
+    }
+    try {
+      const response = await fetch('https://api.telegram.org/bot' + token + '/answerInlineQuery', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ inline_query_id: inlineQuery.id, results, cache_time: 0, is_personal: true })
+      });
+      const result = await response.json().catch(() => null);
+      if (!response.ok || !result?.ok) console.warn('Telegram inline query response failed:', response.status, result?.description || 'Telegram API returned an unsuccessful response');
+    } catch (error) {
+      console.error('Telegram inline query response error:', error.message);
+    }
+    return res.json({ ok: true });
+  }
   const message = req.body?.message;
   const chatId = message?.chat?.id;
   if (!chatId) return res.json({ ok: true });
@@ -591,6 +639,18 @@ app.use((err, _req, res, _next) => {
 
 const webRoot = path.resolve(process.env.WEB_ROOT || 'docs/telegram');
 
+app.get('/pognali-share-cover.jpg', async (_req, res) => {
+  try {
+    const source = await fs.readFile(path.join(webRoot, 'file_00000000c5a081f488c652aeb4ab4bfa.png'));
+    const jpeg = await sharp(source).jpeg({ quality: 90, mozjpeg: true }).toBuffer();
+    res.set('Cache-Control', 'public, max-age=86400');
+    res.type('jpeg').send(jpeg);
+  } catch (error) {
+    console.error('Could not convert Pognali share cover to JPEG:', error.message);
+    res.status(503).send('Share cover temporarily unavailable');
+  }
+});
+
 app.get('/pognali-share-cover.png', async (_req, res) => {
   try {
     // Keep the original square invitation image, as in the earlier working version.
@@ -680,7 +740,7 @@ async function configureTelegramWebhook() {
     const response = await fetch('https://api.telegram.org/bot' + token + '/setWebhook', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ url: webhookUrl, secret_token: secret, allowed_updates: ['message'], drop_pending_updates: false })
+      body: JSON.stringify({ url: webhookUrl, secret_token: secret, allowed_updates: ['message', 'inline_query'], drop_pending_updates: false })
     });
     const result = await response.json();
     if (!response.ok || !result.ok) {
