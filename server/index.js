@@ -3,6 +3,9 @@ const fs = require('node:fs/promises');
 const path = require('node:path');
 const { Pool } = require('pg');
 const helmet = require('helmet');
+const compression = require('compression');
+const zlib = require('node:zlib');
+const crypto = require('node:crypto');
 const { rateLimit } = require('express-rate-limit');
 const sharp = require('sharp');
 const { verifyTelegramInitData } = require('./telegram-auth');
@@ -13,7 +16,17 @@ app.set('trust proxy', 1);
 app.disable('x-powered-by');
 // Keep security headers without a restrictive CSP: the Mini App loads Telegram and MapLibre assets.
 app.use(helmet({ contentSecurityPolicy: false }));
+app.use(compression({ filter: (req, res) => req.path.startsWith('/api/') && compression.filter(req, res) }));
 app.use(express.json({ limit: '64kb' }));
+
+// Cache shared event-list data briefly; every API write invalidates it before route handlers run.
+const eventsCache = new Map();
+const configuredEventsTtl = Number(process.env.EVENTS_CACHE_TTL_MS);
+const EVENTS_TTL_MS = Number.isFinite(configuredEventsTtl) && configuredEventsTtl >= 0 ? Math.min(configuredEventsTtl, 60000) : 5000;
+app.use('/api', (req, res, next) => {
+  if (req.method !== 'GET' && req.method !== 'HEAD') res.on('finish', () => eventsCache.clear());
+  next();
+});
 const apiRateLimit = rateLimit({ windowMs: 15 * 60 * 1000, limit: 1500, standardHeaders: 'draft-8', legacyHeaders: false, skip: req => req.path === '/health' });
 // Per-account protection after Telegram initData is verified; the IP limit above is only a broad safety net.
 const authenticatedApiRateLimit = rateLimit({ windowMs: 15 * 60 * 1000, limit: 600, keyGenerator: req => String(req.telegramUser.id), standardHeaders: 'draft-8', legacyHeaders: false });
@@ -296,22 +309,51 @@ app.patch('/api/me', async (req, res) => {
   res.json({ user: result.rows[0] });
 });
 
-app.get('/api/events', async (req, res) => {
-  const city = typeof req.query.city === 'string' ? req.query.city.trim().slice(0, 120) : '';
-  const category = typeof req.query.category === 'string' ? req.query.category.trim().slice(0, 40) : '';
-  const limit = Math.min(500, Math.max(1, Number.parseInt(req.query.limit, 10) || 100));
+async function buildEventsPayload(city, category, limit) {
   const result = await pool.query(
     `SELECT e.*, COALESCE(u.display_name, u.first_name) AS creator_first_name, u.username AS creator_username,
-       COUNT(ep.user_id) FILTER (WHERE ep.status='joined')::int AS participants_count,
-       BOOL_OR(ep.user_id=$3 AND ep.status='joined') AS joined_by_me
+       COUNT(ep.user_id) FILTER (WHERE ep.status='joined')::int AS participants_count
      FROM events e JOIN users u ON u.id=e.creator_id
      LEFT JOIN event_participants ep ON ep.event_id=e.id
      WHERE e.status='published' AND e.starts_at >= NOW() - INTERVAL '12 hours'
        AND ($1='' OR LOWER(e.city)=LOWER($1)) AND ($2='' OR e.category=$2)
-     GROUP BY e.id, u.id ORDER BY e.starts_at ASC LIMIT $4`,
-    [city, category, req.telegramUser.id, limit]
+     GROUP BY e.id, u.id ORDER BY e.starts_at ASC LIMIT $3`,
+    [city, category, limit]
   );
-  res.json({ events: result.rows });
+  const json = Buffer.from(JSON.stringify({ events: result.rows }));
+  const gz = await new Promise((resolve, reject) => zlib.gzip(json, { level: 6 }, (error, buffer) => error ? reject(error) : resolve(buffer)));
+  return { json, gz };
+}
+
+app.get('/api/events', async (req, res) => {
+  const city = typeof req.query.city === 'string' ? req.query.city.trim().slice(0, 120) : '';
+  const category = typeof req.query.category === 'string' ? req.query.category.trim().slice(0, 40) : '';
+  const limit = Math.min(500, Math.max(1, Number.parseInt(req.query.limit, 10) || 100));
+  const key = `${city.toLowerCase()}|${category}|${limit}`;
+  let entry = eventsCache.get(key);
+  if (EVENTS_TTL_MS === 0 || !entry || Date.now() - entry.at > EVENTS_TTL_MS) {
+    entry = { at: Date.now(), payload: buildEventsPayload(city, category, limit) };
+    if (eventsCache.size >= 200) eventsCache.clear();
+    eventsCache.set(key, entry);
+    entry.payload.catch(() => {
+      if (eventsCache.get(key) === entry) eventsCache.delete(key);
+    });
+  }
+  const { json, gz } = await entry.payload;
+  res.set({ 'Content-Type': 'application/json; charset=utf-8', Vary: 'Accept-Encoding', 'Cache-Control': 'private, no-cache' });
+  if (req.acceptsEncodings('gzip')) {
+    res.set('Content-Encoding', 'gzip');
+    return res.send(gz);
+  }
+  return res.send(json);
+});
+
+app.get('/api/events/joined-ids', async (req, res) => {
+  const mine = await pool.query(
+    `SELECT event_id FROM event_participants WHERE user_id=$1 AND status='joined'`,
+    [req.telegramUser.id]
+  );
+  res.json({ ids: mine.rows.map(row => String(row.event_id)) });
 });
 
 app.get('/api/events/:id', async (req, res) => {
@@ -819,9 +861,37 @@ app.get('/share/:payload', async (req, res, next) => {
 <meta http-equiv="refresh" content="1;url=${safeBotUrl}">
 <style>body{margin:0;min-height:100vh;display:grid;place-items:center;background:#08152c;color:#fff;font:16px system-ui,sans-serif;text-align:center}.wrap{max-width:420px;padding:28px}.brand{font-size:32px;font-weight:850}.sub{color:#c5e7ff;line-height:1.5;margin:14px 0 24px}a{display:inline-block;background:#60bfff;color:#07172e;text-decoration:none;font-weight:800;padding:14px 22px;border-radius:15px}</style></head><body><main class="wrap"><div class="brand">🚀 ${safeTitle}</div><p class="sub">${safeDescription}</p><a href="${safeBotUrl}">Посмотреть событие</a></main><script>setTimeout(()=>{window.location.href=${JSON.stringify(botUrl)}},800)</script></body></html>`);
 });
+// Pre-compress the Mini App shell once at startup and support conditional requests via ETag.
+let indexCache = null;
+fs.readFile(path.join(webRoot, 'index.html')).then(raw => {
+  indexCache = {
+    raw,
+    gz: zlib.gzipSync(raw, { level: 9 }),
+    etag: '"' + crypto.createHash('sha1').update(raw).digest('hex').slice(0, 16) + '"'
+  };
+}).catch(error => console.error('Could not prepare cached index.html:', error.message));
+function sendIndex(req, res) {
+  if (!indexCache) return false;
+  res.set({ ETag: indexCache.etag, 'Cache-Control': 'no-cache', Vary: 'Accept-Encoding', 'Content-Type': 'text/html; charset=utf-8' });
+  if (req.headers['if-none-match'] === indexCache.etag) {
+    res.status(304).end();
+    return true;
+  }
+  if (req.acceptsEncodings('gzip')) {
+    res.set('Content-Encoding', 'gzip');
+    res.end(indexCache.gz);
+  } else {
+    res.end(indexCache.raw);
+  }
+  return true;
+}
+app.get(['/', '/index.html'], (req, res, next) => {
+  if (!sendIndex(req, res)) next();
+});
 app.use(express.static(webRoot));
 app.get('/{*splat}', (req, res, next) => {
   if (req.path.startsWith('/api/')) return next();
+  if (sendIndex(req, res)) return;
   try { res.sendFile(path.join(webRoot, 'index.html')); } catch { next(); }
 });
 
@@ -833,7 +903,7 @@ async function configureTelegramWebhook() {
     console.log('Telegram webhook not configured: required environment variables are missing');
     return;
   }
-  const webhookUrl = 'https://pognali-telegram-mini-app.onrender.com/telegram/webhook';
+  const webhookUrl = new URL('/telegram/webhook', miniAppUrl).toString();
   try {
     const identityResponse = await fetch('https://api.telegram.org/bot' + token + '/getMe');
     const identity = await identityResponse.json();
