@@ -612,7 +612,7 @@ app.get('/share/:payload', async (req, res, next) => {
   const cover = origin + '/pognali-share-cover.png?v=share-square-20261023';
   const botUsername = String(process.env.TELEGRAM_BOT_USERNAME || 'Pognali_pognali_bot').replace(/^@/, '');
   // The inviter is carried in a short, URL-safe start payload so the bot can show who sent the invite.
-  const inviterFirstName = String(req.query.inviter || '').trim().split(/\\s+/)[0].replace(/[\\u0000-\\u001f\\u007f<>]/g, '');
+  const inviterFirstName = String(req.query.inviter || '').trim().split(/\s+/)[0].replace(/[\u0000-\u001f\u007f<>]/g, '');
   let inviterPayload = '';
   for (let length = Array.from(inviterFirstName).length; length > 0; length--) {
     const encoded = Buffer.from(Array.from(inviterFirstName).slice(0, length).join('')).toString('base64url');
