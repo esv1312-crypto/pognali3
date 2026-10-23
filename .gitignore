@@ -11,3 +11,6 @@ app/build/
 .env.*
 !.env.example
 node_modules/
+
+# Packaged build archives
+*.zip
