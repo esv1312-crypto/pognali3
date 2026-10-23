@@ -577,6 +577,66 @@ app.post('/api/events/:id/prepare-share', async (req, res) => {
   }
 });
 
+app.post('/api/events/:id/prepare-share', async (req, res) => {
+  const botToken = process.env.TELEGRAM_BOT_TOKEN;
+  const miniAppUrl = process.env.MINI_APP_URL;
+  if (!botToken || !miniAppUrl || !miniAppUrl.startsWith('https://')) {
+    return res.status(503).json({ error: 'Telegram sharing is not configured' });
+  }
+  const eventResult = await pool.query(
+    `SELECT e.id, e.title, e.description, e.city, e.address, e.starts_at,
+       COALESCE(u.display_name, u.first_name, 'Друг') AS inviter_name
+     FROM events e LEFT JOIN users u ON u.id=$2
+     WHERE e.id=$1 AND e.status='published'`,
+    [req.params.id, req.telegramUser.id]
+  );
+  if (!eventResult.rowCount) return res.status(404).json({ error: 'Событие не найдено или больше недоступно.' });
+  const event = eventResult.rows[0];
+  const botUsername = String(process.env.TELEGRAM_BOT_USERNAME || 'Pognali_pognali_bot').replace(/^@/, '').trim();
+  const inviter = String(event.inviter_name || 'Друг').replace(/[\u0000-\u001f\u007f<>]/g, '').trim().split(/\s+/)[0].slice(0, 18);
+  const inviterPayload = Buffer.from(inviter, 'utf8').toString('base64url');
+  const startPayload = 'event_' + String(event.id) + (inviterPayload ? '_i_' + inviterPayload : '');
+  const startUrl = 'https://t.me/' + botUsername + '?startapp=' + encodeURIComponent(startPayload);
+  const when = event.starts_at ? new Date(event.starts_at).toLocaleString('ru-RU', { dateStyle: 'medium', timeStyle: 'short', timeZone: 'Europe/Moscow' }) : '';
+  const place = [event.address, event.city].filter(Boolean).join(', ');
+  const details = [when, place, event.description].filter(Boolean).join(' · ').slice(0, 300);
+  const caption = (['👋 ' + inviter + ' зовёт тебя!', '🚀 ' + event.title, [when, place].filter(Boolean).join(' · '), event.description, 'Жми «Открыть событие» и присоединяйся!'].filter(Boolean).join('\n\n')).slice(0, 1024);
+  const photoUrl = new URL('/pognali-share-cover.png?v=share-square-20261023', miniAppUrl).toString();
+  const preparedResult = {
+    type: 'photo',
+    id: 'pognali-event-' + String(event.id) + '-' + Date.now(),
+    photo_url: photoUrl,
+    thumbnail_url: photoUrl,
+    photo_width: 1254,
+    photo_height: 1254,
+    title: ('🚀 ' + event.title).slice(0, 120),
+    description: details || 'Пойдём вместе? Открой событие в Погнали.',
+    caption,
+    reply_markup: { inline_keyboard: [[{ text: 'Открыть событие', url: startUrl }]] }
+  };
+  try {
+    const response = await fetch('https://api.telegram.org/bot' + botToken + '/savePreparedInlineMessage', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        user_id: req.telegramUser.id,
+        result: preparedResult,
+        allow_user_chats: true,
+        allow_group_chats: true
+      })
+    });
+    const payload = await response.json().catch(() => null);
+    if (!response.ok || !payload?.ok || !payload?.result?.id) {
+      console.warn('Telegram prepared invitation failed:', response.status, payload?.description || 'Telegram API returned an unsuccessful response');
+      return res.status(502).json({ error: 'Не удалось подготовить приглашение через Telegram.' });
+    }
+    res.json({ id: payload.result.id, eventId: String(event.id) });
+  } catch (error) {
+    console.error('Telegram prepared invitation error:', error.message);
+    res.status(502).json({ error: 'Не удалось подготовить приглашение через Telegram.' });
+  }
+});
+
 app.post('/api/events/:id/share', async (req, res) => {
   const event = await pool.query("SELECT id FROM events WHERE id=$1 AND status='published'", [req.params.id]);
   if (!event.rowCount) return res.status(404).json({ error: 'Event not found or no longer available' });
