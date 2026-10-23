@@ -47,9 +47,9 @@ app.post('/telegram/webhook', webhookRateLimit, async (req, res) => {
   if (!chatId) return res.json({ ok: true });
   const text = String(message.text || '');
   let replyText = 'Погнали — это приложение для реальных встреч, прогулок, спорта и других планов. Выбирай событие и присоединяйся!';
-  const startParts = text.trim().split(/\\s+/);
+  const startParts = text.trim().split(/\s+/);
   const startPayload = String(startParts[0] || '').toLowerCase() === '/start' ? (startParts[1] || '') : '';
-  const isEventStart = startPayload.startsWith('event_') && /^\\d+$/.test(startPayload.slice(6));
+  const isEventStart = startPayload.startsWith('event_') && /^\d+$/.test(startPayload.slice(6));
   const appUrl = new URL(miniAppUrl);
   if (isEventStart) appUrl.searchParams.set('startapp', startPayload);
   let replyMarkup = { inline_keyboard: [[{ text: '🚀 Открыть Погнали', web_app: { url: appUrl.toString() } }]] };
