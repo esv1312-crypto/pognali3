@@ -70,6 +70,27 @@ test('capture real Pognali UI and inspect responsive layout', async ({ browser }
         }).catch(() => {});
       }
     }
+
+    // Inspect the event creation form and its location picker map.
+    const createButton = page.locator('.bottomnav .nav').filter({ hasText: 'Создать' }).first();
+    if (await createButton.isVisible()) {
+      await createButton.click();
+      await page.waitForTimeout(700);
+      await page.screenshot({ path: path.join(out, device.name + '-create-top.png'), fullPage: true, animations: 'disabled' }).catch(() => {});
+      const picker = page.locator('#pickerMap');
+      if (await picker.count()) {
+        await picker.scrollIntoViewIfNeeded().catch(() => {});
+        await page.waitForTimeout(2200);
+        await page.screenshot({ path: path.join(out, device.name + '-create-location-map.png'), fullPage: false, animations: 'disabled' }).catch(() => {});
+        const mapDetails = await page.evaluate(() => ({
+          pickerLibrary: document.querySelector('#pickerMap .maplibregl-canvas') ? 'MapLibre' : (document.querySelector('#pickerMap .leaflet-container') ? 'Leaflet' : 'unknown'),
+          pickerCanvasCount: document.querySelectorAll('#pickerMap canvas').length,
+          pickerBounds: (() => { const r = document.querySelector('#pickerMap')?.getBoundingClientRect(); return r ? { x: r.x, y: r.y, width: r.width, height: r.height } : null; })(),
+          visibleFormLabels: [...document.querySelectorAll('#content label')].filter(el => el.getClientRects().length).map(el => el.innerText.trim()).slice(0, 40)
+        }));
+        report.pages.push({ device: device.name, createFlow: mapDetails });
+      }
+    }
     await context.close();
   }
 
