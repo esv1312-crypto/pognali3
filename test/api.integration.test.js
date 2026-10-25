@@ -193,3 +193,16 @@ t('static delivery: split script is immutable, index has ETag/304, vendor files 
   assert.match(ml.headers.get('content-type'), /javascript/);
   assert.equal((await fetch(ctx.base + '/vendor/missing.js')).status, 404);
 });
+
+t('admin can update a report with a numeric ID', async () => {
+  const ev = await create(A, { title: 'Событие для жалобы' });
+  const reported = await api(B, `/events/${ev.id}/reports`, { method: 'POST', body: { reason: 'other', details: 'Проверка модерации' } });
+  assert.equal(reported.status, 201);
+  const reportId = reported.json.reportId ?? reported.json.id ?? reported.json.report?.id;
+  assert.ok(reportId, 'report endpoint returns the created report ID');
+  const updated = await api(A, `/admin/reports/${reportId}`, {
+    method: 'PATCH', body: { status: 'reviewing' }, headers: { 'x-admin-token': 'adm' }
+  });
+  assert.equal(updated.status, 200);
+  assert.equal(updated.json.report.status, 'reviewing');
+});
