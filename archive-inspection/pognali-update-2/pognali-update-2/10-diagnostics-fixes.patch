@@ -1,0 +1,97 @@
+diff --git a/docs/telegram/index.html b/docs/telegram/index.html
+index fb237a2..7124e97 100644
+--- a/docs/telegram/index.html
++++ b/docs/telegram/index.html
+@@ -582,6 +582,7 @@ body{background:var(--pg-bg)!important}
+ </style>
+ <style id="pognali-unread-badge">.nav .unread-badge{position:absolute;top:2px;left:calc(50% + 8px);min-width:18px;height:18px;padding:0 4px;display:inline-flex;align-items:center;justify-content:center;border:2px solid #fff;border-radius:999px;background:#e53935;color:#fff;font-size:10px;font-weight:900;line-height:1;box-shadow:0 1px 4px #0002;z-index:2}.nav .unread-badge.hidden{display:none!important}.nav.active .unread-badge{border-color:#17191d}.message-unread-badge{flex:none;min-width:20px;height:20px;padding:0 5px;display:inline-flex;align-items:center;justify-content:center;border-radius:999px;background:#e53935;color:#fff;font-size:11px;font-weight:900;line-height:1;box-shadow:0 1px 4px #0002}</style>
+ <style id="pognali-fixes">.sheet .tag{display:inline-block;margin:0 0 10px;line-height:1.2}.sheet h2{margin:0 0 8px}.life-tagline{overflow:hidden!important;text-overflow:ellipsis!important;white-space:nowrap!important}@media(max-width:359px){.life-tagline{display:none!important}}</style>
++<style id="pognali-a11y">.bottomnav .nav span{font-size:11px!important;letter-spacing:-.2px}.bottomnav .nav:not(.active):not(.create-nav) span{color:#5f6672!important}.create-hero-kicker,.create-hero-foot{font-size:11px!important;color:#5f6672!important}.calendar-week span{font-size:11px!important;color:#5f6672!important}button[onclick="clearCalendarDate()"]{min-height:36px;padding:0 14px}.maplibregl-ctrl-group button{width:40px!important;height:40px!important}</style>
+ </head>
+ <body>
+ <div class="app">
+@@ -887,7 +888,7 @@ let holdTimer=null,holdStart=null;const mapEl=map.getContainer(),clearHold=()=>{
+ map.on('contextmenu',ev=>{if(ev.originalEvent)ev.originalEvent.preventDefault();askCreateAtMapPoint(ev.lngLat.lat,ev.lngLat.lng)});
+ mapEl.addEventListener('touchstart',ev=>{if(!ev.touches||ev.touches.length!==1)return;const t=ev.touches[0];holdStart={x:t.clientX,y:t.clientY};const rect=mapEl.getBoundingClientRect(),point=map.unproject([t.clientX-rect.left,t.clientY-rect.top]);holdTimer=setTimeout(()=>askCreateAtMapPoint(point.lat,point.lng),650)},{passive:true});
+ mapEl.addEventListener('touchmove',ev=>{if(!holdStart||!ev.touches||!ev.touches.length)return;const t=ev.touches[0];if(Math.hypot(t.clientX-holdStart.x,t.clientY-holdStart.y)>12)clearHold()},{passive:true});mapEl.addEventListener('touchend',clearHold,{passive:true});mapEl.addEventListener('touchcancel',clearHold,{passive:true});
+-const updateMapState=()=>{const c=map.getCenter();lastMapView={lat:c.lat,lng:c.lng,zoom:map.getZoom()};mapViews[selectedFilter]=lastMapView;try{localStorage.setItem(KEY+'_map_views',JSON.stringify(mapViews))}catch(e){}const el=document.getElementById('map');if(el)el.classList.toggle('map-zoomed',map.getZoom()>=13.5);const scope=document.getElementById('mapScope');if(scope){scope.textContent=mapScopeLabel();scope.classList.toggle('world',!mapRadiusKm(map.getZoom())&&!!userGeo)}};
++const updateMapState=()=>{if(!map)return;const c=map.getCenter();lastMapView={lat:c.lat,lng:c.lng,zoom:map.getZoom()};mapViews[selectedFilter]=lastMapView;try{localStorage.setItem(KEY+'_map_views',JSON.stringify(mapViews))}catch(e){}const el=document.getElementById('map');if(el)el.classList.toggle('map-zoomed',map.getZoom()>=13.5);const scope=document.getElementById('mapScope');if(scope){scope.textContent=mapScopeLabel();scope.classList.toggle('world',!mapRadiusKm(map.getZoom())&&!!userGeo)}};
+ map.on('moveend',updateMapState);map.on('load',()=>{if(!map)return;updateMapState();const points=es.map(e=>[Number(e.lng),Number(e.lat)]).filter(([lng,lat])=>Number.isFinite(lat)&&Number.isFinite(lng)&&Math.abs(lat)<=90&&Math.abs(lng)<=180);if(selectedFilter==='Мои'){if(points.length===1){lastMapView={lat:points[0][1],lng:points[0][0],zoom:13};mapViews[selectedFilter]=lastMapView;map.jumpTo({center:points[0],zoom:13})}else if(points.length>1)map.fitBounds(points,{padding:{top:48,bottom:48,left:48,right:48},maxZoom:13})}else if(API_MODE&&points.length&&!selectedCityPoint&&!userGeo&&(!savedView||savedView.zoom<5)){/* Первый запуск: не оставляем события Симферополя за кадром на мировом масштабе. */if(points.length===1)map.jumpTo({center:points[0],zoom:13});else map.fitBounds(points,{padding:{top:72,bottom:90,left:36,right:36},maxZoom:12})}if(!userGeo&&selectedFilter!=='Мои')requestUserLocation();else if(userGeo&&selectedFilter!=='Мои')drawUserLocation(userGeo.lat,userGeo.lng,false);refreshMainMapLayout(!!selectedDate)});
+ markers=[];renderEventsMarkersOnly();}
+ 
+@@ -1441,7 +1442,7 @@ async function requestDirectMessage(userId){try{await apiRequest('/direct/reques
+ async function respondDirectRequest(id,decision){try{await apiRequest('/direct/'+id+'/respond',{method:'POST',body:JSON.stringify({decision})});await loadDirectInbox()}catch(e){showToast(e.message||'Не удалось обработать запрос','error')}}
+ async function openDirectChat(id){try{const d=await apiRequest('/direct/'+id+'/messages');const msgs=d.messages||[];await markMessagesRead('direct',id);openModal('<button class="close" onclick="openPersonalMessages()">✕</button><h2>Личный диалог</h2><div class="meta">Личные сообщения доступны после взаимного согласия.</div><div class="chat"><div class="messages" id="directMessages">'+msgs.map(m=>'<div class="msg '+(String(m.sender_id)===String(window.Telegram?.WebApp?.initDataUnsafe?.user?.id)?'me':'')+'"><b>'+esc(m.sender_name||'Участник')+'</b><br>'+esc(m.body)+'</div>').join('')+'</div><form class="composer" onsubmit="sendDirectMessage(event,'+Number(id)+')"><input id="directInput" maxlength="2000" required placeholder="Написать сообщение..."><button class="primary">➤</button></form></div>');const box=document.getElementById('directMessages');box.scrollTop=box.scrollHeight}catch(e){showToast(e.message||'Не удалось открыть диалог','error')}}
+ async function sendDirectMessage(ev,id){ev.preventDefault();const input=document.getElementById('directInput'),body=input?.value.trim();if(!body)return;try{await apiRequest('/direct/'+id+'/messages',{method:'POST',body:JSON.stringify({body})});await openDirectChat(id)}catch(e){showToast(e.message||'Не удалось отправить сообщение','error')}}
+-async function openEventContactChat(id,conversationId){const event=db.events.find(x=>x.id===Number(id));const title=event?.title||'Событие';try{const d=await apiRequest('/event-contacts/'+conversationId+'/messages');const msgs=d.messages||[];await markMessagesRead('event_contact',conversationId);openModal('<button class="close" onclick="openEvent('+Number(id)+')">✕</button><h2>Организатор · '+esc(title)+'</h2><div class="meta">Переписка только по этому событию</div><div class="chat"><div class="messages" id="contactMessages">'+msgs.map(m=>'<div class="msg '+(String(m.sender_id)===String(window.Telegram?.WebApp?.initDataUnsafe?.user?.id)?'me':'')+'"><b>'+esc(m.sender_name||'Участник')+'</b><br>'+esc(m.body)+'</div>').join('')+'</div><form class="composer" onsubmit="sendEventContactMessage(event,'+Number(id)+','+Number(conversationId)+')"><input id="contactInput" maxlength="2000" required placeholder="Вопрос по событию..."><button class="primary">➤</button></form></div>');const box=document.getElementById('contactMessages');box.scrollTop=box.scrollHeight}catch(e){showToast(e.message||'Не удалось открыть переписку','error')}}async function sendEventContactMessage(ev,id,conversationId){ev.preventDefault();const input=document.getElementById('contactInput'),body=input?.value.trim();if(!body)return;try{await apiRequest('/event-contacts/'+conversationId+'/messages',{method:'POST',body:JSON.stringify({body})});await openEventContactChat(id,conversationId)}catch(e){showToast(e.message||'Не удалось отправить сообщение','error')}}function renderProfile(){let p=db.profile;document.getElementById('content').innerHTML=`<div class="profile"><h2>Профиль</h2><div class="avatar" onclick="document.getElementById('photoInput').click()">${p.photo?`<img src="${p.photo}" alt="Фото профиля">`:'👤'}</div><input id="photoInput" type="file" accept="image/*" hidden onchange="handlePhoto(this)"><button type="button" class="avatarPick" onclick="document.getElementById('photoInput').click()">📷 Выбрать фотографию</button><div class="field"><label>Имя</label><input id="pname" value="${esc(p.name)}"></div><div class="field"><label>Дата рождения</label><input id="pbirth" type="date" value="${p.birth}"></div><div class="field"><label>Город</label><input id="pcity" value="${esc(p.city)}"></div><div class="field"><label>О себе</label><textarea id="pbio">${esc(p.bio)}</textarea></div><button class="primary full" onclick="saveProfile()">СОХРАНИТЬ ПРОФИЛЬ</button>${renderProfileMessages()}<div class="notice" style="margin:12px 0 0">Фото сохраняется в этом демо на устройстве. В настоящем приложении оно будет загружаться на сервер.</div></div>`}
++async function openEventContactChat(id,conversationId){const event=db.events.find(x=>x.id===Number(id));const title=event?.title||'Событие';try{const d=await apiRequest('/event-contacts/'+conversationId+'/messages');const msgs=d.messages||[];await markMessagesRead('event_contact',conversationId);openModal('<button class="close" onclick="openEvent('+Number(id)+')">✕</button><h2>Организатор · '+esc(title)+'</h2><div class="meta">Переписка только по этому событию</div><div class="chat"><div class="messages" id="contactMessages">'+msgs.map(m=>'<div class="msg '+(String(m.sender_id)===String(window.Telegram?.WebApp?.initDataUnsafe?.user?.id)?'me':'')+'"><b>'+esc(m.sender_name||'Участник')+'</b><br>'+esc(m.body)+'</div>').join('')+'</div><form class="composer" onsubmit="sendEventContactMessage(event,'+Number(id)+','+Number(conversationId)+')"><input id="contactInput" maxlength="2000" required placeholder="Вопрос по событию..."><button class="primary">➤</button></form></div>');const box=document.getElementById('contactMessages');box.scrollTop=box.scrollHeight}catch(e){showToast(e.message||'Не удалось открыть переписку','error')}}async function sendEventContactMessage(ev,id,conversationId){ev.preventDefault();const input=document.getElementById('contactInput'),body=input?.value.trim();if(!body)return;try{await apiRequest('/event-contacts/'+conversationId+'/messages',{method:'POST',body:JSON.stringify({body})});await openEventContactChat(id,conversationId)}catch(e){showToast(e.message||'Не удалось отправить сообщение','error')}}function renderProfile(){let p=db.profile;document.getElementById('content').innerHTML=`<div class="profile"><h2>Профиль</h2><div class="avatar" onclick="document.getElementById('photoInput').click()">${p.photo?`<img src="${p.photo}" alt="Фото профиля">`:'👤'}</div><input id="photoInput" type="file" accept="image/*" hidden onchange="handlePhoto(this)"><button type="button" class="avatarPick" onclick="document.getElementById('photoInput').click()">📷 Выбрать фотографию</button><div class="field"><label for="pname">Имя</label><input id="pname" value="${esc(p.name)}"></div><div class="field"><label for="pbirth">Дата рождения</label><input id="pbirth" type="date" value="${p.birth}"></div><div class="field"><label for="pcity">Город</label><input id="pcity" value="${esc(p.city)}"></div><div class="field"><label for="pbio">О себе</label><textarea id="pbio">${esc(p.bio)}</textarea></div><button class="primary full" onclick="saveProfile()">СОХРАНИТЬ ПРОФИЛЬ</button>${renderProfileMessages()}<div class="notice" style="margin:12px 0 0">Фото сохраняется в этом демо на устройстве. В настоящем приложении оно будет загружаться на сервер.</div></div>`}
+ function handlePhoto(input){let file=input.files?.[0];if(!file)return;if(!file.type.startsWith('image/'))return showToast('Выбери изображение.','error');let reader=new FileReader();reader.onload=()=>{let img=new Image();img.onload=()=>{let max=512,scale=Math.min(1,max/Math.max(img.width,img.height)),c=document.createElement('canvas');c.width=Math.round(img.width*scale);c.height=Math.round(img.height*scale);c.getContext('2d').drawImage(img,0,0,c.width,c.height);db.profile.photo=c.toDataURL('image/jpeg',0.82);save();renderProfile()};img.src=reader.result};reader.readAsDataURL(file)}
+ async function saveProfile(){db.profile={...db.profile,name:document.getElementById('pname').value.trim()||'Пользователь',birth:document.getElementById('pbirth').value,city:document.getElementById('pcity').value.trim(),bio:document.getElementById('pbio').value.trim()};db.users[2]={...(db.users[2]||{}),...db.profile};try{if(API_MODE){const result=await apiRequest('/me',{method:'PATCH',body:JSON.stringify({display_name:db.profile.name,city:db.profile.city,bio:db.profile.bio})});if(result.user)db.profile={...db.profile,name:result.user.display_name||result.user.first_name||db.profile.name,city:result.user.city||'',bio:result.user.bio||''}}save();renderProfile();showToast('Профиль сохранён','success')}catch(err){showToast(err.message||'Не удалось сохранить профиль','error')}}
+ function openProfile(){go('profile')}
+diff --git a/package.json b/package.json
+index 2f16706..8c64467 100644
+--- a/package.json
++++ b/package.json
+@@ -16,7 +16,7 @@
+     "pg": "^8.16.3",
+     "helmet": "^8.1.0",
+     "express-rate-limit": "^8.1.0",
+-    "sharp": "^0.34.4",
++    "sharp": "^0.35.5",
+     "compression": "^1.8.2",
+     "maplibre-gl": "5.6.2",
+     "supercluster": "8.0.1"
+diff --git a/server/index.js b/server/index.js
+index 6a493fa..12613e4 100644
+--- a/server/index.js
++++ b/server/index.js
+@@ -11,6 +11,8 @@ const sharp = require('sharp');
+ const { verifyTelegramInitData } = require('./telegram-auth');
+ 
+ const app = express();
++// Ids in URLs are numeric: answer 404 for anything else instead of letting PostgreSQL fail with a 500.
++app.param('id', (req, res, next, value) => (/^\d{1,15}$/.test(value) ? next() : res.status(404).json({ error: 'Не найдено' })));
+ // Render sits behind a trusted reverse proxy; use its forwarded client IP for the fallback IP limiter.
+ app.set('trust proxy', 1);
+ app.disable('x-powered-by');
+@@ -18,6 +20,8 @@ app.disable('x-powered-by');
+ app.use(helmet({ contentSecurityPolicy: false }));
+ app.use(compression({ filter: (req, res) => req.path.startsWith('/api/') && compression.filter(req, res) }));
+ app.use(express.json({ limit: '64kb' }));
++// PostgreSQL text columns cannot store NUL characters: reject them as a client error rather than a 500.
++app.use((req, res, next) => (req.body && typeof req.body === 'object' && JSON.stringify(req.body).includes('\\u0000') ? res.status(400).json({ error: 'Некорректные символы в тексте' }) : next()));
+ 
+ // Cache shared event-list data briefly; every API write invalidates it before route handlers run.
+ const eventsCache = new Map();
+@@ -246,7 +250,7 @@ let notifyTimer = null;
+ function notifyUser(chatId, text, key, intervalMs = 60000) {
+   const now = Date.now();
+   if (key && now - (notifyLastSent.get(key) || 0) < intervalMs) return;
+-  if (key) notifyLastSent.set(key, now);
++  if (key) { if (notifyLastSent.size > 50000) notifyLastSent.clear(); notifyLastSent.set(key, now); } // bounded: no unbounded growth
+   if (notifyQueue.length >= 5000) notifyQueue.shift();
+   notifyQueue.push([chatId, text]);
+   if (!notifyTimer) {
+@@ -412,6 +416,10 @@ app.post('/api/events', async (req, res) => {
+   // A map-picked point can be valid even when reverse geocoding cannot identify a city.
+   const city = cityInput || addressInput || 'Не указан';
+   const startsAt = new Date(b.starts_at);
++  const startMs = startsAt.getTime();
++  if (Number.isFinite(startMs) && (startMs < Date.now() - 24 * 3600 * 1000 || startMs > Date.now() + 3 * 365 * 24 * 3600 * 1000)) {
++    return res.status(400).json({ error: 'starts_at must be within the next 3 years' });
++  }
+   if (title.length < 3 || title.length > 120 || !city || city.length > 120 || !Number.isFinite(startsAt.getTime())) {
+     return res.status(400).json({ error: 'Title (3–120 chars), city and valid starts_at are required' });
+   }
+@@ -806,6 +814,11 @@ app.patch('/api/admin/reports/:id', requireAdmin, async (req, res) => {
+ });
+ 
+ app.use((err, _req, res, _next) => {
++  const status = Number(err.status || err.statusCode);
++  if (status >= 400 && status < 500) { // bad JSON, body too large, etc. are the client's problem, not a server error
++    if (res.headersSent) return;
++    return res.status(status).json({ error: status === 413 ? 'Слишком большой запрос' : 'Некорректный запрос' });
++  }
+   console.error('Unhandled API error:', err.message);
+   if (res.headersSent) return;
+   res.status(500).json({ error: 'Что-то пошло не так. Попробуй ещё раз.' });
