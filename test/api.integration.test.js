@@ -206,3 +206,15 @@ t('admin can update a report with a numeric ID', async () => {
   assert.equal(updated.status, 200);
   assert.equal(updated.json.report.status, 'reviewing');
 });
+
+t('event updates reject dates outside the supported range', async () => {
+  const ev = await create(A, { title: 'Событие для проверки даты' });
+  const farFuture = await api(A, `/events/${ev.id}`, {
+    method: 'PATCH', body: newEvent({ title: 'Обновление даты', starts_at: '9999-12-31T00:00:00Z' })
+  });
+  assert.equal(farFuture.status, 400);
+  const tooOld = await api(A, `/events/${ev.id}`, {
+    method: 'PATCH', body: newEvent({ title: 'Обновление даты', starts_at: '1999-01-01T00:00:00Z' })
+  });
+  assert.equal(tooOld.status, 400);
+});

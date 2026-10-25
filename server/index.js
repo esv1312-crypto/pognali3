@@ -454,6 +454,10 @@ app.patch('/api/events/:id', async (req, res) => {
   const title = typeof b.title === 'string' ? b.title.trim() : '';
   const city = typeof b.city === 'string' ? b.city.trim() : '';
   const startsAt = new Date(b.starts_at);
+  const startMs = startsAt.getTime();
+  if (Number.isFinite(startMs) && (startMs < Date.now() - 24 * 3600 * 1000 || startMs > Date.now() + 3 * 365 * 24 * 3600 * 1000)) {
+    return res.status(400).json({ error: 'starts_at must be within the next 3 years' });
+  }
   const capacity = b.capacity == null || b.capacity === '' ? null : Number(b.capacity);
   const lat = b.latitude == null || b.latitude === '' ? null : Number(b.latitude);
   const lon = b.longitude == null || b.longitude === '' ? null : Number(b.longitude);
