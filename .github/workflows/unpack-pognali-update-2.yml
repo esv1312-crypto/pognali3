@@ -27,15 +27,14 @@ jobs:
           unzip -t pognali-update-2.zip
           mkdir -p /tmp/pognali-update-2
           unzip -q pognali-update-2.zip -d /tmp/pognali-update-2
-          echo "Archive files:"
-          find /tmp/pognali-update-2 -type f -printf '%P (%s bytes)\n' | sort
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           branch="inspection/pognali-update-2-unpacked"
           git checkout -B "$branch"
           mkdir -p archive-inspection/pognali-update-2
           cp -a /tmp/pognali-update-2/. archive-inspection/pognali-update-2/
-          git add archive-inspection/pognali-update-2
+          find /tmp/pognali-update-2 -type f -printf '%P (%s bytes)\n' | sort > archive-inspection/FILES.txt
+          git add archive-inspection/pognali-update-2 archive-inspection/FILES.txt
           if git diff --cached --quiet; then
             echo "No extracted file changes."
           else
