@@ -23,8 +23,9 @@ app.use(express.json({ limit: '64kb' }));
 const eventsCache = new Map();
 const configuredEventsTtl = Number(process.env.EVENTS_CACHE_TTL_MS);
 const EVENTS_TTL_MS = Number.isFinite(configuredEventsTtl) && configuredEventsTtl >= 0 ? Math.min(configuredEventsTtl, 60000) : 5000;
+const LIST_CHANGING_WRITE = /^\/events(\/\d+(\/finish)?)?$/;
 app.use('/api', (req, res, next) => {
-  if (req.method !== 'GET' && req.method !== 'HEAD') res.on('finish', () => eventsCache.clear());
+  if (req.method !== 'GET' && req.method !== 'HEAD' && LIST_CHANGING_WRITE.test(req.path)) res.on('finish', () => eventsCache.clear());
   next();
 });
 const apiRateLimit = rateLimit({ windowMs: 15 * 60 * 1000, limit: 1500, standardHeaders: 'draft-8', legacyHeaders: false, skip: req => req.path === '/health' });
@@ -44,7 +45,7 @@ const databaseConnectionString = process.env.DATABASE_URL
 const pool = process.env.DATABASE_URL ? new Pool({
   connectionString: databaseConnectionString,
   ssl: databaseSsl,
-  max: Number(process.env.PG_POOL_MAX || 5),
+  max: Number(process.env.PG_POOL_MAX || 10),
   idleTimeoutMillis: 30000,
   connectionTimeoutMillis: 8000
 }) : null;
@@ -322,7 +323,8 @@ async function buildEventsPayload(city, category, limit) {
   );
   const json = Buffer.from(JSON.stringify({ events: result.rows }));
   const gz = await new Promise((resolve, reject) => zlib.gzip(json, { level: 6 }, (error, buffer) => error ? reject(error) : resolve(buffer)));
-  return { json, gz };
+  const etag = 'W/"' + crypto.createHash('sha1').update(json).digest('hex').slice(0, 20) + '"';
+  return { json, gz, etag };
 }
 
 app.get('/api/events', async (req, res) => {
@@ -339,8 +341,9 @@ app.get('/api/events', async (req, res) => {
       if (eventsCache.get(key) === entry) eventsCache.delete(key);
     });
   }
-  const { json, gz } = await entry.payload;
-  res.set({ 'Content-Type': 'application/json; charset=utf-8', Vary: 'Accept-Encoding', 'Cache-Control': 'private, no-cache' });
+  const { json, gz, etag } = await entry.payload;
+  res.set({ 'Content-Type': 'application/json; charset=utf-8', Vary: 'Accept-Encoding', 'Cache-Control': 'private, no-cache', ETag: etag });
+  if (req.headers['if-none-match'] === etag) return res.status(304).end();
   if (req.acceptsEncodings('gzip')) {
     res.set('Content-Encoding', 'gzip');
     return res.send(gz);
@@ -885,6 +888,25 @@ function sendIndex(req, res) {
   }
   return true;
 }
+function serveVendor(urlPath, pkg, file, type, subdir = '') {
+  let loading = null;
+  app.get(urlPath, async (req, res, next) => {
+    try {
+      loading = loading || fs.readFile(path.join(path.dirname(require.resolve(pkg)), subdir, file))
+        .then(raw => ({ raw, gz: zlib.gzipSync(raw, { level: 9 }), br: zlib.brotliCompressSync(raw) }));
+      const entry = await loading;
+      res.set({ 'Content-Type': type, 'Cache-Control': 'public, max-age=31536000, immutable', Vary: 'Accept-Encoding' });
+      if (req.acceptsEncodings('br')) { res.set('Content-Encoding', 'br'); return res.send(entry.br); }
+      if (req.acceptsEncodings('gzip')) { res.set('Content-Encoding', 'gzip'); return res.send(entry.gz); }
+      return res.send(entry.raw);
+    } catch { loading = null; return next(); }
+  });
+}
+serveVendor('/vendor/maplibre-gl-5.6.2.js', 'maplibre-gl', 'maplibre-gl.js', 'application/javascript; charset=utf-8');
+serveVendor('/vendor/maplibre-gl-5.6.2.css', 'maplibre-gl', 'maplibre-gl.css', 'text/css; charset=utf-8');
+serveVendor('/vendor/supercluster-8.0.1.js', 'supercluster', 'supercluster.min.js', 'application/javascript; charset=utf-8', 'dist');
+app.get('/vendor/{*splat}', (_req, res) => res.status(404).end());
+
 app.get(['/', '/index.html'], (req, res, next) => {
   if (!sendIndex(req, res)) next();
 });
