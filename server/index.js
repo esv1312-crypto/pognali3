@@ -274,9 +274,9 @@ async function sendTelegramMessage(chatId, text, replyMarkup) {
   } catch (error) { console.warn('Telegram notification failed:', error.message); return false; }
 }
 
-async const userSeen = new Map();
+const userSeen = new Map();
 const USER_SEEN_TTL_MS = 10 * 60 * 1000;
-function requireTelegram(req, res, next) {
+async function requireTelegram(req, res, next) {
   const token = process.env.TELEGRAM_BOT_TOKEN;
   if (!token) return res.status(503).json({ error: 'Telegram bot token is not configured on the server' });
   const initData = req.get('x-telegram-init-data') || '';
