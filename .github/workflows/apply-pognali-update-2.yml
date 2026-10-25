@@ -1,0 +1,57 @@
+name: Apply and validate Pognali update 2
+
+on:
+  push:
+    branches:
+      - feature/telegram-mini-app
+    paths:
+      - '.github/workflows/apply-pognali-update-2.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  apply-test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feature/telegram-mini-app
+          fetch-depth: 0
+      - name: Fetch reviewed patch files
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch origin inspection/pognali-update-2-unpacked
+          mkdir -p /tmp/pognali-patches
+          for patch in 10-diagnostics-fixes.patch 11-maplibre-6.patch 12-integration-tests.patch; do
+            git show "origin/inspection/pognali-update-2-unpacked:archive-inspection/pognali-update-2/pognali-update-2/$patch" > "/tmp/pognali-patches/$patch"
+            test -s "/tmp/pognali-patches/$patch"
+          done
+      - name: Apply patches on an isolated branch
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git checkout -B update/pognali-update-2
+          rm -f pognali-update-2.zip .github/workflows/unpack-pognali-update-2.yml .github/workflows/apply-pognali-update-2.yml
+          for patch in /tmp/pognali-patches/10-diagnostics-fixes.patch /tmp/pognali-patches/11-maplibre-6.patch /tmp/pognali-patches/12-integration-tests.patch; do
+            echo "Checking $patch"
+            git apply --check "$patch"
+            git apply "$patch"
+          done
+      - name: Install dependencies and run tests
+        run: |
+          npm install
+          npm test
+          npm audit --omit=dev
+      - name: Commit tested changes
+        shell: bash
+        run: |
+          set -euo pipefail
+          git add docs/telegram/index.html server/index.js package.json package-lock.json .github/workflows/telegram-api-test.yml test
+          git status --short
+          git commit -m "feat: apply Pognali update 2 security, MapLibre 6 and integration tests"
+          git push origin update/pognali-update-2 --force
