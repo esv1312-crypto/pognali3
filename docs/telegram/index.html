@@ -750,7 +750,7 @@ seedDemoEvents();
 db.events.forEach(e=>{if(!e.country&&e.city==='Симферополь')e.country='Россия';if(!e.city&&e.place) e.city=e.place;});
 save();
 let currentTab='events', map, markers=[]; let selectedFilter=API_MODE?'Мир':'Рядом', eventView='list'; let selectedDate=null, calendarOpen=false, calendarMonth=new Date(new Date().getFullYear(),new Date().getMonth(),1); let lastMapView=null; let mapViews={Мир:null,Рядом:null,Мои:null}; let selectedCity=localStorage.getItem(KEY+'_selected_city')||''; let selectedCityPoint=null; try{selectedCityPoint=JSON.parse(localStorage.getItem(KEY+'_selected_city_point')||'null')}catch(e){} try{mapViews={...mapViews,...(JSON.parse(localStorage.getItem(KEY+'_map_views')||'{}')||{})}}catch(e){} let userLocationMarker=null; let userLocationRequested=false; let userGeo=null; let userGeoCity='';
-const NEARBY_RADIUS_KM=150; const MAP_RADIUS_LEVELS=[{minZoom:13,km:25},{minZoom:11,km:50},{minZoom:9,km:100},{minZoom:7,km:600}];
+const NEARBY_RADIUS_KM=100; const MAP_RADIUS_LEVELS=[{minZoom:13,km:25},{minZoom:11,km:50},{minZoom:9,km:100},{minZoom:7,km:600}];
 function mapRadiusKm(zoom){for(const x of MAP_RADIUS_LEVELS)if(zoom>=x.minZoom)return x.km;return null}
 function mapScopeLabel(){const n=filtered().length;if(selectedCity&&selectedFilter==='Мир')return `🏙️ ${selectedCity} · ${n} ${n===1?'событие':'событий'}`;if(selectedFilter==='Мир')return `🏙️ Выбери город · ${n} ${n===1?'событие':'событий'}`;if(selectedFilter==='Рядом')return userGeo?`📍 ${userGeoCity||'Ваше местоположение'} · радиус ${NEARBY_RADIUS_KM} км · ${n} ${n===1?'событие':'событий'}`:'📍 Разреши геолокацию для поиска рядом';return `🙋 Мои события · ${n} ${n===1?'событие':'событий'}`}
 function save(){localStorage.setItem(KEY,JSON.stringify(db))}
