@@ -435,11 +435,12 @@ app.post('/api/events', async (req, res) => {
   const endsAt = b.ends_at ? new Date(b.ends_at) : null;
   if (endsAt && (!Number.isFinite(endsAt.getTime()) || endsAt < startsAt)) return res.status(400).json({ error: 'Invalid ends_at' });
   const result = await pool.query(
-    `INSERT INTO events (creator_id,title,description,category,city,address,latitude,longitude,starts_at,ends_at,capacity)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) RETURNING *`,
+    `INSERT INTO events (creator_id,title,description,category,city,address,latitude,longitude,starts_at,ends_at,capacity,emoji)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12) RETURNING *`,
     [req.telegramUser.id, title, typeof b.description === 'string' ? b.description.trim().slice(0,3000) : '',
       typeof b.category === 'string' ? b.category.slice(0,40) : 'other', city, typeof b.address === 'string' ? b.address.trim().slice(0,250) : '',
-      lat, lon, startsAt.toISOString(), endsAt ? endsAt.toISOString() : null, capacity]
+      lat, lon, startsAt.toISOString(), endsAt ? endsAt.toISOString() : null, capacity,
+      typeof b.emoji === 'string' ? b.emoji.trim().slice(0, 32) : '']
   );
   await pool.query(
     `INSERT INTO event_participants (event_id,user_id,status) VALUES ($1,$2,'joined')
@@ -470,12 +471,13 @@ app.patch('/api/events/:id', async (req, res) => {
   if (endsAt && (!Number.isFinite(endsAt.getTime()) || endsAt < startsAt)) return res.status(400).json({ error: 'Invalid ends_at' });
   const result = await pool.query(
     `UPDATE events SET title=$3, description=$4, category=$5, city=$6, address=$7,
-       latitude=$8, longitude=$9, starts_at=$10, ends_at=$11, capacity=$12, updated_at=NOW()
+       latitude=$8, longitude=$9, starts_at=$10, ends_at=$11, capacity=$12, emoji=$13, updated_at=NOW()
      WHERE id=$1 AND creator_id=$2 AND status='published' RETURNING *`,
     [req.params.id, req.telegramUser.id, title, typeof b.description === 'string' ? b.description.trim().slice(0,3000) : '',
       typeof b.category === 'string' ? b.category.slice(0,40) : 'other', city,
       typeof b.address === 'string' ? b.address.trim().slice(0,250) : '', lat, lon,
-      startsAt.toISOString(), endsAt ? endsAt.toISOString() : null, capacity]
+      startsAt.toISOString(), endsAt ? endsAt.toISOString() : null, capacity,
+      typeof b.emoji === 'string' ? b.emoji.trim().slice(0, 32) : '']
   );
   if (!result.rowCount) return res.status(404).json({ error: 'Event not found or you are not its organizer' });
   res.json({ event: result.rows[0] });

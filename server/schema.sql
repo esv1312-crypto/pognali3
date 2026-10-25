@@ -18,6 +18,7 @@ CREATE TABLE IF NOT EXISTS events (
   title TEXT NOT NULL CHECK (char_length(title) BETWEEN 3 AND 120),
   description TEXT NOT NULL DEFAULT '',
   category TEXT NOT NULL DEFAULT 'other',
+  emoji TEXT NOT NULL DEFAULT '',
   city TEXT NOT NULL,
   address TEXT NOT NULL DEFAULT '',
   latitude DOUBLE PRECISION,
@@ -32,6 +33,7 @@ CREATE TABLE IF NOT EXISTS events (
          (latitude BETWEEN -90 AND 90 AND longitude BETWEEN -180 AND 180)),
   CHECK (ends_at IS NULL OR ends_at >= starts_at)
 );
+ALTER TABLE events ADD COLUMN IF NOT EXISTS emoji TEXT NOT NULL DEFAULT '';
 
 CREATE INDEX IF NOT EXISTS events_city_starts_idx ON events (LOWER(city), starts_at) WHERE status = 'published';
 CREATE INDEX IF NOT EXISTS events_starts_idx ON events (starts_at) WHERE status = 'published';
