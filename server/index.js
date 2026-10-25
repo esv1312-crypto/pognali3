@@ -11,6 +11,8 @@ const sharp = require('sharp');
 const { verifyTelegramInitData } = require('./telegram-auth');
 
 const app = express();
+// Ids in URLs are numeric: answer 404 for anything else instead of letting PostgreSQL fail with a 500.
+app.param('id', (req, res, next, value) => (/^\d{1,15}$/.test(value) ? next() : res.status(404).json({ error: 'Не найдено' })));
 // Render sits behind a trusted reverse proxy; use its forwarded client IP for the fallback IP limiter.
 app.set('trust proxy', 1);
 app.disable('x-powered-by');
@@ -18,6 +20,8 @@ app.disable('x-powered-by');
 app.use(helmet({ contentSecurityPolicy: false }));
 app.use(compression({ filter: (req, res) => req.path.startsWith('/api/') && compression.filter(req, res) }));
 app.use(express.json({ limit: '64kb' }));
+// PostgreSQL text columns cannot store NUL characters: reject them as a client error rather than a 500.
+app.use((req, res, next) => (req.body && typeof req.body === 'object' && JSON.stringify(req.body).includes('\\u0000') ? res.status(400).json({ error: 'Некорректные символы в тексте' }) : next()));
 
 // Cache shared event-list data briefly; every API write invalidates it before route handlers run.
 const eventsCache = new Map();
@@ -246,7 +250,7 @@ let notifyTimer = null;
 function notifyUser(chatId, text, key, intervalMs = 60000) {
   const now = Date.now();
   if (key && now - (notifyLastSent.get(key) || 0) < intervalMs) return;
-  if (key) notifyLastSent.set(key, now);
+  if (key) { if (notifyLastSent.size > 50000) notifyLastSent.clear(); notifyLastSent.set(key, now); } // bounded: no unbounded growth
   if (notifyQueue.length >= 5000) notifyQueue.shift();
   notifyQueue.push([chatId, text]);
   if (!notifyTimer) {
@@ -412,6 +416,10 @@ app.post('/api/events', async (req, res) => {
   // A map-picked point can be valid even when reverse geocoding cannot identify a city.
   const city = cityInput || addressInput || 'Не указан';
   const startsAt = new Date(b.starts_at);
+  const startMs = startsAt.getTime();
+  if (Number.isFinite(startMs) && (startMs < Date.now() - 24 * 3600 * 1000 || startMs > Date.now() + 3 * 365 * 24 * 3600 * 1000)) {
+    return res.status(400).json({ error: 'starts_at must be within the next 3 years' });
+  }
   if (title.length < 3 || title.length > 120 || !city || city.length > 120 || !Number.isFinite(startsAt.getTime())) {
     return res.status(400).json({ error: 'Title (3–120 chars), city and valid starts_at are required' });
   }
@@ -806,6 +814,11 @@ app.patch('/api/admin/reports/:id', requireAdmin, async (req, res) => {
 });
 
 app.use((err, _req, res, _next) => {
+  const status = Number(err.status || err.statusCode);
+  if (status >= 400 && status < 500) { // bad JSON, body too large, etc. are the client's problem, not a server error
+    if (res.headersSent) return;
+    return res.status(status).json({ error: status === 413 ? 'Слишком большой запрос' : 'Некорректный запрос' });
+  }
   console.error('Unhandled API error:', err.message);
   if (res.headersSent) return;
   res.status(500).json({ error: 'Что-то пошло не так. Попробуй ещё раз.' });
@@ -961,8 +974,13 @@ function serveVendor(urlPath, pkg, file, type, subdir = '') {
     } catch { loading = null; return next(); }
   });
 }
-serveVendor('/vendor/maplibre-gl-5.6.2.js', 'maplibre-gl', 'maplibre-gl.js', 'application/javascript; charset=utf-8');
-serveVendor('/vendor/maplibre-gl-5.6.2.css', 'maplibre-gl', 'maplibre-gl.css', 'text/css; charset=utf-8');
+// maplibre-gl 6 is ESM-only: the page imports /vendor/maplibre-gl-<ver>/maplibre-gl.mjs, which finds its worker
+// (maplibre-gl-worker.mjs) next to itself, so both files must be served from the same folder.
+// 'maplibre-gl/package.json' is the only entry point the package exports that resolves from CommonJS.
+const MAPLIBRE_DIR = '/vendor/maplibre-gl-6.15.0';
+serveVendor(`${MAPLIBRE_DIR}/maplibre-gl.mjs`, 'maplibre-gl/package.json', 'maplibre-gl.mjs', 'text/javascript; charset=utf-8', 'dist');
+serveVendor(`${MAPLIBRE_DIR}/maplibre-gl-worker.mjs`, 'maplibre-gl/package.json', 'maplibre-gl-worker.mjs', 'text/javascript; charset=utf-8', 'dist');
+serveVendor(`${MAPLIBRE_DIR}/maplibre-gl.css`, 'maplibre-gl/package.json', 'maplibre-gl.css', 'text/css; charset=utf-8', 'dist');
 serveVendor('/vendor/supercluster-8.0.1.js', 'supercluster', 'supercluster.min.js', 'application/javascript; charset=utf-8', 'dist');
 app.get('/vendor/{*splat}', (_req, res) => res.status(404).end());
 
