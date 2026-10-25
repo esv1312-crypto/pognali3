@@ -934,10 +934,12 @@ async function start() {
     await pool.query(schema);
   }
   const port = Number(process.env.PORT || 3000);
-  app.listen(port, '0.0.0.0', () => {
+  const server = app.listen(port, '0.0.0.0', () => {
     console.log(`Pognali API listening on ${port}; DB ${pool ? 'configured' : 'missing'}`);
     configureTelegramWebhook();
   });
+  server.keepAliveTimeout = 65000;
+  server.headersTimeout = 66000;
 }
 if (require.main === module) start().catch(error => { console.error('Startup failed:', error.message); process.exit(1); });
 module.exports = { app, start };
