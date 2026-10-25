@@ -274,7 +274,9 @@ async function sendTelegramMessage(chatId, text, replyMarkup) {
   } catch (error) { console.warn('Telegram notification failed:', error.message); return false; }
 }
 
-async function requireTelegram(req, res, next) {
+async const userSeen = new Map();
+const USER_SEEN_TTL_MS = 10 * 60 * 1000;
+function requireTelegram(req, res, next) {
   const token = process.env.TELEGRAM_BOT_TOKEN;
   if (!token) return res.status(503).json({ error: 'Telegram bot token is not configured on the server' });
   const initData = req.get('x-telegram-init-data') || '';
@@ -286,6 +288,9 @@ async function requireTelegram(req, res, next) {
     return res.status(401).json({ error: auth.error === 'Telegram login expired; reopen the Mini App' ? 'Сессия Telegram устарела. Открой приложение заново.' : 'Не удалось подтвердить вход через Telegram. Открой приложение заново.' });
   }
   req.telegramUser = auth.user;
+  const profileKey = [auth.user.username, auth.user.first_name, auth.user.last_name, auth.user.photo_url].join('\u0001');
+  const seen = userSeen.get(auth.user.id);
+  if (seen && seen.key === profileKey && Date.now() - seen.at < USER_SEEN_TTL_MS) return next();
   try {
     await pool.query(
       `INSERT INTO users (id, username, first_name, last_name, photo_url)
@@ -295,6 +300,8 @@ async function requireTelegram(req, res, next) {
          photo_url=COALESCE(EXCLUDED.photo_url, users.photo_url), updated_at=NOW()`,
       [auth.user.id, auth.user.username, auth.user.first_name, auth.user.last_name, auth.user.photo_url]
     );
+    if (userSeen.size > 20000) userSeen.clear();
+    userSeen.set(auth.user.id, { key: profileKey, at: Date.now() });
     next();
   } catch (error) {
     console.error('User upsert failed:', error.message);
