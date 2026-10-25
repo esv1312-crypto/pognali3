@@ -11,7 +11,6 @@ CREATE TABLE IF NOT EXISTS users (
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 ALTER TABLE users ADD COLUMN IF NOT EXISTS display_name TEXT;
-ALTER TABLE events ADD COLUMN IF NOT EXISTS emoji TEXT NOT NULL DEFAULT '';
 
 CREATE TABLE IF NOT EXISTS events (
   id BIGSERIAL PRIMARY KEY,
@@ -34,6 +33,7 @@ CREATE TABLE IF NOT EXISTS events (
          (latitude BETWEEN -90 AND 90 AND longitude BETWEEN -180 AND 180)),
   CHECK (ends_at IS NULL OR ends_at >= starts_at)
 );
+ALTER TABLE events ADD COLUMN IF NOT EXISTS emoji TEXT NOT NULL DEFAULT '';
 
 CREATE INDEX IF NOT EXISTS events_city_starts_idx ON events (LOWER(city), starts_at) WHERE status = 'published';
 CREATE INDEX IF NOT EXISTS events_starts_idx ON events (starts_at) WHERE status = 'published';
