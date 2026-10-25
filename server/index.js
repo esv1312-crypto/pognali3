@@ -864,15 +864,40 @@ app.get('/share/:payload', async (req, res, next) => {
 <meta http-equiv="refresh" content="1;url=${safeBotUrl}">
 <style>body{margin:0;min-height:100vh;display:grid;place-items:center;background:#08152c;color:#fff;font:16px system-ui,sans-serif;text-align:center}.wrap{max-width:420px;padding:28px}.brand{font-size:32px;font-weight:850}.sub{color:#c5e7ff;line-height:1.5;margin:14px 0 24px}a{display:inline-block;background:#60bfff;color:#07172e;text-decoration:none;font-weight:800;padding:14px 22px;border-radius:15px}</style></head><body><main class="wrap"><div class="brand">🚀 ${safeTitle}</div><p class="sub">${safeDescription}</p><a href="${safeBotUrl}">Посмотреть событие</a></main><script>setTimeout(()=>{window.location.href=${JSON.stringify(botUrl)}},800)</script></body></html>`);
 });
-// Pre-compress the Mini App shell once at startup and support conditional requests via ETag.
+// Prepare the Mini App shell and a fingerprinted app script once at startup.
 let indexCache = null;
-fs.readFile(path.join(webRoot, 'index.html')).then(raw => {
+const appAssets = new Map();
+fs.readFile(path.join(webRoot, 'index.html'), 'utf8').then(source => {
+  let html = source;
+  if (String(process.env.SPLIT_ASSETS || '1') !== '0') {
+    const open = html.lastIndexOf('<script>');
+    const close = html.lastIndexOf('</script>');
+    if (open >= 0 && close > open) {
+      const script = html.slice(open + 8, close);
+      const hash = crypto.createHash('sha1').update(script).digest('hex').slice(0, 16);
+      const name = '/assets/app.' + hash + '.js';
+      const js = Buffer.from(script);
+      appAssets.set(name, { raw: js, gz: zlib.gzipSync(js, { level: 9 }), br: zlib.brotliCompressSync(js) });
+      html = html.slice(0, open) + '<script defer src="' + name + '"></script>' + html.slice(close + 9);
+      html = html.replace('<script src="https://telegram.org/js/telegram-web-app.js"></script>', '<script defer src="https://telegram.org/js/telegram-web-app.js"></script>');
+    }
+  }
+  const raw = Buffer.from(html);
   indexCache = {
     raw,
     gz: zlib.gzipSync(raw, { level: 9 }),
+    br: zlib.brotliCompressSync(raw),
     etag: '"' + crypto.createHash('sha1').update(raw).digest('hex').slice(0, 16) + '"'
   };
 }).catch(error => console.error('Could not prepare cached index.html:', error.message));
+app.get('/assets/:name', (req, res) => {
+  const entry = appAssets.get('/assets/' + req.params.name);
+  if (!entry) return res.status(404).end();
+  res.set({ 'Content-Type': 'application/javascript; charset=utf-8', 'Cache-Control': 'public, max-age=31536000, immutable', Vary: 'Accept-Encoding' });
+  if (req.acceptsEncodings('br')) { res.set('Content-Encoding', 'br'); return res.send(entry.br); }
+  if (req.acceptsEncodings('gzip')) { res.set('Content-Encoding', 'gzip'); return res.send(entry.gz); }
+  return res.send(entry.raw);
+});
 function sendIndex(req, res) {
   if (!indexCache) return false;
   res.set({ ETag: indexCache.etag, 'Cache-Control': 'no-cache', Vary: 'Accept-Encoding', 'Content-Type': 'text/html; charset=utf-8' });
@@ -880,12 +905,9 @@ function sendIndex(req, res) {
     res.status(304).end();
     return true;
   }
-  if (req.acceptsEncodings('gzip')) {
-    res.set('Content-Encoding', 'gzip');
-    res.end(indexCache.gz);
-  } else {
-    res.end(indexCache.raw);
-  }
+  if (req.acceptsEncodings('br')) { res.set('Content-Encoding', 'br'); res.end(indexCache.br); }
+  else if (req.acceptsEncodings('gzip')) { res.set('Content-Encoding', 'gzip'); res.end(indexCache.gz); }
+  else res.end(indexCache.raw);
   return true;
 }
 function serveVendor(urlPath, pkg, file, type, subdir = '') {
