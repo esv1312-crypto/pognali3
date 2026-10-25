@@ -802,7 +802,7 @@ app.get('/api/admin/reports', requireAdmin, async (req, res) => {
 app.patch('/api/admin/reports/:id', requireAdmin, async (req, res) => {
   const id = String(req.params.id || '');
   const status = String(req.body?.status || '');
-  if (!/^[1-9]\\d{0,18}$/.test(id) || !['open', 'reviewing', 'resolved', 'dismissed'].includes(status)) {
+  if (!/^[1-9]\d{0,18}$/.test(id) || !['open', 'reviewing', 'resolved', 'dismissed'].includes(status)) {
     return res.status(400).json({ error: 'A valid report ID and status are required' });
   }
   const result = await pool.query(
