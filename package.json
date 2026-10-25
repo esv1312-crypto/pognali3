@@ -6,19 +6,23 @@
   "main": "server/index.js",
   "scripts": {
     "start": "node server/index.js",
-    "test": "node --test"
+    "test": "node --test",
+    "test:unit": "SKIP_DB_TESTS=1 node --test"
   },
   "engines": {
     "node": ">=20"
   },
   "dependencies": {
-    "express": "^5.1.0",
-    "pg": "^8.16.3",
-    "helmet": "^8.1.0",
-    "express-rate-limit": "^8.1.0",
-    "sharp": "^0.34.4",
     "compression": "^1.8.2",
-    "maplibre-gl": "5.6.2",
+    "express": "^5.1.0",
+    "express-rate-limit": "^8.1.0",
+    "helmet": "^8.1.0",
+    "maplibre-gl": "6.15.0",
+    "pg": "^8.16.3",
+    "sharp": "^0.35.5",
     "supercluster": "8.0.1"
+  },
+  "devDependencies": {
+    "embedded-postgres": "18.4.0-beta.17"
   }
 }
