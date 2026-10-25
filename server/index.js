@@ -240,6 +240,23 @@ function requireDatabase(_req, res, next) {
   next();
 }
 
+const notifyQueue = [];
+const notifyLastSent = new Map();
+let notifyTimer = null;
+function notifyUser(chatId, text, key, intervalMs = 60000) {
+  const now = Date.now();
+  if (key && now - (notifyLastSent.get(key) || 0) < intervalMs) return;
+  if (key) notifyLastSent.set(key, now);
+  if (notifyQueue.length >= 5000) notifyQueue.shift();
+  notifyQueue.push([chatId, text]);
+  if (!notifyTimer) {
+    notifyTimer = setInterval(() => {
+      const job = notifyQueue.shift();
+      if (!job) { clearInterval(notifyTimer); notifyTimer = null; return; }
+      void sendTelegramMessage(job[0], job[1]);
+    }, 50);
+  }
+}
 async function sendTelegramMessage(chatId, text, replyMarkup) {
   const token = process.env.TELEGRAM_BOT_TOKEN;
   if (!token || !chatId) return false;
@@ -503,7 +520,7 @@ app.post('/api/events/:id/messages', async (req, res) => {
   const recipients = await pool.query("SELECT ep.user_id FROM event_participants ep WHERE ep.event_id=$1 AND ep.status='joined' AND ep.user_id<>$2", [req.params.id, req.telegramUser.id]);
   const eventTitle = await pool.query('SELECT title FROM events WHERE id=$1', [req.params.id]);
   const title = eventTitle.rows[0]?.title || 'событие';
-  for (const recipient of recipients.rows) void sendTelegramMessage(recipient.user_id, '💬 Новое сообщение в чате события «' + title + '». Открой «Погнали», чтобы ответить.');
+  for (const recipient of recipients.rows) notifyUser(recipient.user_id, '💬 Новое сообщение в чате события «' + title + '». Открой «Погнали», чтобы ответить.', 'chat:' + recipient.user_id + ':' + req.params.id, 5 * 60 * 1000);
 });
 
 
@@ -570,11 +587,11 @@ pool.query("SELECT e.id AS event_id,e.title,e.starts_at,(SELECT body FROM event_
 app.post('/api/direct/requests',async(req,res)=>{const target=String(req.body&&req.body.user_id||'');if(!target || target.length>20 || ![...target].every(ch=>ch>='0'&&ch<='9') || BigInt(target)<=0n)return res.status(400).json({error:'A valid user_id is required'});if(target===String(req.telegramUser.id))return res.status(400).json({error:'You cannot message yourself'});const u=await pool.query('SELECT id FROM users WHERE id=$1',[target]);if(!u.rowCount)return res.status(404).json({error:'User not found'});if(await hasMessagingBlock(req.telegramUser.id,target))return res.status(403).json({error:'Messaging is unavailable between these users'});const [low,high]=sortedUserPair(req.telegramUser.id,target);const r=await pool.query("INSERT INTO direct_conversations(user_low,user_high,requested_by,status) VALUES($1,$2,$3,'pending') ON CONFLICT(user_low,user_high) DO UPDATE SET requested_by=EXCLUDED.requested_by,status='pending',updated_at=NOW() WHERE direct_conversations.status='rejected' AND direct_conversations.requested_by<>EXCLUDED.requested_by RETURNING id,status,requested_by",[low,high,req.telegramUser.id]);if(r.rowCount)return res.status(201).json({conversation:r.rows[0]});const old=await pool.query('SELECT id,status,requested_by FROM direct_conversations WHERE user_low=$1 AND user_high=$2',[low,high]);if(old.rows[0]&&old.rows[0].status==='accepted')return res.json({conversation:old.rows[0],alreadyAccepted:true});if(old.rows[0]&&old.rows[0].status==='pending')return res.json({conversation:old.rows[0],requestPending:true});return res.status(403).json({error:'The other user must initiate a new request'})});
 app.post('/api/direct/:id/respond',async(req,res)=>{const d=req.body&&req.body.decision;const status=d==='accept'?'accepted':d==='reject'?'rejected':'';if(!status)return res.status(400).json({error:'decision must be accept or reject'});const r=await pool.query("UPDATE direct_conversations SET status=$2,updated_at=NOW() WHERE id=$1 AND (user_low=$3 OR user_high=$3) AND requested_by<>$3 AND status='pending' RETURNING id,status",[req.params.id,status,req.telegramUser.id]);if(!r.rowCount)return res.status(404).json({error:'Pending request not found'});res.json({conversation:r.rows[0]})});
 app.get('/api/direct/:id/messages',async(req,res)=>{const c=await pool.query('SELECT id,status,user_low,user_high,requested_by FROM direct_conversations WHERE id=$1 AND (user_low=$2 OR user_high=$2)',[req.params.id,req.telegramUser.id]);if(!c.rowCount)return res.status(404).json({error:'Conversation not found'});const row=c.rows[0];if(row.status!=='accepted'){if(row.status==='pending'&&String(row.requested_by)!==String(req.telegramUser.id))return res.json({messages:[],request:row});return res.status(403).json({error:'Personal messages require mutual consent'})}const other=String(row.user_low)===String(req.telegramUser.id)?row.user_high:row.user_low;if(await hasMessagingBlock(req.telegramUser.id,other))return res.status(403).json({error:'Messaging is unavailable between these users'});const r=await pool.query('SELECT m.id,m.sender_id,m.body,m.created_at,COALESCE(u.display_name,u.first_name) AS sender_name FROM direct_messages m JOIN users u ON u.id=m.sender_id WHERE m.conversation_id=$1 ORDER BY m.created_at ASC LIMIT 500',[req.params.id]);res.json({messages:r.rows})});
-app.post('/api/direct/:id/messages',async(req,res)=>{const body=typeof(req.body&&req.body.body)==='string'?req.body.body.trim():'';if(!body||body.length>2000)return res.status(400).json({error:'Message must contain 1–2000 characters'});const c=await pool.query("SELECT id,user_low,user_high FROM direct_conversations WHERE id=$1 AND status='accepted' AND (user_low=$2 OR user_high=$2)",[req.params.id,req.telegramUser.id]);if(!c.rowCount)return res.status(403).json({error:'Personal messages require mutual consent'});const other=String(c.rows[0].user_low)===String(req.telegramUser.id)?c.rows[0].user_high:c.rows[0].user_low;if(await hasMessagingBlock(req.telegramUser.id,other))return res.status(403).json({error:'Messaging is unavailable between these users'});const r=await pool.query('INSERT INTO direct_messages(conversation_id,sender_id,body) VALUES($1,$2,$3) RETURNING id,sender_id,body,created_at',[req.params.id,req.telegramUser.id,body]);await pool.query('UPDATE direct_conversations SET updated_at=NOW() WHERE id=$1',[req.params.id]);res.status(201).json({message:r.rows[0]});void sendTelegramMessage(other,'💬 Новое личное сообщение в «Погнали». Открой приложение, чтобы ответить.')});
+app.post('/api/direct/:id/messages',async(req,res)=>{const body=typeof(req.body&&req.body.body)==='string'?req.body.body.trim():'';if(!body||body.length>2000)return res.status(400).json({error:'Message must contain 1–2000 characters'});const c=await pool.query("SELECT id,user_low,user_high FROM direct_conversations WHERE id=$1 AND status='accepted' AND (user_low=$2 OR user_high=$2)",[req.params.id,req.telegramUser.id]);if(!c.rowCount)return res.status(403).json({error:'Personal messages require mutual consent'});const other=String(c.rows[0].user_low)===String(req.telegramUser.id)?c.rows[0].user_high:c.rows[0].user_low;if(await hasMessagingBlock(req.telegramUser.id,other))return res.status(403).json({error:'Messaging is unavailable between these users'});const r=await pool.query('INSERT INTO direct_messages(conversation_id,sender_id,body) VALUES($1,$2,$3) RETURNING id,sender_id,body,created_at',[req.params.id,req.telegramUser.id,body]);await pool.query('UPDATE direct_conversations SET updated_at=NOW() WHERE id=$1',[req.params.id]);res.status(201).json({message:r.rows[0]});notifyUser(other,'💬 Новое личное сообщение в «Погнали». Открой приложение, чтобы ответить.','dm:'+other+':'+req.params.id,60000)});
 app.post('/api/users/:id/block',async(req,res)=>{if(String(req.params.id)===String(req.telegramUser.id))return res.status(400).json({error:'You cannot block yourself'});const u=await pool.query('SELECT id FROM users WHERE id=$1',[req.params.id]);if(!u.rowCount)return res.status(404).json({error:'User not found'});await pool.query('INSERT INTO user_blocks(blocker_id,blocked_id) VALUES($1,$2) ON CONFLICT DO NOTHING',[req.telegramUser.id,req.params.id]);res.json({blocked:true})});
 app.post('/api/events/:id/contact',async(req,res)=>{const e=await pool.query("SELECT id,creator_id,title FROM events WHERE id=$1 AND status='published'",[req.params.id]);if(!e.rowCount)return res.status(404).json({error:'Event not found or no longer available'});const organizer=String(e.rows[0].creator_id),participant=String(req.telegramUser.id);if(organizer===participant)return res.status(400).json({error:'You are the organizer of this event'});if(await hasMessagingBlock(participant,organizer))return res.status(403).json({error:'Messaging is unavailable between these users'});const r=await pool.query('INSERT INTO event_contact_conversations(event_id,participant_id,organizer_id) VALUES($1,$2,$3) ON CONFLICT(event_id,participant_id) DO UPDATE SET updated_at=NOW() RETURNING id,event_id,participant_id,organizer_id',[req.params.id,participant,organizer]);res.status(201).json({conversation:r.rows[0],eventTitle:e.rows[0].title})});
 app.get('/api/event-contacts/:id/messages',async(req,res)=>{const c=await pool.query('SELECT id,event_id,participant_id,organizer_id FROM event_contact_conversations WHERE id=$1 AND (participant_id=$2 OR organizer_id=$2)',[req.params.id,req.telegramUser.id]);if(!c.rowCount)return res.status(404).json({error:'Conversation not found'});const row=c.rows[0],other=String(row.participant_id)===String(req.telegramUser.id)?row.organizer_id:row.participant_id;if(await hasMessagingBlock(req.telegramUser.id,other))return res.status(403).json({error:'Messaging is unavailable between these users'});const r=await pool.query('SELECT m.id,m.sender_id,m.body,m.created_at,COALESCE(u.display_name,u.first_name) AS sender_name FROM event_contact_messages m JOIN users u ON u.id=m.sender_id WHERE m.conversation_id=$1 ORDER BY m.created_at ASC LIMIT 500',[req.params.id]);res.json({messages:r.rows,conversation:row})});
-app.post('/api/event-contacts/:id/messages',async(req,res)=>{const body=typeof(req.body&&req.body.body)==='string'?req.body.body.trim():'';if(!body||body.length>2000)return res.status(400).json({error:'Message must contain 1–2000 characters'});const c=await pool.query('SELECT id,participant_id,organizer_id FROM event_contact_conversations WHERE id=$1 AND (participant_id=$2 OR organizer_id=$2)',[req.params.id,req.telegramUser.id]);if(!c.rowCount)return res.status(404).json({error:'Conversation not found'});const row=c.rows[0],other=String(row.participant_id)===String(req.telegramUser.id)?row.organizer_id:row.participant_id;if(await hasMessagingBlock(req.telegramUser.id,other))return res.status(403).json({error:'Messaging is unavailable between these users'});const r=await pool.query('INSERT INTO event_contact_messages(conversation_id,sender_id,body) VALUES($1,$2,$3) RETURNING id,sender_id,body,created_at',[req.params.id,req.telegramUser.id,body]);await pool.query('UPDATE event_contact_conversations SET updated_at=NOW() WHERE id=$1',[req.params.id]);res.status(201).json({message:r.rows[0]});void sendTelegramMessage(other,'💬 Новое сообщение по событию в «Погнали». Открой приложение, чтобы ответить.')});
+app.post('/api/event-contacts/:id/messages',async(req,res)=>{const body=typeof(req.body&&req.body.body)==='string'?req.body.body.trim():'';if(!body||body.length>2000)return res.status(400).json({error:'Message must contain 1–2000 characters'});const c=await pool.query('SELECT id,participant_id,organizer_id FROM event_contact_conversations WHERE id=$1 AND (participant_id=$2 OR organizer_id=$2)',[req.params.id,req.telegramUser.id]);if(!c.rowCount)return res.status(404).json({error:'Conversation not found'});const row=c.rows[0],other=String(row.participant_id)===String(req.telegramUser.id)?row.organizer_id:row.participant_id;if(await hasMessagingBlock(req.telegramUser.id,other))return res.status(403).json({error:'Messaging is unavailable between these users'});const r=await pool.query('INSERT INTO event_contact_messages(conversation_id,sender_id,body) VALUES($1,$2,$3) RETURNING id,sender_id,body,created_at',[req.params.id,req.telegramUser.id,body]);await pool.query('UPDATE event_contact_conversations SET updated_at=NOW() WHERE id=$1',[req.params.id]);res.status(201).json({message:r.rows[0]});notifyUser(other,'💬 Новое сообщение по событию в «Погнали». Открой приложение, чтобы ответить.','ec:'+other+':'+req.params.id,60000)});
 
 async function recordEventShareAction(eventId, userId, action) {
   const table = await pool.query("SELECT to_regclass('public.event_share_events') AS table_name");
@@ -708,7 +725,7 @@ app.post('/api/events/:id/join', async (req, res) => {
     await client.query('COMMIT');
     res.json({ joined: true, eventId: String(req.params.id) });
     if (eventInfo.rowCount && String(eventInfo.rows[0].creator_id) !== String(req.telegramUser.id)) {
-      void sendTelegramMessage(eventInfo.rows[0].creator_id, '👋 На событие «' + eventInfo.rows[0].title + '» записался новый участник. Открой «Погнали», чтобы посмотреть участников.');
+      notifyUser(eventInfo.rows[0].creator_id, '👋 На событие «' + eventInfo.rows[0].title + '» записался новый участник. Открой «Погнали», чтобы посмотреть участников.', 'join:' + eventInfo.rows[0].creator_id + ':' + req.params.id, 30000);
     }
   } catch (error) {
     await client.query('ROLLBACK'); throw error;
@@ -789,32 +806,45 @@ app.use((err, _req, res, _next) => {
 
 const webRoot = path.resolve(process.env.WEB_ROOT || 'docs/telegram');
 
-app.get('/pognali-share-cover.jpg', async (_req, res) => {
-  try {
-    const source = await fs.readFile(path.join(webRoot, 'file_00000000c5a081f488c652aeb4ab4bfa.png'));
-    const jpeg = await sharp(source).jpeg({ quality: 90, mozjpeg: true }).toBuffer();
-    res.set('Cache-Control', 'public, max-age=86400');
-    res.type('jpeg').send(jpeg);
-  } catch (error) {
-    console.error('Could not convert Pognali share cover to JPEG:', error.message);
-    res.status(503).send('Share cover temporarily unavailable');
+const shareCover = {};
+function loadShareCover(kind) {
+  if (!shareCover[kind]) {
+    shareCover[kind] = fs.readFile(path.join(webRoot, 'file_00000000c5a081f488c652aeb4ab4bfa.png'))
+      .then(source => kind === 'png' ? source : sharp(source).jpeg({ quality: 90, mozjpeg: true }).toBuffer())
+      .catch(error => { delete shareCover[kind]; throw error; });
   }
-});
-
-app.get('/pognali-share-cover.png', async (_req, res) => {
-  try {
-    // Keep the original square invitation image, as in the earlier working version.
-    const source = await fs.readFile(path.join(webRoot, 'file_00000000c5a081f488c652aeb4ab4bfa.png'));
-    res.set('Cache-Control', 'public, max-age=86400');
-    res.type('png').send(source);
-  } catch (error) {
-    console.error('Could not read Pognali share cover:', error.message);
-    res.status(503).send('Share cover temporarily unavailable');
-  }
-});
+  return shareCover[kind];
+}
+for (const kind of ['jpg', 'png']) {
+  app.get('/pognali-share-cover.' + kind, async (_req, res) => {
+    try {
+      const body = await loadShareCover(kind);
+      res.set('Cache-Control', 'public, max-age=86400');
+      res.type(kind === 'jpg' ? 'jpeg' : 'png').send(body);
+    } catch (error) {
+      console.error('Could not load Pognali share cover:', error.message);
+      res.status(503).send('Share cover temporarily unavailable');
+    }
+  });
+}
 
 // Public share landing page: Open Graph preview uses the real event details and the shared Pognali cover.
+const sharePageCache = new Map();
 app.get('/share/:payload', async (req, res, next) => {
+  const cacheKey = req.get('host') + req.originalUrl;
+  const cached = sharePageCache.get(cacheKey);
+  if (cached && Date.now() - cached.at < 60000) {
+    res.set('Cache-Control', 'public, max-age=60');
+    return res.type('html').send(cached.html);
+  }
+  const originalSend = res.send.bind(res);
+  res.send = body => {
+    if (res.statusCode === 200 && typeof body === 'string') {
+      if (sharePageCache.size > 500) sharePageCache.clear();
+      sharePageCache.set(cacheKey, { at: Date.now(), html: body });
+    }
+    return originalSend(body);
+  };
   const match = String(req.params.payload || '').match(/^event_(\d+)$/);
   if (!match) return next();
   const eventId = match[1];
