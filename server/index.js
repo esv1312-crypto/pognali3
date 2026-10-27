@@ -159,11 +159,12 @@ app.post('/telegram/webhook', webhookRateLimit, async (req, res) => {
       ? (inviterName ? 'Тебя пригласил(а) ' + inviterName + ' 👋 Нажми «Посмотреть событие», чтобы присоединиться.' : 'Тебя пригласили на событие 👇 Нажми кнопку «Посмотреть событие», чтобы открыть карточку.')
       : 'Не листай чужую жизнь — давай строить свою 👇';
   } else if (text.trim().toLowerCase() === '/id') {
-    replyText = 'Твой Telegram ID: ' + String(message.from?.id || message.chat?.id || 'не удалось определить') + '\\nСкопируй этот номер для настройки уведомлений администратора.';
+    replyText = 'Твой Telegram ID: ' + String(message.from?.id || message.chat?.id || 'не удалось определить') + '\nСкопируй этот номер для настройки уведомлений администратора.';
   } else if (message.location) {
     replyText = 'Спасибо! Открой Погнали — там можно выбрать события рядом и поставить точку на карте.';
   }
   try {
+    let notFoundStart = false;
     let response;
     if (isEventStart) {
       const eventId = eventPayloadMatch[1];
@@ -181,10 +182,11 @@ app.post('/telegram/webhook', webhookRateLimit, async (req, res) => {
           body: JSON.stringify({ chat_id: chatId, photo: photoUrl, caption, reply_markup: replyMarkup })
         });
       } else {
+        notFoundStart = true;
         replyText = 'Не нашёл это событие — возможно, оно уже завершилось или удалено. Открой «Погнали» и выбери другое 👇';
       }
     }
-    if (!response && (text.toLowerCase().startsWith('/start') || text.toLowerCase().startsWith('/startapp'))) {
+    if (!response && !notFoundStart && (text.toLowerCase().startsWith('/start') || text.toLowerCase().startsWith('/startapp'))) {
       const welcomePhoto = new URL('/pognali-share-cover.png?v=share-square-20261023', miniAppUrl).toString();
       response = await fetch('https://api.telegram.org/bot' + token + '/sendPhoto', {
         method: 'POST',
@@ -562,10 +564,14 @@ app.get('/api/messages/unread-count', async (req, res) => {
        WHERE (c.participant_id=$1 OR c.organizer_id=$1) AND m.sender_id<>$1
          AND m.created_at > COALESCE((SELECT r.last_read_at FROM message_reads r WHERE r.user_id=$1 AND r.conversation_type='event_contact' AND r.conversation_id=c.id), 'epoch'::timestamptz))
       +
-      (SELECT COUNT(*) FROM event_messages m
-       JOIN event_participants ep ON ep.event_id=m.event_id AND ep.user_id=$1 AND ep.status='joined'
-       WHERE m.sender_id<>$1
-         AND m.created_at > COALESCE((SELECT r.last_read_at FROM message_reads r WHERE r.user_id=$1 AND r.conversation_type='event' AND r.conversation_id=m.event_id), 'epoch'::timestamptz))
+      (SELECT COALESCE(SUM(x.n), 0) FROM event_participants ep
+       LEFT JOIN message_reads r ON r.user_id=$1 AND r.conversation_type='event' AND r.conversation_id=ep.event_id
+       CROSS JOIN LATERAL (
+         SELECT COUNT(*)::int AS n FROM (
+           SELECT 1 FROM event_messages m
+           WHERE m.event_id=ep.event_id AND m.sender_id<>$1 AND m.created_at > COALESCE(r.last_read_at, 'epoch'::timestamptz)
+           LIMIT 99) q) x
+       WHERE ep.user_id=$1 AND ep.status='joined')
     )::int AS unread_count`,
     [uid]
   );
@@ -604,7 +610,7 @@ app.post('/api/messages/read', async (req, res) => {
 app.get('/api/messages',async(req,res)=>{const uid=req.telegramUser.id;const [direct,contacts,eventChats]=await Promise.all([
 pool.query("SELECT c.id,c.status,c.requested_by,c.updated_at,CASE WHEN c.user_low=$1 THEN c.user_high ELSE c.user_low END AS other_user_id,COALESCE(u.display_name,u.first_name) AS other_name,u.username,(SELECT body FROM direct_messages m WHERE m.conversation_id=c.id ORDER BY m.created_at DESC LIMIT 1) AS last_message FROM direct_conversations c JOIN users u ON u.id=CASE WHEN c.user_low=$1 THEN c.user_high ELSE c.user_low END WHERE (c.user_low=$1 OR c.user_high=$1) AND (c.status<>'rejected' OR c.requested_by=$1) ORDER BY c.updated_at DESC LIMIT 100",[uid]),
 pool.query("SELECT c.id,c.event_id,c.participant_id,c.organizer_id,c.updated_at,e.title AS event_title,CASE WHEN c.participant_id=$1 THEN c.organizer_id ELSE c.participant_id END AS other_user_id,COALESCE(u.display_name,u.first_name) AS other_name,(SELECT body FROM event_contact_messages m WHERE m.conversation_id=c.id ORDER BY m.created_at DESC LIMIT 1) AS last_message FROM event_contact_conversations c JOIN events e ON e.id=c.event_id JOIN users u ON u.id=CASE WHEN c.participant_id=$1 THEN c.organizer_id ELSE c.participant_id END WHERE c.participant_id=$1 OR c.organizer_id=$1 ORDER BY c.updated_at DESC LIMIT 100",[uid]),
-pool.query("SELECT e.id AS event_id,e.title,e.starts_at,(SELECT body FROM event_messages m WHERE m.event_id=e.id ORDER BY m.created_at DESC LIMIT 1) AS last_message,(SELECT COUNT(*)::int FROM event_messages um WHERE um.event_id=e.id AND um.sender_id<>$1 AND um.created_at>COALESCE((SELECT mr.last_read_at FROM message_reads mr WHERE mr.user_id=$1 AND mr.conversation_type='event' AND mr.conversation_id=e.id),'epoch'::timestamptz)) AS unread_count FROM event_participants ep JOIN events e ON e.id=ep.event_id WHERE ep.user_id=$1 AND ep.status='joined' AND e.status<>'cancelled' ORDER BY e.starts_at DESC LIMIT 100",[uid])]);res.json({direct:direct.rows,eventContacts:contacts.rows,eventChats:eventChats.rows})});
+pool.query("SELECT e.id AS event_id,e.title,e.starts_at,(SELECT body FROM event_messages m WHERE m.event_id=e.id ORDER BY m.created_at DESC LIMIT 1) AS last_message,(SELECT COUNT(*)::int FROM (SELECT 1 FROM event_messages um WHERE um.event_id=e.id AND um.sender_id<>$1 AND um.created_at>COALESCE((SELECT mr.last_read_at FROM message_reads mr WHERE mr.user_id=$1 AND mr.conversation_type='event' AND mr.conversation_id=e.id),'epoch'::timestamptz) LIMIT 99) q) AS unread_count FROM event_participants ep JOIN events e ON e.id=ep.event_id WHERE ep.user_id=$1 AND ep.status='joined' AND e.status<>'cancelled' ORDER BY e.starts_at DESC LIMIT 100",[uid])]);res.json({direct:direct.rows,eventContacts:contacts.rows,eventChats:eventChats.rows})});
 app.post('/api/direct/requests',async(req,res)=>{const target=String(req.body&&req.body.user_id||'');if(!target || target.length>20 || ![...target].every(ch=>ch>='0'&&ch<='9') || BigInt(target)<=0n)return res.status(400).json({error:'A valid user_id is required'});if(target===String(req.telegramUser.id))return res.status(400).json({error:'You cannot message yourself'});const u=await pool.query('SELECT id FROM users WHERE id=$1',[target]);if(!u.rowCount)return res.status(404).json({error:'User not found'});if(await hasMessagingBlock(req.telegramUser.id,target))return res.status(403).json({error:'Messaging is unavailable between these users'});const [low,high]=sortedUserPair(req.telegramUser.id,target);const r=await pool.query("INSERT INTO direct_conversations(user_low,user_high,requested_by,status) VALUES($1,$2,$3,'pending') ON CONFLICT(user_low,user_high) DO UPDATE SET requested_by=EXCLUDED.requested_by,status='pending',updated_at=NOW() WHERE direct_conversations.status='rejected' AND direct_conversations.requested_by<>EXCLUDED.requested_by RETURNING id,status,requested_by",[low,high,req.telegramUser.id]);if(r.rowCount)return res.status(201).json({conversation:r.rows[0]});const old=await pool.query('SELECT id,status,requested_by FROM direct_conversations WHERE user_low=$1 AND user_high=$2',[low,high]);if(old.rows[0]&&old.rows[0].status==='accepted')return res.json({conversation:old.rows[0],alreadyAccepted:true});if(old.rows[0]&&old.rows[0].status==='pending')return res.json({conversation:old.rows[0],requestPending:true});return res.status(403).json({error:'The other user must initiate a new request'})});
 app.post('/api/direct/:id/respond',async(req,res)=>{const d=req.body&&req.body.decision;const status=d==='accept'?'accepted':d==='reject'?'rejected':'';if(!status)return res.status(400).json({error:'decision must be accept or reject'});const r=await pool.query("UPDATE direct_conversations SET status=$2,updated_at=NOW() WHERE id=$1 AND (user_low=$3 OR user_high=$3) AND requested_by<>$3 AND status='pending' RETURNING id,status",[req.params.id,status,req.telegramUser.id]);if(!r.rowCount)return res.status(404).json({error:'Pending request not found'});res.json({conversation:r.rows[0]})});
 app.get('/api/direct/:id/messages',async(req,res)=>{const c=await pool.query('SELECT id,status,user_low,user_high,requested_by FROM direct_conversations WHERE id=$1 AND (user_low=$2 OR user_high=$2)',[req.params.id,req.telegramUser.id]);if(!c.rowCount)return res.status(404).json({error:'Conversation not found'});const row=c.rows[0];if(row.status!=='accepted'){if(row.status==='pending'&&String(row.requested_by)!==String(req.telegramUser.id))return res.json({messages:[],request:row});return res.status(403).json({error:'Personal messages require mutual consent'})}const other=String(row.user_low)===String(req.telegramUser.id)?row.user_high:row.user_low;if(await hasMessagingBlock(req.telegramUser.id,other))return res.status(403).json({error:'Messaging is unavailable between these users'});const r=await pool.query('SELECT m.id,m.sender_id,m.body,m.created_at,COALESCE(u.display_name,u.first_name) AS sender_name FROM direct_messages m JOIN users u ON u.id=m.sender_id WHERE m.conversation_id=$1 ORDER BY m.created_at ASC LIMIT 500',[req.params.id]);res.json({messages:r.rows})});
@@ -754,6 +760,10 @@ app.post('/api/events/:id/join', async (req, res) => {
 });
 
 app.post('/api/events/:id/leave', async (req, res) => {
+  const own = await pool.query('SELECT creator_id FROM events WHERE id=$1', [req.params.id]);
+  if (own.rowCount && String(own.rows[0].creator_id) === String(req.telegramUser.id)) {
+    return res.status(409).json({ error: 'Организатор не может выйти из своего события. Заверши или удали его.' });
+  }
   const result = await pool.query(
     `UPDATE event_participants SET status='left' WHERE event_id=$1 AND user_id=$2 AND status='joined'`,
     [req.params.id, req.telegramUser.id]
