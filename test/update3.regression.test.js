@@ -21,8 +21,8 @@ test('organizers cannot leave their own event and lose access to its chat', () =
 });
 
 test('organizers do not get a leave button in event cards or the event detail modal', () => {
-  assert.ok(html.includes("joined&&e.owner===2?'':`<button"));
-  assert.ok(html.includes("joined&&e.owner===2?'':`<button"));
+  const ownerGuard = "joined&&e.owner===2?'':`<button";
+  assert.ok(html.split(ownerGuard).length - 1 >= 2, 'both card and modal should hide the leave button');
 });
 
 test('expired event invitations do not fall back to the generic welcome photo', () => {
