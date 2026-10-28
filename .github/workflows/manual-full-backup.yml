@@ -34,7 +34,7 @@ jobs:
           git rev-parse HEAD > backup-out/commit.txt
           git log -1 --format='%H%n%aI%n%s' > backup-out/source-commit.txt
           pg_dump "$DATABASE_URL" --format=custom --no-owner --no-acl --file=backup-out/database.dump
-          tar --exclude=.git --exclude=node_modules --exclude=.env --exclude='*.log' -czf backup-out/source.tar.gz .
+          tar --exclude=.git --exclude=node_modules --exclude=.env --exclude='*.log' --exclude=backup-out -czf backup-out/source.tar.gz .
           tar -czf backup-out/pognali-full-backup.tar.gz -C backup-out database.dump commit.txt source-commit.txt source.tar.gz
           openssl enc -aes-256-cbc -salt -pbkdf2 -iter 200000 -in backup-out/pognali-full-backup.tar.gz -out backup-out/pognali-full-backup.tar.gz.enc -pass env:BACKUP_ENCRYPTION_KEY
           sha256sum backup-out/pognali-full-backup.tar.gz.enc > backup-out/SHA256SUMS.txt
