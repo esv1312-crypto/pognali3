@@ -1,0 +1,124 @@
+# Pognali update 2 validation
+
+- npm install exit code: 0
+- npm test exit code: 0
+- npm audit --omit=dev exit code: 0
+
+## npm install (last 40 lines)
+npm warn EBADENGINE Unsupported engine {
+npm warn EBADENGINE   package: '@mapbox/jsonlint-lines-primitives@2.0.3',
+npm warn EBADENGINE   required: { node: '>= 22' },
+npm warn EBADENGINE   current: { node: 'v20.20.2', npm: '10.8.2' }
+npm warn EBADENGINE }
+
+added 138 packages, and audited 139 packages in 6s
+
+38 packages are looking for funding
+  run `npm fund` for details
+
+found 0 vulnerabilities
+
+## npm test (last 100 lines)
+ok 5 - health is public and reports the database
+  ---
+  duration_ms: 1334.684141
+  ...
+# Telegram initData rejected: {"reason":"Telegram authentication is not configured","initDataPresent":false,"initDataLength":0,"keys":[]}
+# Telegram initData rejected: {"reason":"Telegram signature verification failed","initDataPresent":true,"initDataLength":211,"keys":["auth_date","hash","query_id","user"]}
+# Telegram initData rejected: {"reason":"Telegram login expired; reopen the Mini App","initDataPresent":true,"initDataLength":211,"keys":["auth_date","hash","query_id","user"]}
+# Subtest: rejects missing, tampered and expired Telegram initData
+ok 6 - rejects missing, tampered and expired Telegram initData
+  ---
+  duration_ms: 39.999754
+  ...
+# Subtest: profile changes from Telegram are picked up despite the user cache
+ok 7 - profile changes from Telegram are picked up despite the user cache
+  ---
+  duration_ms: 12.742175
+  ...
+# Subtest: event validation answers 4xx (never 500) for hostile input
+ok 8 - event validation answers 4xx (never 500) for hostile input
+  ---
+  duration_ms: 46.888682
+  ...
+# Subtest: non-numeric or absurd ids are 404, not 500
+ok 9 - non-numeric or absurd ids are 404, not 500
+  ---
+  duration_ms: 8.384693
+  ...
+# Subtest: event list is cached, ETag/304 works and creating an event refreshes it
+ok 10 - event list is cached, ETag/304 works and creating an event refreshes it
+  ---
+  duration_ms: 21.916686
+  ...
+# Subtest: joining: capacity limit, idempotent, safe under parallel requests, joined-ids is per user
+ok 11 - joining: capacity limit, idempotent, safe under parallel requests, joined-ids is per user
+  ---
+  duration_ms: 70.321328
+  ...
+# Subtest: chat: unread counter is capped per conversation and cleared by reading
+ok 12 - chat: unread counter is capped per conversation and cleared by reading
+  ---
+  duration_ms: 402.028312
+  ...
+# Subtest: telegram notifications are throttled: repeated chat messages notify once
+ok 13 - telegram notifications are throttled: repeated chat messages notify once
+  ---
+  duration_ms: 429.371496
+  ...
+# Subtest: share endpoints: landing page, 404 for unknown, cached cover with ETag
+ok 14 - share endpoints: landing page, 404 for unknown, cached cover with ETag
+  ---
+  duration_ms: 360.462813
+  ...
+# Subtest: static delivery: split script is immutable, index has ETag/304, vendor files are real, unknown ones 404
+ok 15 - static delivery: split script is immutable, index has ETag/304, vendor files are real, unknown ones 404
+  ---
+  duration_ms: 1906.688125
+  ...
+# 2026-10-25 20:14:53.092 UTC [2414] LOG:  received fast shutdown request
+# 2026-10-25 20:14:53.095 UTC [2414] LOG:  aborting any active transactions
+# 2026-10-25 20:14:53.095 UTC [2430] FATAL:  terminating connection due to administrator command
+# 2026-10-25 20:14:53.095 UTC [2431] FATAL:  terminating connection due to administrator command
+# 2026-10-25 20:14:53.095 UTC [2429] FATAL:  terminating connection due to administrator command
+# 2026-10-25 20:14:53.095 UTC [2427] FATAL:  terminating connection due to administrator command
+# 2026-10-25 20:14:53.095 UTC [2428] FATAL:  terminating connection due to administrator command
+# 2026-10-25 20:14:53.098 UTC [2426] FATAL:  terminating connection due to administrator command
+# 2026-10-25 20:14:53.098 UTC [2425] FATAL:  terminating connection due to administrator command
+# 2026-10-25 20:14:53.101 UTC [2414] LOG:  background worker "logical replication launcher" (PID 2423) exited with exit code 1
+# 2026-10-25 20:14:53.103 UTC [2418] LOG:  shutting down
+# 2026-10-25 20:14:53.103 UTC [2418] LOG:  checkpoint starting: shutdown immediate
+# 2026-10-25 20:14:53.132 UTC [2418] LOG:  checkpoint complete: wrote 1006 buffers (6.1%), wrote 3 SLRU buffers; 0 WAL file(s) added, 0 removed, 0 recycled; write=0.016 s, sync=0.013 s, total=0.030 s; sync files=374, longest=0.001 s, average=0.001 s; distance=4864 kB, estimate=4864 kB; lsn=0/1C0BA30, redo lsn=0/1C0BA30
+# 2026-10-25 20:14:53.142 UTC [2414] LOG:  database system is shut down
+# Subtest: accepts valid Telegram initData and returns normalized user
+ok 16 - accepts valid Telegram initData and returns normalized user
+  ---
+  duration_ms: 11.447769
+  ...
+# Subtest: rejects expired Telegram initData with a reopen hint
+ok 17 - rejects expired Telegram initData with a reopen hint
+  ---
+  duration_ms: 0.500472
+  ...
+# Subtest: rejects initData signed with a different bot token
+ok 18 - rejects initData signed with a different bot token
+  ---
+  duration_ms: 0.47776
+  ...
+# Subtest: rejects malformed user data even when the signature is valid
+ok 19 - rejects malformed user data even when the signature is valid
+  ---
+  duration_ms: 0.453544
+  ...
+1..19
+# tests 19
+# suites 0
+# pass 19
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 5089.110452
+
+## npm audit (last 60 lines)
+found 0 vulnerabilities

@@ -1,0 +1,16 @@
+# Generated Android build output
+app/build/
+**/build/
+
+# Android packages
+*.apk
+*.aab
+
+# Local environment and dependencies
+.env
+.env.*
+!.env.example
+node_modules/
+
+# Packaged build archives
+*.zip

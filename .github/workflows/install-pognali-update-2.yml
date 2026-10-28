@@ -1,0 +1,60 @@
+name: Validate Pognali update 2
+
+on:
+  push:
+    branches:
+      - feature/telegram-mini-app
+    paths:
+      - 'pognali-update-2.zip'
+      - '.github/workflows/install-pognali-update-2.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  apply-and-test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feature/telegram-mini-app
+          fetch-depth: 0
+      - name: Verify and extract archive
+        run: |
+          set -euo pipefail
+          unzip -t pognali-update-2.zip
+          mkdir -p /tmp/pognali-update-2
+          unzip -q pognali-update-2.zip -d /tmp/pognali-update-2
+          find /tmp/pognali-update-2 -type f -maxdepth 3 -print | sort
+      - name: Apply patches on an isolated branch
+        run: |
+          set -euo pipefail
+          cd /tmp/pognali-update-2
+          find . -name '10-diagnostics-fixes.patch' -o -name '11-maplibre-6.patch' -o -name '12-integration-tests.patch' | sort
+          git -C "$GITHUB_WORKSPACE" checkout -b update2/validate-2026-10-26
+          for patch in 10-diagnostics-fixes.patch 11-maplibre-6.patch 12-integration-tests.patch; do
+            file="$(find /tmp/pognali-update-2 -name "$patch" -print -quit)"
+            test -n "$file"
+            git -C "$GITHUB_WORKSPACE" apply --check "$file"
+            git -C "$GITHUB_WORKSPACE" apply "$file"
+          done
+      - name: Install dependencies
+        working-directory: .
+        run: npm install
+      - name: Run tests
+        run: npm test
+      - name: Audit production dependencies
+        run: npm audit --omit=dev
+      - name: Commit validated changes to isolated branch
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add server/index.js docs/telegram/index.html package.json package-lock.json test .github/workflows/telegram-api-test.yml
+          if git diff --cached --quiet; then
+            echo "No changes to commit"
+            exit 1
+          fi
+          git commit -m "feat: apply Pognali update 2 patches"
+          git push origin update2/validate-2026-10-26
