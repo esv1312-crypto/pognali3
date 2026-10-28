@@ -1,0 +1,52 @@
+name: Create encrypted full backup
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout application source
+        uses: actions/checkout@v4
+        with:
+          ref: feature/telegram-mini-app
+          fetch-depth: 0
+
+      - name: Install PostgreSQL client
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y postgresql-client
+
+      - name: Create source and database archive
+        env:
+          DATABASE_URL: ${{ secrets.POGNALI_DATABASE_URL }}
+          BACKUP_ENCRYPTION_KEY: ${{ secrets.POGNALI_BACKUP_ENCRYPTION_KEY }}
+        run: |
+          set -euo pipefail
+          test -n "$DATABASE_URL" || { echo "Missing repository secret POGNALI_DATABASE_URL"; exit 1; }
+          test -n "$BACKUP_ENCRYPTION_KEY" || { echo "Missing repository secret POGNALI_BACKUP_ENCRYPTION_KEY"; exit 1; }
+          mkdir -p backup-out
+          git rev-parse HEAD > backup-out/commit.txt
+          git log -1 --format='%H%n%aI%n%s' > backup-out/source-commit.txt
+          pg_dump "$DATABASE_URL" --format=custom --no-owner --no-acl --file=backup-out/database.dump
+          tar --exclude=.git --exclude=node_modules --exclude=.env --exclude='*.log' -czf backup-out/source.tar.gz .
+          tar -czf backup-out/pognali-full-backup.tar.gz -C backup-out database.dump commit.txt source-commit.txt source.tar.gz
+          openssl enc -aes-256-cbc -salt -pbkdf2 -iter 200000 -in backup-out/pognali-full-backup.tar.gz -out backup-out/pognali-full-backup.tar.gz.enc -pass env:BACKUP_ENCRYPTION_KEY
+          sha256sum backup-out/pognali-full-backup.tar.gz.enc > backup-out/SHA256SUMS.txt
+          rm -f backup-out/database.dump backup-out/pognali-full-backup.tar.gz
+          unset DATABASE_URL BACKUP_ENCRYPTION_KEY
+
+      - name: Upload encrypted backup artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: pognali-full-backup-encrypted
+          path: |
+            backup-out/pognali-full-backup.tar.gz.enc
+            backup-out/SHA256SUMS.txt
+          retention-days: 7
+          if-no-files-found: error
