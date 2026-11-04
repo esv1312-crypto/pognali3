@@ -944,6 +944,11 @@ app.post('/api/events/:id/repeat', async (req, res) => {
     if (!base.rowCount) { await client.query('ROLLBACK'); return res.status(404).json({ error: 'Повторить встречу может только организатор опубликованного события' }); }
     const event = base.rows[0];
     const baseTime = new Date(event.starts_at).getTime();
+    const baseDateKey = new Date(event.starts_at).toISOString().slice(0, 10);
+    if (dates.some(date => date.toISOString().slice(0, 10) === baseDateKey)) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ error: 'Дата исходной встречи уже занята этой встречей' });
+    }
     if (baseTime <= Date.now()) { await client.query('ROLLBACK'); return res.status(400).json({ error: 'Повторять можно только предстоящую встречу' }); }
     if (event.series_id) { await client.query('ROLLBACK'); return res.status(409).json({ error: 'Эта встреча уже входит в серию' }); }
     if (dates.some(date => date.getTime() <= Date.now())) {
