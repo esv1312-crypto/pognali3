@@ -166,6 +166,51 @@ t('chat: unread counter is capped per conversation and cleared by reading', asyn
   assert.equal(read.status, 200);
 });
 
+t('direct message requests notify both users and mutual consent gates messages', async () => {
+  await api(A, '/me');
+  await api(B, '/me');
+  ctx.telegram.length = 0;
+  const requested = await api(A, '/direct/requests', { method: 'POST', body: { user_id: String(B.id) } });
+  assert.equal(requested.status, 201);
+  const conversationId = requested.json.conversation.id;
+  await sleep(200);
+  assert.ok(ctx.telegram.some(call =>
+    call.method === 'sendMessage' &&
+    String(call.body?.chat_id) === String(B.id) &&
+    /запрос на личную переписку/.test(String(call.body?.text || ''))
+  ), 'recipient receives the new request notification');
+  assert.equal((await api(A, `/direct/${conversationId}/messages`, { method: 'POST', body: { body: 'До согласия' } })).status, 403);
+  ctx.telegram.length = 0;
+  assert.equal((await api(B, `/direct/${conversationId}/respond`, { method: 'POST', body: { decision: 'accept' } })).status, 200);
+  await sleep(200);
+  assert.ok(ctx.telegram.some(call =>
+    call.method === 'sendMessage' &&
+    String(call.body?.chat_id) === String(A.id) &&
+    /запрос на личную переписку.*принят/i.test(String(call.body?.text || ''))
+  ), 'requester receives the acceptance notification');
+  assert.equal((await api(A, `/direct/${conversationId}/messages`, { method: 'POST', body: { body: 'Теперь можно общаться' } })).status, 201);
+  const inbox = await api(B, `/direct/${conversationId}/messages`);
+  assert.ok(inbox.json.messages.some(message => message.body === 'Теперь можно общаться'));
+});
+
+t('event chat returns the newest 500 messages in chronological order', async () => {
+  const ev = await create(A, { title: 'История чата', capacity: 20 });
+  await api(B, `/events/${ev.id}/join`, { method: 'POST', body: {} });
+  await ctx.db.query(
+    `INSERT INTO event_messages(event_id,sender_id,body,created_at)
+     SELECT $1,$2,'history-'||n,NOW()-INTERVAL '10 minutes'+n*INTERVAL '1 second'
+     FROM generate_series(1,510) AS n`,
+    [ev.id, B.id]
+  );
+  const result = await api(A, `/events/${ev.id}/messages`);
+  assert.equal(result.status, 200);
+  assert.equal(result.json.messages.length, 500);
+  assert.equal(result.json.messages[0].body, 'history-11');
+  assert.equal(result.json.messages[499].body, 'history-510');
+});
+
+
+
 t('event chat notifications reach the organizer even without a participant row', async () => {
   const ev = await create(A, { title: 'Чат без строки организатора', capacity: 20 });
   await api(B, `/events/${ev.id}/join`, { method: 'POST', body: {} });
