@@ -7,7 +7,7 @@ CREATE TABLE IF NOT EXISTS users (
   photo_url TEXT,
   photo_data BYTEA,
   photo_mime TEXT,
-  avatar_key TEXT UNIQUE,
+  avatar_key TEXT,
   birth_date DATE,
   birth_day SMALLINT CHECK (birth_day IS NULL OR birth_day BETWEEN 1 AND 31),
   birth_month SMALLINT CHECK (birth_month IS NULL OR birth_month BETWEEN 1 AND 12),
