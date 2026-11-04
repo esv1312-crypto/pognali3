@@ -31,22 +31,23 @@ jobs:
           node-version: 22
           cache: ''
 
-      - name: Install Playwright
+      - name: Install app dependencies and Playwright
         run: |
+          npm ci --omit=dev
           npm install --no-save --no-package-lock @playwright/test
           npx playwright install --with-deps chromium
 
-      - name: Start local static server
+      - name: Start the real Express app
         run: |
-          python3 -m http.server 4173 --bind 127.0.0.1 > /tmp/pognali-http.log 2>&1 &
+          WEB_ROOT=docs/telegram PORT=4173 DATABASE_SSL=disable node server/index.js > /tmp/pognali-server.log 2>&1 &
           for i in $(seq 1 30); do
-            if curl --fail --silent http://127.0.0.1:4173/docs/telegram/index.html > /dev/null; then
-              echo "Static server is ready"
+            if curl --fail --silent http://127.0.0.1:4173/ > /dev/null; then
+              echo "Pognali Express server is ready"
               exit 0
             fi
             sleep 1
           done
-          cat /tmp/pognali-http.log
+          cat /tmp/pognali-server.log
           exit 1
 
       - name: Capture screens and inspect responsive UI
