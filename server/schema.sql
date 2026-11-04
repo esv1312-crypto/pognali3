@@ -69,6 +69,8 @@ CREATE TABLE IF NOT EXISTS event_series (
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 ALTER TABLE events ADD COLUMN IF NOT EXISTS series_id BIGINT REFERENCES event_series(id) ON DELETE SET NULL;
+ALTER TABLE event_series DROP CONSTRAINT IF EXISTS event_series_recurrence_rule_check;
+ALTER TABLE event_series ADD CONSTRAINT event_series_recurrence_rule_check CHECK (recurrence_rule IN ('daily','weekly','monthly','custom'));
 ALTER TABLE events ADD COLUMN IF NOT EXISTS series_index SMALLINT;
 CREATE INDEX IF NOT EXISTS events_series_idx ON events(series_id, series_index) WHERE series_id IS NOT NULL;
 
