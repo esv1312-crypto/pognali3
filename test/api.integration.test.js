@@ -111,6 +111,33 @@ t('Telegram profile sync is throttled for repeated profile reads', async () => {
   assert.equal(allSyncCalls, firstSyncCalls, 'second profile read reuses the recent sync');
 });
 
+t('profile birthday can be cleared and invalid calendar dates are rejected', async () => {
+  await api(A, '/me');
+  assert.equal((await api(A, '/me', { method: 'PATCH', body: { birth_date: '1990-02-28' } })).status, 200);
+  const invalid = await api(A, '/me', { method: 'PATCH', body: { birth_date: '1990-02-30' } });
+  assert.equal(invalid.status, 400);
+  const future = await api(A, '/me', { method: 'PATCH', body: { birth_date: '2999-01-01' } });
+  assert.equal(future.status, 400);
+  const cleared = await api(A, '/me', { method: 'PATCH', body: { birth_date: null } });
+  assert.equal(cleared.status, 200);
+  assert.equal(cleared.json.user.birth_date, null);
+  assert.equal(cleared.json.user.birth_day, null);
+  assert.equal(cleared.json.user.birth_month, null);
+  assert.equal(cleared.json.user.birth_year, null);
+});
+
+t('user search does not expose full birth dates or unnecessary profile data', async () => {
+  const searchable = { id: 779, first_name: 'SearchableBirthday', username: 'searchablebirthday' };
+  await api(A, '/me');
+  await api(searchable, '/me');
+  const result = await api(A, '/users/search?q=SearchableBirthday');
+  assert.equal(result.status, 200);
+  assert.equal(result.json.users.length, 1);
+  for (const field of ['birth_date', 'birth_day', 'birth_month', 'birth_year', 'photo_url', 'bio']) {
+    assert.equal(Object.hasOwn(result.json.users[0], field), false, field + ' must not be exposed by user search');
+  }
+});
+
 t('event validation answers 4xx (never 500) for hostile input', async () => {
   const bad = [
     ['empty title', newEvent({ title: '' }), 400], ['lat 999', newEvent({ latitude: 999 }), 400], ['lat text', newEvent({ latitude: 'abc' }), 400],
@@ -152,6 +179,20 @@ t('joining: capacity limit, idempotent, safe under parallel requests, joined-ids
   const mine = await api(B, '/events/joined-ids');
   assert.ok(mine.json.ids.includes(String(big.id)) && mine.json.ids.includes(String(small.id)));
   assert.ok(!(await api(C, '/events/joined-ids')).json.ids.includes(String(big.id)));
+});
+
+t('joining an ended event is rejected while an ongoing event remains joinable', async () => {
+  const ended = await create(A, { starts_at: new Date(Date.now() - 4 * 60 * 60 * 1000).toISOString() });
+  const endedJoin = await api(B, `/events/${ended.id}/join`, { method: 'POST', body: {} });
+  assert.equal(endedJoin.status, 409);
+  const active = await create(A, { starts_at: new Date(Date.now() - 60 * 60 * 1000).toISOString() });
+  const activeJoin = await api(B, `/events/${active.id}/join`, { method: 'POST', body: {} });
+  assert.equal(activeJoin.status, 200);
+  const explicitEnd = await create(A, {
+    starts_at: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString(),
+    ends_at: new Date(Date.now() - 30 * 60 * 1000).toISOString()
+  });
+  assert.equal((await api(C, `/events/${explicitEnd.id}/join`, { method: 'POST', body: {} })).status, 409);
 });
 
 t('chat: unread counter is capped per conversation and cleared by reading', async () => {

@@ -43,3 +43,23 @@ test('all open chat types start a five-second refresh loop', () => {
   assert.ok(page.includes("startChatPolling('event_contact', conversationId, lastMessageId)"));
   assert.ok(page.includes('}, 5000);'));
 });
+
+test('opening personal messages from a direct chat closes the modal before navigation', () => {
+  const start = page.indexOf('async function openPersonalMessages');
+  const end = page.indexOf('async function loadDirectInbox', start);
+  const handler = page.slice(start, end);
+  const closeAt = handler.indexOf('closeModal()');
+  const navigateAt = handler.indexOf("go('messages')");
+  assert.ok(closeAt >= 0 && navigateAt > closeAt);
+});
+
+test('MapLibre initialization waits for the vendor module and falls back to list mode on failure', () => {
+  assert.ok(page.includes('pognali-maplibre-ready'));
+  assert.ok(page.includes('pognali-maplibre-failed'));
+  assert.ok(page.includes('if (!window.maplibregl)'));
+});
+
+test('event end time from the API is used by the client event-state logic', () => {
+  assert.ok(page.includes('endAt:x.ends_at||null'));
+  assert.ok(page.includes('const explicitEnd=e.endAt||e.end_at||e.endDateTime||e.end_datetime'));
+});
