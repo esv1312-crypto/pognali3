@@ -776,8 +776,8 @@ app.get('/api/me/activity', async (req, res) => {
        CASE WHEN e.creator_id=$1 THEN 'organizer' ELSE 'participant' END AS my_role,
        COUNT(ep.user_id) FILTER (WHERE ep.status='joined')::int AS participants_count
      FROM events e LEFT JOIN event_participants ep ON ep.event_id=e.id
-     WHERE e.creator_id=$1 OR EXISTS(
-       SELECT 1 FROM event_participants mine WHERE mine.event_id=e.id AND mine.user_id=$1 AND mine.status='joined')
+     WHERE e.status <> 'cancelled' AND (e.creator_id=$1 OR EXISTS(
+       SELECT 1 FROM event_participants mine WHERE mine.event_id=e.id AND mine.user_id=$1 AND mine.status='joined'))
      GROUP BY e.id ORDER BY e.starts_at DESC LIMIT 300`,
     [req.telegramUser.id]
   );
