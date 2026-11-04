@@ -804,8 +804,8 @@ app.post('/api/events/:id/repeat', async (req, res) => {
     const baseTime = new Date(event.starts_at).getTime();
     if (baseTime <= Date.now()) { await client.query('ROLLBACK'); return res.status(400).json({ error: 'Повторять можно только предстоящую встречу' }); }
     if (event.series_id) { await client.query('ROLLBACK'); return res.status(409).json({ error: 'Эта встреча уже входит в серию' }); }
-    if (dates.some(date => date.getTime() <= Date.now() || date.getTime() <= baseTime)) {
-      await client.query('ROLLBACK'); return res.status(400).json({ error: 'Выбирай даты позже исходной встречи и текущего момента' });
+    if (dates.some(date => date.getTime() <= Date.now())) {
+      await client.query('ROLLBACK'); return res.status(400).json({ error: 'Выбирай только будущие даты' });
     }
     dates.sort((a,b) => a.getTime()-b.getTime());
     const series = await client.query(
