@@ -9,6 +9,7 @@ const crypto = require('node:crypto');
 const { rateLimit } = require('express-rate-limit');
 const sharp = require('sharp');
 const { verifyTelegramInitData } = require('./telegram-auth');
+const { syncTelegramProfile } = require('./telegram-profile');
 
 const app = express();
 // Ids in URLs are numeric: answer 404 for anything else instead of letting PostgreSQL fail with a 500.
@@ -321,8 +322,9 @@ app.use('/api', apiRateLimit, (req, res, next) => {
 });
 
 app.get('/api/me', async (req, res) => {
+  await syncTelegramProfile(pool, req.telegramUser.id, process.env.TELEGRAM_BOT_TOKEN);
   const result = await pool.query(
-    'SELECT id, username, first_name, last_name, display_name, photo_url, city, bio, created_at FROM users WHERE id=$1',
+    'SELECT id, username, first_name, last_name, display_name, photo_url, city, bio, birth_date, birth_day, birth_month, birth_year, created_at FROM users WHERE id=$1',
     [req.telegramUser.id]
   );
   res.json({ user: { ...result.rows[0], is_admin: isAdminTelegramUser(req.telegramUser.id) } });
@@ -332,12 +334,27 @@ app.patch('/api/me', async (req, res) => {
   const displayName = typeof req.body.display_name === 'string' ? req.body.display_name.trim().slice(0, 80) : undefined;
   const city = typeof req.body.city === 'string' ? req.body.city.trim().slice(0, 120) : undefined;
   const bio = typeof req.body.bio === 'string' ? req.body.bio.trim().slice(0, 500) : undefined;
+  const birthDate = typeof req.body.birth_date === 'string' && /^\\d{4}-\\d{2}-\\d{2}$/.test(req.body.birth_date) ? req.body.birth_date : undefined;
   const result = await pool.query(
-    `UPDATE users SET display_name=COALESCE($2, display_name), city=COALESCE($3, city), bio=COALESCE($4, bio), updated_at=NOW()
-     WHERE id=$1 RETURNING id, username, first_name, last_name, display_name, photo_url, city, bio`,
-    [req.telegramUser.id, displayName ?? null, city ?? null, bio ?? null]
+    `UPDATE users SET display_name=COALESCE($2, display_name), city=COALESCE($3, city), bio=COALESCE($4, bio),
+     birth_date=COALESCE($5::date,birth_date),
+     birth_day=CASE WHEN $5::date IS NOT NULL THEN EXTRACT(DAY FROM $5::date)::smallint ELSE birth_day END,
+     birth_month=CASE WHEN $5::date IS NOT NULL THEN EXTRACT(MONTH FROM $5::date)::smallint ELSE birth_month END,
+     birth_year=CASE WHEN $5::date IS NOT NULL THEN EXTRACT(YEAR FROM $5::date)::smallint ELSE birth_year END,
+     updated_at=NOW()
+     WHERE id=$1 RETURNING id, username, first_name, last_name, display_name, photo_url, city, bio, birth_date, birth_day, birth_month, birth_year`,
+    [req.telegramUser.id, displayName ?? null, city ?? null, bio ?? null, birthDate ?? null]
   );
   res.json({ user: result.rows[0] });
+});
+
+app.get('/media/avatars/:key', async (req, res) => {
+  if (!/^[a-f0-9]{40}$/.test(req.params.key)) return res.status(404).end();
+  const result = await pool.query('SELECT photo_data, photo_mime FROM users WHERE avatar_key=$1', [req.params.key]);
+  const avatar = result.rows[0];
+  if (!avatar?.photo_data) return res.status(404).end();
+  res.set({ 'Content-Type': avatar.photo_mime || 'image/jpeg', 'Cache-Control': 'public, max-age=86400, immutable', 'X-Content-Type-Options': 'nosniff' });
+  res.send(avatar.photo_data);
 });
 
 async function buildEventsPayload(city, category, limit) {
@@ -402,7 +419,7 @@ app.get('/api/events/:id', async (req, res) => {
   );
   if (!result.rowCount) return res.status(404).json({ error: 'Event not found' });
   const people = await pool.query(
-    `SELECT u.id, u.username, u.first_name, u.last_name, u.photo_url
+    `SELECT u.id, u.username, u.first_name, u.last_name, u.display_name, u.photo_url, u.city, u.bio, u.birth_date, u.birth_day, u.birth_month, u.birth_year
      FROM event_participants ep JOIN users u ON u.id=ep.user_id
      WHERE ep.event_id=$1 AND ep.status='joined' ORDER BY ep.joined_at`,
     [req.params.id]
@@ -549,7 +566,7 @@ app.post('/api/events/:id/messages', async (req, res) => {
 
 function sortedUserPair(a,b){return BigInt(a)<BigInt(b)?[String(a),String(b)]:[String(b),String(a)]}
 async function hasMessagingBlock(a,b){const r=await pool.query("SELECT 1 FROM user_blocks WHERE (blocker_id=$1 AND blocked_id=$2) OR (blocker_id=$2 AND blocked_id=$1) LIMIT 1",[a,b]);return r.rowCount>0}
-app.get('/api/users/search',async(req,res)=>{const q=typeof req.query.q==='string'?req.query.q.trim().slice(0,80):'';if(q.length<2)return res.json({users:[]});const pattern='%'+q.replaceAll('%','').replaceAll('_','')+'%';const r=await pool.query("SELECT id,username,first_name,last_name,display_name,photo_url,city FROM users WHERE id<>$1 AND (COALESCE(display_name,'') ILIKE $2 OR COALESCE(username,'') ILIKE $2 OR first_name ILIKE $2 OR last_name ILIKE $2) ORDER BY COALESCE(display_name,first_name) LIMIT 20",[req.telegramUser.id,pattern]);res.json({users:r.rows})});
+app.get('/api/users/search',async(req,res)=>{const q=typeof req.query.q==='string'?req.query.q.trim().slice(0,80):'';if(q.length<2)return res.json({users:[]});const pattern='%'+q.replaceAll('%','').replaceAll('_','')+'%';const r=await pool.query("SELECT id,username,first_name,last_name,display_name,photo_url,city,bio,birth_date,birth_day,birth_month,birth_year FROM users WHERE id<>$1 AND (COALESCE(display_name,'') ILIKE $2 OR COALESCE(username,'') ILIKE $2 OR first_name ILIKE $2 OR last_name ILIKE $2) ORDER BY COALESCE(display_name,first_name) LIMIT 20",[req.telegramUser.id,pattern]);res.json({users:r.rows})});
 app.get('/api/messages/unread-count', async (req, res) => {
   const uid = req.telegramUser.id;
   const result = await pool.query(
