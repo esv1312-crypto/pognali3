@@ -35,3 +35,11 @@ test('report IDs use a working numeric validation regex', () => {
 test('organizer does not see the leave button in event cards or details', () => {
   assert.ok((page.match(/joined&&e\.owner===2\?'':/g) || []).length >= 2);
 });
+
+test('all open chat types start a five-second refresh loop', () => {
+  assert.ok(page.includes('function startChatPolling(type, id, lastMessageId)'));
+  assert.ok(page.includes("startChatPolling('event', id, lastMessageId)"));
+  assert.ok(page.includes("startChatPolling('direct', id, lastMessageId)"));
+  assert.ok(page.includes("startChatPolling('event_contact', conversationId, lastMessageId)"));
+  assert.ok(page.includes('}, 5000);'));
+});
