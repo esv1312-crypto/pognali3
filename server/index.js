@@ -559,7 +559,14 @@ app.post('/api/events/:id/messages', async (req, res) => {
     [req.params.id, req.telegramUser.id, body]
   );
   res.status(201).json({ message: result.rows[0] });
-  const recipients = await pool.query("SELECT ep.user_id FROM event_participants ep WHERE ep.event_id=$1 AND ep.status='joined' AND ep.user_id<>$2", [req.params.id, req.telegramUser.id]);
+  const recipients = await pool.query(
+    `SELECT audience.user_id FROM (
+       SELECT creator_id AS user_id FROM events WHERE id=$1
+       UNION
+       SELECT ep.user_id FROM event_participants ep WHERE ep.event_id=$1 AND ep.status='joined'
+     ) audience WHERE audience.user_id<>$2`,
+    [req.params.id, req.telegramUser.id]
+  );
   const eventTitle = await pool.query('SELECT title FROM events WHERE id=$1', [req.params.id]);
   const title = eventTitle.rows[0]?.title || 'событие';
   for (const recipient of recipients.rows) notifyUser(recipient.user_id, '💬 Новое сообщение в чате события «' + title + '». Открой «Погнали», чтобы ответить.', 'chat:' + recipient.user_id + ':' + req.params.id, 5 * 60 * 1000);
