@@ -3,6 +3,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const crypto = require('node:crypto');
+const { Pool } = require('pg');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
@@ -26,7 +27,7 @@ function initData(user, { ageSec = 0, tamper = false } = {}) {
   return p.toString();
 }
 
-const ctx = { base: '', pg: null, server: null, telegram: [] };
+const ctx = { base: '', pg: null, db: null, server: null, telegram: [] };
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 async function api(user, p, { method = 'GET', body, raw, headers = {} } = {}) {
   const res = await fetch(ctx.base + '/api' + p, {
@@ -57,6 +58,7 @@ test.before(async () => {
     DATABASE_URL: `postgres://postgres:pw@127.0.0.1:${dbPort}/pognali`, DATABASE_SSL: 'disable', PORT: String(port),
     TELEGRAM_BOT_TOKEN: TOKEN, TELEGRAM_BOT_USERNAME: 'test_bot', MINI_APP_URL: 'https://app.test', TELEGRAM_WEBHOOK_SECRET: 's', ADMIN_API_TOKEN: 'adm'
   });
+  ctx.db = new Pool({ connectionString: process.env.DATABASE_URL, ssl: false });
   const realFetch = global.fetch;
   global.fetch = async (url, opts) => { // never talk to the real Telegram; record outgoing bot calls
     if (String(url).includes('api.telegram.org')) { ctx.telegram.push({ method: String(url).split('/').pop(), body: opts && opts.body ? JSON.parse(opts.body) : null }); return { ok: true, status: 200, json: async () => ({ ok: true, result: {} }) }; }
@@ -69,6 +71,7 @@ test.before(async () => {
 
 test.after(async () => {
   if (SKIP) return;
+  if (ctx.db) await ctx.db.end();
   if (ctx.pg) await ctx.pg.stop();
   setTimeout(() => process.exit(0), 200).unref();
 });
@@ -95,6 +98,17 @@ t('profile changes from Telegram are picked up despite the user cache', async ()
   assert.equal(first.json.user.first_name, 'Первое');
   assert.equal(again.json.user.first_name, 'Первое');
   assert.equal(renamed.json.user.first_name, 'Новое');
+});
+
+t('Telegram profile sync is throttled for repeated profile reads', async () => {
+  const user = { id: 778, first_name: 'Проверка синхронизации' };
+  ctx.telegram.length = 0;
+  assert.equal((await api(user, '/me')).status, 200);
+  const firstSyncCalls = ctx.telegram.filter(call => ['getChat', 'getUserProfilePhotos'].includes(call.method)).length;
+  assert.equal(firstSyncCalls, 2, 'first profile read syncs birthday and photo');
+  assert.equal((await api(user, '/me')).status, 200);
+  const allSyncCalls = ctx.telegram.filter(call => ['getChat', 'getUserProfilePhotos'].includes(call.method)).length;
+  assert.equal(allSyncCalls, firstSyncCalls, 'second profile read reuses the recent sync');
 });
 
 t('event validation answers 4xx (never 500) for hostile input', async () => {
@@ -150,6 +164,23 @@ t('chat: unread counter is capped per conversation and cleared by reading', asyn
   assert.ok(capped <= 99 * 10, 'bounded work per conversation');
   const read = await api(A, '/messages/read', { method: 'POST', body: { type: 'event', conversationType: 'event', conversation_id: ev.id, conversationId: ev.id } });
   assert.equal(read.status, 200);
+});
+
+t('event chat notifications reach the organizer even without a participant row', async () => {
+  const ev = await create(A, { title: 'Чат без строки организатора', capacity: 20 });
+  await api(B, `/events/${ev.id}/join`, { method: 'POST', body: {} });
+  await sleep(200);
+  await ctx.db.query('DELETE FROM event_participants WHERE event_id=$1 AND user_id=$2', [ev.id, A.id]);
+  ctx.telegram.length = 0;
+  const sent = await api(B, `/events/${ev.id}/messages`, { method: 'POST', body: { body: 'Проверка уведомления организатору' } });
+  assert.equal(sent.status, 201);
+  await sleep(250);
+  const delivered = ctx.telegram.filter(call =>
+    call.method === 'sendMessage' &&
+    String(call.body?.chat_id) === String(A.id) &&
+    /Новое сообщение в чате события/.test(String(call.body?.text || ''))
+  );
+  assert.equal(delivered.length, 1, 'organizer receives the group-chat notification');
 });
 
 t('telegram notifications are throttled: repeated chat messages notify once', async () => {
