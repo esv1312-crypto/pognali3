@@ -5,12 +5,27 @@ CREATE TABLE IF NOT EXISTS users (
   last_name TEXT NOT NULL DEFAULT '',
   display_name TEXT,
   photo_url TEXT,
+  photo_data BYTEA,
+  photo_mime TEXT,
+  avatar_key TEXT UNIQUE,
+  birth_date DATE,
+  birth_day SMALLINT CHECK (birth_day IS NULL OR birth_day BETWEEN 1 AND 31),
+  birth_month SMALLINT CHECK (birth_month IS NULL OR birth_month BETWEEN 1 AND 12),
+  birth_year SMALLINT CHECK (birth_year IS NULL OR birth_year BETWEEN 1900 AND 2100),
   city TEXT,
   bio TEXT,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 ALTER TABLE users ADD COLUMN IF NOT EXISTS display_name TEXT;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS photo_data BYTEA;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS photo_mime TEXT;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS avatar_key TEXT;
+CREATE UNIQUE INDEX IF NOT EXISTS users_avatar_key_idx ON users(avatar_key) WHERE avatar_key IS NOT NULL;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS birth_date DATE;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS birth_day SMALLINT;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS birth_month SMALLINT;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS birth_year SMALLINT;
 
 CREATE TABLE IF NOT EXISTS events (
   id BIGSERIAL PRIMARY KEY,
