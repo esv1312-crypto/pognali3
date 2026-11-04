@@ -1447,12 +1447,11 @@ function renderMessagesTab(){if(API_MODE){document.getElementById('content').inn
 async function toggleEventFavorite(id){const e=db.events.find(x=>x.id===Number(id));if(!e||!API_MODE)return;try{const method=e.apiFavorite?'DELETE':'POST';await apiRequest('/events/'+encodeURIComponent(id)+'/favorite',{method,body:method==='POST'?JSON.stringify({}):undefined});e.apiFavorite=!e.apiFavorite;openEvent(id,true);showToast(e.apiFavorite?'Добавлено в избранное':'Убрано из избранного','success')}catch(err){showToast(err.message||'Не удалось изменить избранное','error')}}
 async function openFavorites(){if(!API_MODE)return showToast('Избранное доступно в Telegram','info');try{const d=await apiRequest('/favorites');const rows=d.events||[];openModal('<button class="close" onclick="closeModal()">✕</button><h2>☆ Избранное</h2>'+(rows.length?rows.map(e=>'<button class="message-item" onclick="closeModal();openEvent('+Number(e.id)+')"><span style="flex:1;min-width:0"><b>'+esc(e.title)+'</b><small>'+esc(e.city||'')+' · '+new Date(e.starts_at).toLocaleString('ru-RU',{dateStyle:'medium',timeStyle:'short'})+'</small></span>›</button>').join(''):'<div class="empty">Пока ничего не сохранено. Добавляй интересные события в избранное.</div>'))}catch(e){showToast(e.message||'Не удалось загрузить избранное','error')}}
 async function openActivityHistory(){if(!API_MODE)return showToast('История доступна в Telegram','info');try{const d=await apiRequest('/me/activity');const rows=d.events||[];openModal('<button class="close" onclick="closeModal()">✕</button><h2>◷ История участия</h2>'+(rows.length?rows.map(e=>'<button class="message-item" onclick="closeModal();openEvent('+Number(e.id)+')"><span style="flex:1;min-width:0"><b>'+esc(e.title)+'</b><small>'+esc(e.my_role==='organizer'?'Организатор':'Участник')+' · '+esc(e.city||'')+' · '+new Date(e.starts_at).toLocaleDateString('ru-RU')+' · '+esc(e.status)+'</small></span>›</button>').join(''):'<div class="empty">Здесь появятся события, которые ты создал или в которых участвовал.</div>'))}catch(e){showToast(e.message||'Не удалось загрузить историю','error')}}
-let repeatCalendarMonth=null,repeatSelectedDates=[],repeatBaseTime='19:00',repeatMinDate='';
+let repeatCalendarMonth=null,repeatSelectedDates=[],repeatBaseTime='19:00';
 function openRepeatEvent(id){
  const event=db.events.find(x=>x.id===Number(id));
  if(!event)return showToast('Не удалось найти исходную встречу','error');
  repeatSelectedDates=[];
- repeatMinDate=event.date||localDateKey();
  repeatBaseTime=/^\d{2}:\d{2}$/.test(event.time||'')?event.time:'19:00';
  const now=new Date();
  repeatCalendarMonth=new Date(now.getFullYear(),now.getMonth(),1);
@@ -1468,7 +1467,7 @@ function renderRepeatCalendar(){
  for(let i=0;i<offset;i++)days+='<span class="cal-day empty-day"></span>';
  for(let day=1;day<=last;day++){
   const date=year+'-'+String(month+1).padStart(2,'0')+'-'+String(day).padStart(2,'0');
-  const past=date<=today||date<=repeatMinDate,active=repeatSelectedDates.includes(date);
+  const past=date<=today,active=repeatSelectedDates.includes(date);
   days+='<button type="button" class="cal-day'+(active?' active':'')+(date===today?' today':'')+'" '+(past?'disabled':'')+' onclick="toggleRepeatDate(\''+date+'\')"><span>'+day+'</span></button>';
  }
  days+='</div>';
