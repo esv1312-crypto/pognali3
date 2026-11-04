@@ -43,3 +43,7 @@ test('all open chat types start a five-second refresh loop', () => {
   assert.ok(page.includes("startChatPolling('event_contact', conversationId, lastMessageId)"));
   assert.ok(page.includes('}, 5000);'));
 });
+
+test('opening personal messages from a direct chat closes the modal before navigation', () => {
+  assert.ok(page.includes('closeModal();\\n  go(\'messages\');'));
+});
