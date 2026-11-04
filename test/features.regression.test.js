@@ -17,8 +17,9 @@ test('missing event invitation does not fall through to generic welcome', () => 
   assert.match(server, /!response && !notFoundStart && \(text\.toLowerCase\(\)\.startsWith\('\/start'\)/);
 });
 
-test('unread event-message counts are capped at 99 in both API responses', () => {
-  assert.ok((server.match(/LIMIT 99\) q/g) || []).length >= 2);
+test('unread event-chat badges are capped per conversation and the aggregate query is bounded', () => {
+  assert.match(server, /LIMIT 99\\) q\\) AS unread_count/);
+  assert.match(server, /LIMIT 9900\\) event_unread/);
 });
 
 test('organizer cannot leave their own event through the API', () => {
