@@ -799,6 +799,7 @@ app.post('/api/events/:id/repeat', async (req, res) => {
     const base = await client.query("SELECT * FROM events WHERE id=$1 AND creator_id=$2 AND status='published' FOR UPDATE", [req.params.id, req.telegramUser.id]);
     if (!base.rowCount) { await client.query('ROLLBACK'); return res.status(404).json({ error: 'Создать повторение может только организатор опубликованного события' }); }
     const event = base.rows[0];
+    if (new Date(event.starts_at).getTime() <= Date.now()) { await client.query('ROLLBACK'); return res.status(400).json({ error: 'Повторять можно только предстоящее событие' }); }
     if (event.series_id) { await client.query('ROLLBACK'); return res.status(409).json({ error: 'Это событие уже входит в серию' }); }
     const series = await client.query(
       'INSERT INTO event_series(creator_id,base_event_id,recurrence_rule,interval_count,occurrence_count) VALUES($1,$2,$3,$4,$5) RETURNING id',
