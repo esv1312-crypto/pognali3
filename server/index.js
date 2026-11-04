@@ -304,7 +304,7 @@ async function requireTelegram(req, res, next) {
        VALUES ($1,$2,$3,$4,$5)
        ON CONFLICT (id) DO UPDATE SET username=EXCLUDED.username,
          first_name=EXCLUDED.first_name, last_name=EXCLUDED.last_name,
-         photo_url=COALESCE(EXCLUDED.photo_url, users.photo_url), updated_at=NOW()`,
+         photo_url=CASE WHEN users.photo_data IS NOT NULL THEN users.photo_url ELSE COALESCE(EXCLUDED.photo_url, users.photo_url) END, updated_at=NOW()`,
       [auth.user.id, auth.user.username, auth.user.first_name, auth.user.last_name, auth.user.photo_url]
     );
     if (userSeen.size > 20000) userSeen.clear();
