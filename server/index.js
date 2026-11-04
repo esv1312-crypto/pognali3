@@ -752,7 +752,7 @@ app.get('/api/favorites', async (req, res) => {
      JOIN users u ON u.id=e.creator_id
      LEFT JOIN event_participants ep ON ep.event_id=e.id
      WHERE f.user_id=$1 AND e.status <> 'cancelled'
-     GROUP BY e.id,u.id ORDER BY f.created_at DESC LIMIT 200`,
+     GROUP BY e.id,u.id ORDER BY MAX(f.created_at) DESC LIMIT 200`,
     [req.telegramUser.id]
   );
   res.json({ events: result.rows });
