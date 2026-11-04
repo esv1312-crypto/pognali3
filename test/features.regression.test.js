@@ -52,3 +52,9 @@ test('opening personal messages from a direct chat closes the modal before navig
   const navigateAt = handler.indexOf("go('messages')");
   assert.ok(closeAt >= 0 && navigateAt > closeAt);
 });
+
+test('MapLibre initialization waits for the vendor module and falls back to list mode on failure', () => {
+  assert.ok(page.includes('pognali-maplibre-ready'));
+  assert.ok(page.includes('pognali-maplibre-failed'));
+  assert.ok(page.includes('if (!window.maplibregl)'));
+});
