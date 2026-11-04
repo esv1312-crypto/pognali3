@@ -410,7 +410,9 @@ app.get('/api/events/:id', async (req, res) => {
   const result = await pool.query(
     `SELECT e.*, COALESCE(u.display_name, u.first_name) AS creator_first_name, u.username AS creator_username,
        COUNT(ep.user_id) FILTER (WHERE ep.status='joined')::int AS participants_count,
-       BOOL_OR(ep.user_id=$2 AND ep.status='joined') AS joined_by_me
+       BOOL_OR(ep.user_id=$2 AND ep.status='joined') AS joined_by_me,
+       EXISTS(SELECT 1 FROM event_favorites ef WHERE ef.event_id=e.id AND ef.user_id=$2) AS is_favorite,
+       e.series_id, e.series_index
      FROM events e JOIN users u ON u.id=e.creator_id
      LEFT JOIN event_participants ep ON ep.event_id=e.id
      WHERE e.id=$1 AND e.status <> 'cancelled'
@@ -739,6 +741,96 @@ app.post('/api/events/:id/share-opened', async (req, res) => {
   if (!event.rowCount) return res.status(404).json({ error: 'Event not found or no longer available' });
   const tracked = await recordEventShareAction(req.params.id, req.telegramUser.id, 'opened_from_share');
   res.json({ tracked, eventId: String(req.params.id) });
+});
+
+
+app.get('/api/favorites', async (req, res) => {
+  const result = await pool.query(
+    `SELECT e.*, COALESCE(u.display_name,u.first_name) AS creator_first_name,
+       COUNT(ep.user_id) FILTER (WHERE ep.status='joined')::int AS participants_count
+     FROM event_favorites f JOIN events e ON e.id=f.event_id
+     JOIN users u ON u.id=e.creator_id
+     LEFT JOIN event_participants ep ON ep.event_id=e.id
+     WHERE f.user_id=$1 AND e.status <> 'cancelled'
+     GROUP BY e.id,u.id ORDER BY MAX(f.created_at) DESC LIMIT 200`,
+    [req.telegramUser.id]
+  );
+  res.json({ events: result.rows });
+});
+
+app.post('/api/events/:id/favorite', async (req, res) => {
+  const event = await pool.query("SELECT id FROM events WHERE id=$1 AND status='published'", [req.params.id]);
+  if (!event.rowCount) return res.status(404).json({ error: 'Событие недоступно' });
+  await pool.query('INSERT INTO event_favorites(event_id,user_id) VALUES($1,$2) ON CONFLICT DO NOTHING', [req.params.id, req.telegramUser.id]);
+  res.json({ favorite: true });
+});
+
+app.delete('/api/events/:id/favorite', async (req, res) => {
+  await pool.query('DELETE FROM event_favorites WHERE event_id=$1 AND user_id=$2', [req.params.id, req.telegramUser.id]);
+  res.json({ favorite: false });
+});
+
+app.get('/api/me/activity', async (req, res) => {
+  const result = await pool.query(
+    `SELECT e.id,e.title,e.category,e.emoji,e.city,e.address,e.starts_at,e.ends_at,e.status,e.creator_id,
+       CASE WHEN e.creator_id=$1 THEN 'organizer' ELSE 'participant' END AS my_role,
+       COUNT(ep.user_id) FILTER (WHERE ep.status='joined')::int AS participants_count
+     FROM events e LEFT JOIN event_participants ep ON ep.event_id=e.id
+     WHERE e.status <> 'cancelled' AND (e.creator_id=$1 OR EXISTS(
+       SELECT 1 FROM event_participants mine WHERE mine.event_id=e.id AND mine.user_id=$1 AND mine.status='joined'))
+     GROUP BY e.id ORDER BY e.starts_at DESC LIMIT 300`,
+    [req.telegramUser.id]
+  );
+  res.json({ events: result.rows });
+});
+
+app.post('/api/events/:id/repeat', async (req, res) => {
+  const rule = String(req.body?.rule || '');
+  const intervalCount = Number(req.body?.interval_count || 1);
+  const occurrenceCount = Number(req.body?.occurrence_count || 4);
+  if (!['daily','weekly','monthly'].includes(rule)) return res.status(400).json({ error: 'Выбери ежедневный, еженедельный или ежемесячный повтор' });
+  if (!Number.isInteger(intervalCount) || intervalCount < 1 || intervalCount > 4 ||
+      !Number.isInteger(occurrenceCount) || occurrenceCount < 2 || occurrenceCount > 52) {
+    return res.status(400).json({ error: 'Повтор: от 2 до 52 встреч, интервал от 1 до 4' });
+  }
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const base = await client.query("SELECT * FROM events WHERE id=$1 AND creator_id=$2 AND status='published' FOR UPDATE", [req.params.id, req.telegramUser.id]);
+    if (!base.rowCount) { await client.query('ROLLBACK'); return res.status(404).json({ error: 'Создать повторение может только организатор опубликованного события' }); }
+    const event = base.rows[0];
+    if (new Date(event.starts_at).getTime() <= Date.now()) { await client.query('ROLLBACK'); return res.status(400).json({ error: 'Повторять можно только предстоящее событие' }); }
+    if (event.series_id) { await client.query('ROLLBACK'); return res.status(409).json({ error: 'Это событие уже входит в серию' }); }
+    const series = await client.query(
+      'INSERT INTO event_series(creator_id,base_event_id,recurrence_rule,interval_count,occurrence_count) VALUES($1,$2,$3,$4,$5) RETURNING id',
+      [req.telegramUser.id, event.id, rule, intervalCount, occurrenceCount]
+    );
+    const seriesId = series.rows[0].id;
+    await client.query('UPDATE events SET series_id=$2,series_index=1 WHERE id=$1', [event.id, seriesId]);
+    const created = [{ id: String(event.id), starts_at: event.starts_at }];
+    const start = new Date(event.starts_at);
+    const duration = event.ends_at ? new Date(event.ends_at).getTime() - start.getTime() : null;
+    for (let index=2; index<=occurrenceCount; index++) {
+      const next = new Date(start);
+      if (rule === 'daily') next.setUTCDate(next.getUTCDate() + intervalCount * (index - 1));
+      else if (rule === 'weekly') next.setUTCDate(next.getUTCDate() + 7 * intervalCount * (index - 1));
+      else { const day = next.getUTCDate(); next.setUTCDate(1); next.setUTCMonth(next.getUTCMonth() + intervalCount * (index - 1)); const lastDay = new Date(Date.UTC(next.getUTCFullYear(), next.getUTCMonth()+1, 0)).getUTCDate(); next.setUTCDate(Math.min(day,lastDay)); }
+      if (next.getTime() <= Date.now()) continue;
+      const nextEnd = duration === null ? null : new Date(next.getTime() + duration);
+      const inserted = await client.query(
+        `INSERT INTO events(creator_id,title,description,category,emoji,city,address,latitude,longitude,starts_at,ends_at,capacity,status,series_id,series_index)
+         VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,'published',$13,$14) RETURNING id,starts_at`,
+        [event.creator_id,event.title,event.description,event.category,event.emoji,event.city,event.address,event.latitude,event.longitude,next.toISOString(),nextEnd?.toISOString()||null,event.capacity,seriesId,index]
+      );
+      await client.query("INSERT INTO event_participants(event_id,user_id,status) VALUES($1,$2,'joined')", [inserted.rows[0].id, req.telegramUser.id]);
+      created.push({ id: String(inserted.rows[0].id), starts_at: inserted.rows[0].starts_at });
+    }
+    await client.query('COMMIT');
+    res.status(201).json({ series_id: String(seriesId), created_count: created.length, events: created, rule, interval_count: intervalCount });
+  } catch (error) {
+    await client.query('ROLLBACK');
+    throw error;
+  } finally { client.release(); }
 });
 
 app.post('/api/events/:id/join', async (req, res) => {
