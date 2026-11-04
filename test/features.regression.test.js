@@ -18,8 +18,8 @@ test('missing event invitation does not fall through to generic welcome', () => 
 });
 
 test('unread event-chat badges are capped per conversation and the aggregate query is bounded', () => {
-  assert.match(server, /LIMIT 99\\) q\\) AS unread_count/);
-  assert.match(server, /LIMIT 9900\\) event_unread/);
+  assert.ok(server.includes('LIMIT 99) q) AS unread_count'));
+  assert.ok(server.includes('LIMIT 9900) event_unread'));
 });
 
 test('organizer cannot leave their own event through the API', () => {
