@@ -334,16 +334,34 @@ app.patch('/api/me', async (req, res) => {
   const displayName = typeof req.body.display_name === 'string' ? req.body.display_name.trim().slice(0, 80) : undefined;
   const city = typeof req.body.city === 'string' ? req.body.city.trim().slice(0, 120) : undefined;
   const bio = typeof req.body.bio === 'string' ? req.body.bio.trim().slice(0, 500) : undefined;
-  const birthDate = typeof req.body.birth_date === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(req.body.birth_date) ? req.body.birth_date : undefined;
+  const hasBirthDate = Object.prototype.hasOwnProperty.call(req.body, 'birth_date');
+  let birthDate = null;
+  let clearBirthDate = false;
+  if (hasBirthDate) {
+    const raw = req.body.birth_date;
+    if (raw === null || raw === '') {
+      clearBirthDate = true;
+    } else if (typeof raw === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(raw)) {
+      const [year, month, day] = raw.split('-').map(Number);
+      const parsed = new Date(Date.UTC(year, month - 1, day));
+      if (year < 1900 || parsed.getUTCFullYear() !== year || parsed.getUTCMonth() !== month - 1 ||
+          parsed.getUTCDate() !== day || parsed.getTime() > Date.now() + 24 * 60 * 60 * 1000) {
+        return res.status(400).json({ error: 'Укажи корректную дату рождения не из будущего' });
+      }
+      birthDate = raw;
+    } else {
+      return res.status(400).json({ error: 'Укажи корректную дату рождения в формате ГГГГ-ММ-ДД' });
+    }
+  }
   const result = await pool.query(
     `UPDATE users SET display_name=COALESCE($2, display_name), city=COALESCE($3, city), bio=COALESCE($4, bio),
-     birth_date=COALESCE($5::date,birth_date),
-     birth_day=CASE WHEN $5::date IS NOT NULL THEN EXTRACT(DAY FROM $5::date)::smallint ELSE birth_day END,
-     birth_month=CASE WHEN $5::date IS NOT NULL THEN EXTRACT(MONTH FROM $5::date)::smallint ELSE birth_month END,
-     birth_year=CASE WHEN $5::date IS NOT NULL THEN EXTRACT(YEAR FROM $5::date)::smallint ELSE birth_year END,
+     birth_date=CASE WHEN $6 THEN NULL WHEN $5::date IS NOT NULL THEN $5::date ELSE birth_date END,
+     birth_day=CASE WHEN $6 THEN NULL WHEN $5::date IS NOT NULL THEN EXTRACT(DAY FROM $5::date)::smallint ELSE birth_day END,
+     birth_month=CASE WHEN $6 THEN NULL WHEN $5::date IS NOT NULL THEN EXTRACT(MONTH FROM $5::date)::smallint ELSE birth_month END,
+     birth_year=CASE WHEN $6 THEN NULL WHEN $5::date IS NOT NULL THEN EXTRACT(YEAR FROM $5::date)::smallint ELSE birth_year END,
      updated_at=NOW()
      WHERE id=$1 RETURNING id, username, first_name, last_name, display_name, photo_url, city, bio, birth_date, birth_day, birth_month, birth_year`,
-    [req.telegramUser.id, displayName ?? null, city ?? null, bio ?? null, birthDate ?? null]
+    [req.telegramUser.id, displayName ?? null, city ?? null, bio ?? null, birthDate, clearBirthDate]
   );
   res.json({ user: result.rows[0] });
 });
@@ -582,7 +600,19 @@ app.post('/api/events/:id/messages', async (req, res) => {
 
 function sortedUserPair(a,b){return BigInt(a)<BigInt(b)?[String(a),String(b)]:[String(b),String(a)]}
 async function hasMessagingBlock(a,b){const r=await pool.query("SELECT 1 FROM user_blocks WHERE (blocker_id=$1 AND blocked_id=$2) OR (blocker_id=$2 AND blocked_id=$1) LIMIT 1",[a,b]);return r.rowCount>0}
-app.get('/api/users/search',async(req,res)=>{const q=typeof req.query.q==='string'?req.query.q.trim().slice(0,80):'';if(q.length<2)return res.json({users:[]});const pattern='%'+q.replaceAll('%','').replaceAll('_','')+'%';const r=await pool.query("SELECT id,username,first_name,last_name,display_name,photo_url,city,bio,birth_date,birth_day,birth_month,birth_year FROM users WHERE id<>$1 AND (COALESCE(display_name,'') ILIKE $2 OR COALESCE(username,'') ILIKE $2 OR first_name ILIKE $2 OR last_name ILIKE $2) ORDER BY COALESCE(display_name,first_name) LIMIT 20",[req.telegramUser.id,pattern]);res.json({users:r.rows})});
+app.get('/api/users/search', async (req, res) => {
+  const query = typeof req.query.q === 'string' ? req.query.q.trim().slice(0, 80) : '';
+  if (query.length < 2) return res.json({ users: [] });
+  const pattern = '%' + query.replaceAll('%', '').replaceAll('_', '') + '%';
+  const result = await pool.query(
+    `SELECT id, username, first_name, last_name, display_name, city
+     FROM users
+     WHERE id<>$1 AND (COALESCE(display_name,'') ILIKE $2 OR COALESCE(username,'') ILIKE $2 OR first_name ILIKE $2 OR last_name ILIKE $2)
+     ORDER BY COALESCE(display_name, first_name) LIMIT 20`,
+    [req.telegramUser.id, pattern]
+  );
+  res.json({ users: result.rows });
+});
 app.get('/api/messages/unread-count', async (req, res) => {
   const uid = req.telegramUser.id;
   const result = await pool.query(
@@ -951,9 +981,17 @@ app.post('/api/events/:id/join', async (req, res) => {
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
-    const event = await client.query('SELECT id, capacity, status FROM events WHERE id=$1 FOR UPDATE', [req.params.id]);
+    const event = await client.query('SELECT id, capacity, status, starts_at, ends_at FROM events WHERE id=$1 FOR UPDATE', [req.params.id]);
     if (!event.rowCount || event.rows[0].status !== 'published') {
       await client.query('ROLLBACK'); return res.status(404).json({ error: 'Event not found' });
+    }
+    const startMs = new Date(event.rows[0].starts_at).getTime();
+    const endMs = event.rows[0].ends_at
+      ? new Date(event.rows[0].ends_at).getTime()
+      : startMs + 180 * 60 * 1000;
+    if (Date.now() >= endMs) {
+      await client.query('ROLLBACK');
+      return res.status(409).json({ error: 'Событие уже завершено, присоединиться нельзя' });
     }
     const source = ['share','organic'].includes(req.body?.source) ? req.body.source : 'organic';
     const existing = await client.query(
