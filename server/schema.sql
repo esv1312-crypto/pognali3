@@ -50,6 +50,29 @@ CREATE TABLE IF NOT EXISTS events (
 );
 ALTER TABLE events ADD COLUMN IF NOT EXISTS emoji TEXT NOT NULL DEFAULT '';
 
+-- Saved events and recurring meetups. Additive migration: existing events and participants remain untouched.
+CREATE TABLE IF NOT EXISTS event_favorites (
+  event_id BIGINT NOT NULL REFERENCES events(id) ON DELETE CASCADE,
+  user_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  PRIMARY KEY (event_id, user_id)
+);
+CREATE INDEX IF NOT EXISTS event_favorites_user_idx ON event_favorites(user_id, created_at DESC);
+
+CREATE TABLE IF NOT EXISTS event_series (
+  id BIGSERIAL PRIMARY KEY,
+  creator_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  base_event_id BIGINT NOT NULL REFERENCES events(id) ON DELETE CASCADE,
+  recurrence_rule TEXT NOT NULL CHECK (recurrence_rule IN ('daily','weekly','monthly')),
+  interval_count SMALLINT NOT NULL DEFAULT 1 CHECK (interval_count BETWEEN 1 AND 4),
+  occurrence_count SMALLINT NOT NULL CHECK (occurrence_count BETWEEN 2 AND 52),
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+ALTER TABLE events ADD COLUMN IF NOT EXISTS series_id BIGINT REFERENCES event_series(id) ON DELETE SET NULL;
+ALTER TABLE events ADD COLUMN IF NOT EXISTS series_index SMALLINT;
+CREATE INDEX IF NOT EXISTS events_series_idx ON events(series_id, series_index) WHERE series_id IS NOT NULL;
+
+
 CREATE INDEX IF NOT EXISTS events_city_starts_idx ON events (LOWER(city), starts_at) WHERE status = 'published';
 CREATE INDEX IF NOT EXISTS events_starts_idx ON events (starts_at) WHERE status = 'published';
 
