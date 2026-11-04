@@ -13,7 +13,36 @@ async function telegramRequest(token, method, payload) {
   return result.result;
 }
 
+const profileSyncs = new Map();
+const PROFILE_SYNC_TTL_MS = 15 * 60 * 1000;
+
 async function syncTelegramProfile(pool, userId, botToken) {
+  const key = String(userId);
+  const now = Date.now();
+  const cached = profileSyncs.get(key);
+  if (cached && cached.expiresAt > now) return cached.promise;
+
+  if (profileSyncs.size > 20000) {
+    for (const [id, entry] of profileSyncs) {
+      if (entry.expiresAt <= now) profileSyncs.delete(id);
+    }
+    if (profileSyncs.size > 20000) profileSyncs.clear();
+  }
+
+  const entry = {
+    expiresAt: now + PROFILE_SYNC_TTL_MS,
+    promise: performTelegramProfileSync(pool, key, botToken)
+  };
+  profileSyncs.set(key, entry);
+  try {
+    return await entry.promise;
+  } catch (error) {
+    if (profileSyncs.get(key) === entry) profileSyncs.delete(key);
+    throw error;
+  }
+}
+
+async function performTelegramProfileSync(pool, userId, botToken) {
   const tasks = await Promise.allSettled([
     telegramRequest(botToken, 'getChat', { chat_id: userId }),
     telegramRequest(botToken, 'getUserProfilePhotos', { user_id: userId, offset: 0, limit: 1 })
