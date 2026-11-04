@@ -1453,7 +1453,7 @@ function openRepeatEvent(id){
  if(!event)return showToast('Не удалось найти исходную встречу','error');
  repeatSelectedDates=[];
  repeatMinDate=event.date||localDateKey();
- repeatBaseTime=/^\\d{2}:\\d{2}$/.test(event.time||'')?event.time:'19:00';
+ repeatBaseTime=/^\d{2}:\d{2}$/.test(event.time||'')?event.time:'19:00';
  const now=new Date();
  repeatCalendarMonth=new Date(now.getFullYear(),now.getMonth(),1);
  openModal('<button class="close" onclick="openEvent('+Number(id)+')">✕</button><h2>🔁 Повторить встречу</h2><p class="meta">Выбери в календаре даты, на которые создать такие же встречи.</p><div id="repeatCalendar"></div><div id="repeatSelection" class="meta" style="margin:10px 0">Даты не выбраны</div><button id="repeatCreateButton" class="primary full" disabled onclick="submitRepeatEvent('+Number(id)+')">СОЗДАТЬ ВСТРЕЧИ</button>');
