@@ -790,8 +790,9 @@ app.post('/api/events/:id/repeat', async (req, res) => {
     return res.status(400).json({ error: 'Выбери от 1 до 51 дополнительной даты в календаре' });
   }
   const dates = rawDates.map(value => new Date(value));
-  if (dates.some(date => !Number.isFinite(date.getTime())) ||
-      new Set(rawDates.map(value => String(value).slice(0, 10))).size !== rawDates.length) {
+  if (rawDates.some(value => typeof value !== 'string' || !/^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}\\.\\d{3}Z$/.test(value)) ||
+      dates.some(date => !Number.isFinite(date.getTime())) ||
+      new Set(rawDates.map(value => value.slice(0, 10))).size !== rawDates.length) {
     return res.status(400).json({ error: 'Проверь выбранные даты: даты должны быть корректными и не повторяться' });
   }
   const client = await pool.connect();
