@@ -45,5 +45,10 @@ test('all open chat types start a five-second refresh loop', () => {
 });
 
 test('opening personal messages from a direct chat closes the modal before navigation', () => {
-  assert.ok(page.includes('closeModal();\\n  go(\'messages\');'));
+  const start = page.indexOf('async function openPersonalMessages');
+  const end = page.indexOf('async function loadDirectInbox', start);
+  const handler = page.slice(start, end);
+  const closeAt = handler.indexOf('closeModal()');
+  const navigateAt = handler.indexOf("go('messages')");
+  assert.ok(closeAt >= 0 && navigateAt > closeAt);
 });
