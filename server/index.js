@@ -334,7 +334,7 @@ app.patch('/api/me', async (req, res) => {
   const displayName = typeof req.body.display_name === 'string' ? req.body.display_name.trim().slice(0, 80) : undefined;
   const city = typeof req.body.city === 'string' ? req.body.city.trim().slice(0, 120) : undefined;
   const bio = typeof req.body.bio === 'string' ? req.body.bio.trim().slice(0, 500) : undefined;
-  const birthDate = typeof req.body.birth_date === 'string' && /^\\d{4}-\\d{2}-\\d{2}$/.test(req.body.birth_date) ? req.body.birth_date : undefined;
+  const birthDate = typeof req.body.birth_date === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(req.body.birth_date) ? req.body.birth_date : undefined;
   const result = await pool.query(
     `UPDATE users SET display_name=COALESCE($2, display_name), city=COALESCE($3, city), bio=COALESCE($4, bio),
      birth_date=COALESCE($5::date,birth_date),
