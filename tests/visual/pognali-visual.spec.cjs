@@ -9,7 +9,7 @@ test('capture real Pognali UI and inspect responsive layout', async ({ browser }
   // Three viewport runs, navigation captures, and external map tiles can exceed Playwright's 30s default.
   test.setTimeout(120000);
   const errors = [];
-  const report = { testedAt: new Date().toISOString(), pages: [], pageErrors: errors };
+  const report = { testedAt: new Date().toISOString(), pages: [], createFlows: [], pageErrors: errors };
   const devices = [
     { name: 'phone-390', viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true },
     { name: 'small-phone-320', viewport: { width: 320, height: 740 }, isMobile: true, hasTouch: true },
@@ -90,7 +90,7 @@ test('capture real Pognali UI and inspect responsive layout', async ({ browser }
           pickerBounds: (() => { const r = document.querySelector('#pickerMap')?.getBoundingClientRect(); return r ? { x: r.x, y: r.y, width: r.width, height: r.height } : null; })(),
           visibleFormLabels: [...document.querySelectorAll('#content label')].filter(el => el.getClientRects().length).map(el => el.innerText.trim()).slice(0, 40)
         }));
-        report.pages.push({ device: device.name, createFlow: mapDetails });
+        report.createFlows.push({ device: device.name, ...mapDetails });
       }
     }
     await context.close();
@@ -106,6 +106,12 @@ test('capture real Pognali UI and inspect responsive layout', async ({ browser }
     ...report.pages.map(p => '- **' + p.device + '**: viewport ' + p.viewport.width + '×' + p.viewport.height +
       ', document width ' + p.document.width + ', app ' + Math.round(p.app.width) + '×' + Math.round(p.app.height) +
       ', bottom-nav items ' + p.nav.length),
+    '',
+    '## Create form location picker',
+    report.createFlows.length
+      ? report.createFlows.map(p => '- **' + p.device + '**: ' + p.pickerLibrary + ', canvases ' + p.pickerCanvasCount +
+        ', map ' + (p.pickerBounds ? Math.round(p.pickerBounds.width) + '×' + Math.round(p.pickerBounds.height) : 'not visible')).join('\n')
+      : 'No create-flow map was captured.',
     '',
     '## JavaScript page errors',
     errors.length ? errors.map(e => '- [' + e.device + '] ' + e.message).join('\n') : 'No uncaught page errors observed.',
