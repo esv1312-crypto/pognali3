@@ -25,7 +25,7 @@ test('capture real Pognali UI and inspect responsive layout', async ({ browser }
     });
     const page = await context.newPage();
     page.on('pageerror', error => errors.push({ device: device.name, message: error.message }));
-    await page.goto('http://127.0.0.1:4173/docs/telegram/index.html', {
+    await page.goto('http://127.0.0.1:4173/', {
       waitUntil: 'domcontentloaded',
       timeout: 45000,
     });
