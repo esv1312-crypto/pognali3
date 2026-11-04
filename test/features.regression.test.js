@@ -58,3 +58,8 @@ test('MapLibre initialization waits for the vendor module and falls back to list
   assert.ok(page.includes('pognali-maplibre-failed'));
   assert.ok(page.includes('if (!window.maplibregl)'));
 });
+
+test('event end time from the API is used by the client event-state logic', () => {
+  assert.ok(page.includes('endAt:x.ends_at||null'));
+  assert.ok(page.includes('const explicitEnd=e.endAt||e.end_at||e.endDateTime||e.end_datetime'));
+});
