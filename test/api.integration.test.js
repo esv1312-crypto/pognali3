@@ -348,6 +348,28 @@ t('static delivery: split script is immutable, index has ETag/304, vendor files 
   assert.equal((await fetch(ctx.base + '/vendor/missing.js')).status, 404);
 });
 
+t('moderator event cancellations are transactional and leave an admin-only audit trail', async () => {
+  const ev = await create(B, { title: 'Событие для проверки модераторского удаления' });
+  const cancelled = await api(A, `/events/${ev.id}`, { method: 'DELETE' });
+  assert.equal(cancelled.status, 200);
+  assert.equal(cancelled.json.moderated, true);
+  const stored = await ctx.db.query('SELECT status FROM events WHERE id=$1', [ev.id]);
+  assert.equal(stored.rows[0].status, 'cancelled');
+
+  const history = await api(A, `/admin/moderation/events/${ev.id}/actions`);
+  assert.equal(history.status, 200);
+  assert.equal(history.json.actions.length, 1);
+  assert.equal(history.json.actions[0].action, 'cancelled_by_moderator');
+  assert.equal(String(history.json.actions[0].actor_id), String(A.id));
+
+  const denied = await api(B, `/admin/moderation/events/${ev.id}/actions`);
+  assert.equal(denied.status, 403);
+  const repeated = await api(A, `/events/${ev.id}`, { method: 'DELETE' });
+  assert.equal(repeated.status, 404);
+  const unchangedHistory = await api(A, `/admin/moderation/events/${ev.id}/actions`);
+  assert.equal(unchangedHistory.json.actions.length, 1);
+});
+
 t('legacy admin routes require both Telegram allowlist and the separate admin token', async () => {
   const adminProfile = await api(A, '/me');
   const regularProfile = await api(B, '/me');
