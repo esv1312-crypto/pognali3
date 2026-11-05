@@ -211,12 +211,6 @@ t('direct message requests notify both users and mutual consent gates messages',
   await api(A, '/me');
   await api(B, '/me');
   ctx.telegram.length = 0;
-  // A previous consent test may have left an accepted conversation for this fixture pair.
-  // Re-arm it as a rejected request from B so this test exercises a fresh A -> B acceptance.
-  await ctx.db.query(
-    "UPDATE direct_conversations SET status='rejected', requested_by=$1 WHERE user_low=LEAST($1::bigint,$2::bigint) AND user_high=GREATEST($1::bigint,$2::bigint)",
-    [B.id, A.id]
-  );
   const requested = await api(A, '/direct/requests', { method: 'POST', body: { user_id: String(B.id) } });
   assert.equal(requested.status, 201);
   const conversationId = requested.json.conversation.id;
@@ -258,9 +252,12 @@ t('event, direct and event-contact chats support incremental message polling', a
   assert.deepEqual(eventDelta.json.messages.map(message => message.body), ['event-second']);
   assert.equal((await api(A, `/events/${ev.id}/messages?after_id=not-a-number`)).status, 400);
 
+  // The mutual-consent test earlier in this file may already have accepted A <-> B.
   const requested = await api(A, '/direct/requests', { method: 'POST', body: { user_id: String(B.id) } });
   const conversationId = requested.json.conversation.id;
-  assert.equal((await api(B, `/direct/${conversationId}/respond`, { method: 'POST', body: { decision: 'accept' } })).status, 200);
+  if (!requested.json.alreadyAccepted) {
+    assert.equal((await api(B, `/direct/${conversationId}/respond`, { method: 'POST', body: { decision: 'accept' } })).status, 200);
+  }
   const firstDirect = await api(A, `/direct/${conversationId}/messages`, { method: 'POST', body: { body: 'direct-first' } });
   await api(B, `/direct/${conversationId}/messages`, { method: 'POST', body: { body: 'direct-second' } });
   const directDelta = await api(A, `/direct/${conversationId}/messages?after_id=${firstDirect.json.message.id}`);
