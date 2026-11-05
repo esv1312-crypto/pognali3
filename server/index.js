@@ -559,7 +559,7 @@ app.get('/api/events', async (req, res) => {
 
 app.get('/api/events/joined-ids', async (req, res) => {
   const mine = await pool.query(
-    `SELECT event_id FROM event_participants WHERE user_id=$1 AND status='joined' UNION SELECT id AS event_id FROM events WHERE creator_id=$1 AND status='published'`,
+    `SELECT ep.event_id FROM event_participants ep JOIN events e ON e.id=ep.event_id WHERE ep.user_id=$1 AND ep.status='joined' AND e.status='published' UNION SELECT id AS event_id FROM events WHERE creator_id=$1 AND status='published'`,
     [req.telegramUser.id]
   );
   res.json({ ids: mine.rows.map(row => String(row.event_id)) });
@@ -865,6 +865,23 @@ app.post('/api/events/:id/messages', async (req, res) => {
 function sortedUserPair(a,b){return BigInt(a)<BigInt(b)?[String(a),String(b)]:[String(b),String(a)]}
 async function lockMessagingPair(client,a,b){const [low,high]=sortedUserPair(a,b);await client.query("SELECT pg_advisory_xact_lock(hashtextextended($1,0))",['messaging:'+low+':'+high]);}
 async function hasMessagingBlock(a,b){const r=await pool.query("SELECT 1 FROM user_blocks WHERE (blocker_id=$1 AND blocked_id=$2) OR (blocker_id=$2 AND blocked_id=$1) LIMIT 1",[a,b]);return r.rowCount>0}
+async function readMessagingHistory(a,b,read){
+  const client=await pool.connect();
+  try{
+    await client.query('BEGIN');
+    await lockMessagingPair(client,a,b);
+    const blocked=await client.query("SELECT 1 FROM user_blocks WHERE (blocker_id=$1 AND blocked_id=$2) OR (blocker_id=$2 AND blocked_id=$1) LIMIT 1",[a,b]);
+    if(blocked.rowCount){await client.query('ROLLBACK');return null;}
+    const result=await read(client);
+    await client.query('COMMIT');
+    return result;
+  }catch(error){
+    await client.query('ROLLBACK').catch(()=>{});
+    throw error;
+  }finally{
+    client.release();
+  }
+}
 app.get('/api/users/search', async (req, res) => {
   const query = typeof req.query.q === 'string' ? req.query.q.trim().slice(0, 80) : '';
   if (query.length < 2) return res.json({ users: [] });
@@ -1003,34 +1020,35 @@ app.get('/api/direct/:id/messages', async (req, res) => {
     return res.status(403).json({ error: 'Personal messages require mutual consent' });
   }
   const other = String(row.user_low) === String(req.telegramUser.id) ? row.user_high : row.user_low;
-  if (await hasMessagingBlock(req.telegramUser.id, other)) {
-    return res.status(403).json({ error: 'Messaging is unavailable between these users' });
-  }
-  if (afterId !== null) {
-    const messages = await pool.query(
-      `SELECT m.id, m.sender_id, m.body, m.created_at,
-              COALESCE(u.display_name, u.first_name) AS sender_name
-       FROM direct_messages m JOIN users u ON u.id=m.sender_id
-       WHERE m.conversation_id=$1 AND m.id>$2
-       ORDER BY m.id ASC LIMIT 500`,
-      [req.params.id, afterId]
+  const result = await readMessagingHistory(req.telegramUser.id, other, async client => {
+    if (afterId !== null) {
+      const messages = await client.query(
+        `SELECT m.id, m.sender_id, m.body, m.created_at,
+                COALESCE(u.display_name, u.first_name) AS sender_name
+         FROM direct_messages m JOIN users u ON u.id=m.sender_id
+         WHERE m.conversation_id=$1 AND m.id>$2
+         ORDER BY m.id ASC LIMIT 500`,
+        [req.params.id, afterId]
+      );
+      return { messages: messages.rows };
+    }
+    const messages = await client.query(
+      `SELECT recent.id, recent.sender_id, recent.body, recent.created_at,
+              COALESCE(recent.display_name, recent.first_name) AS sender_name
+       FROM (
+         SELECT m.id, m.sender_id, m.body, m.created_at, u.display_name, u.first_name
+         FROM direct_messages m JOIN users u ON u.id=m.sender_id
+         WHERE m.conversation_id=$1
+         ORDER BY m.created_at DESC, m.id DESC
+         LIMIT 500
+       ) recent
+       ORDER BY recent.created_at ASC, recent.id ASC`,
+      [req.params.id]
     );
-    return res.json({ messages: messages.rows });
-  }
-  const messages = await pool.query(
-    `SELECT recent.id, recent.sender_id, recent.body, recent.created_at,
-            COALESCE(recent.display_name, recent.first_name) AS sender_name
-     FROM (
-       SELECT m.id, m.sender_id, m.body, m.created_at, u.display_name, u.first_name
-       FROM direct_messages m JOIN users u ON u.id=m.sender_id
-       WHERE m.conversation_id=$1
-       ORDER BY m.created_at DESC, m.id DESC
-       LIMIT 500
-     ) recent
-     ORDER BY recent.created_at ASC, recent.id ASC`,
-    [req.params.id]
-  );
-  res.json({ messages: messages.rows });
+    return { messages: messages.rows };
+  });
+  if (result === null) return res.status(403).json({ error: 'Messaging is unavailable between these users' });
+  res.json(result);
 });
 app.post('/api/direct/:id/messages',async(req,res)=>{const body=typeof(req.body&&req.body.body)==='string'?req.body.body.trim():'';if(!body||body.length>2000)return res.status(400).json({error:'Message must contain 1–2000 characters'});const actor=String(req.telegramUser.id),client=await pool.connect();let other;try{await client.query('BEGIN');const c=await client.query("SELECT id,user_low,user_high FROM direct_conversations WHERE id=$1 AND status='accepted' AND (user_low=$2 OR user_high=$2)",[req.params.id,actor]);if(!c.rowCount){await client.query('ROLLBACK');return res.status(403).json({error:'Personal messages require mutual consent'});}other=String(c.rows[0].user_low)===actor?String(c.rows[0].user_high):String(c.rows[0].user_low);await lockMessagingPair(client,actor,other);const blocked=await client.query("SELECT 1 FROM user_blocks WHERE (blocker_id=$1 AND blocked_id=$2) OR (blocker_id=$2 AND blocked_id=$1) LIMIT 1",[actor,other]);if(blocked.rowCount){await client.query('ROLLBACK');return res.status(403).json({error:'Messaging is unavailable between these users'});}const r=await client.query('INSERT INTO direct_messages(conversation_id,sender_id,body) VALUES($1,$2,$3) RETURNING id,sender_id,body,created_at',[req.params.id,actor,body]);await client.query('UPDATE direct_conversations SET updated_at=NOW() WHERE id=$1',[req.params.id]);await client.query('COMMIT');res.status(201).json({message:r.rows[0]});}catch(error){await client.query('ROLLBACK').catch(()=>{});throw error;}finally{client.release();}notifyUser(other,'💬 Новое личное сообщение в «Погнали». Открой приложение, чтобы ответить.','dm:'+other+':'+req.params.id,60000)});
 app.get('/api/users/blocked',async(req,res)=>{
@@ -1081,34 +1099,35 @@ app.get('/api/event-contacts/:id/messages', async (req, res) => {
   if (!conversation.rowCount) return res.status(404).json({ error: 'Conversation not found' });
   const row = conversation.rows[0];
   const other = String(row.participant_id) === String(req.telegramUser.id) ? row.organizer_id : row.participant_id;
-  if (await hasMessagingBlock(req.telegramUser.id, other)) {
-    return res.status(403).json({ error: 'Messaging is unavailable between these users' });
-  }
-  if (afterId !== null) {
-    const messages = await pool.query(
-      `SELECT m.id, m.sender_id, m.body, m.created_at,
-              COALESCE(u.display_name, u.first_name) AS sender_name
-       FROM event_contact_messages m JOIN users u ON u.id=m.sender_id
-       WHERE m.conversation_id=$1 AND m.id>$2
-       ORDER BY m.id ASC LIMIT 500`,
-      [req.params.id, afterId]
+  const result = await readMessagingHistory(req.telegramUser.id, other, async client => {
+    if (afterId !== null) {
+      const messages = await client.query(
+        `SELECT m.id, m.sender_id, m.body, m.created_at,
+                COALESCE(u.display_name, u.first_name) AS sender_name
+         FROM event_contact_messages m JOIN users u ON u.id=m.sender_id
+         WHERE m.conversation_id=$1 AND m.id>$2
+         ORDER BY m.id ASC LIMIT 500`,
+        [req.params.id, afterId]
+      );
+      return { messages: messages.rows, conversation: row };
+    }
+    const messages = await client.query(
+      `SELECT recent.id, recent.sender_id, recent.body, recent.created_at,
+              COALESCE(recent.display_name, recent.first_name) AS sender_name
+       FROM (
+         SELECT m.id, m.sender_id, m.body, m.created_at, u.display_name, u.first_name
+         FROM event_contact_messages m JOIN users u ON u.id=m.sender_id
+         WHERE m.conversation_id=$1
+         ORDER BY m.created_at DESC, m.id DESC
+         LIMIT 500
+       ) recent
+       ORDER BY recent.created_at ASC, recent.id ASC`,
+      [req.params.id]
     );
-    return res.json({ messages: messages.rows, conversation: row });
-  }
-  const messages = await pool.query(
-    `SELECT recent.id, recent.sender_id, recent.body, recent.created_at,
-            COALESCE(recent.display_name, recent.first_name) AS sender_name
-     FROM (
-       SELECT m.id, m.sender_id, m.body, m.created_at, u.display_name, u.first_name
-       FROM event_contact_messages m JOIN users u ON u.id=m.sender_id
-       WHERE m.conversation_id=$1
-       ORDER BY m.created_at DESC, m.id DESC
-       LIMIT 500
-     ) recent
-     ORDER BY recent.created_at ASC, recent.id ASC`,
-    [req.params.id]
-  );
-  res.json({ messages: messages.rows, conversation: row });
+    return { messages: messages.rows, conversation: row };
+  });
+  if (result === null) return res.status(403).json({ error: 'Messaging is unavailable between these users' });
+  res.json(result);
 });
 app.post('/api/event-contacts/:id/messages',async(req,res)=>{const body=typeof(req.body&&req.body.body)==='string'?req.body.body.trim():'';if(!body||body.length>2000)return res.status(400).json({error:'Message must contain 1–2000 characters'});const actor=String(req.telegramUser.id),client=await pool.connect();let other;try{await client.query('BEGIN');const c=await client.query(`SELECT c.id,c.participant_id,c.organizer_id FROM event_contact_conversations c JOIN events e ON e.id=c.event_id WHERE c.id=$1 AND e.status <> 'cancelled' AND (c.participant_id=$2 OR c.organizer_id=$2)`,[req.params.id,actor]);if(!c.rowCount){await client.query('ROLLBACK');return res.status(404).json({error:'Conversation not found'});}const row=c.rows[0];other=String(row.participant_id)===actor?String(row.organizer_id):String(row.participant_id);await lockMessagingPair(client,actor,other);const blocked=await client.query("SELECT 1 FROM user_blocks WHERE (blocker_id=$1 AND blocked_id=$2) OR (blocker_id=$2 AND blocked_id=$1) LIMIT 1",[actor,other]);if(blocked.rowCount){await client.query('ROLLBACK');return res.status(403).json({error:'Messaging is unavailable between these users'});}const r=await client.query('INSERT INTO event_contact_messages(conversation_id,sender_id,body) VALUES($1,$2,$3) RETURNING id,sender_id,body,created_at',[req.params.id,actor,body]);await client.query('UPDATE event_contact_conversations SET updated_at=NOW() WHERE id=$1',[req.params.id]);await client.query('COMMIT');res.status(201).json({message:r.rows[0]});}catch(error){await client.query('ROLLBACK').catch(()=>{});throw error;}finally{client.release();}notifyUser(other,'💬 Новое сообщение по событию в «Погнали». Открой приложение, чтобы ответить.','ec:'+other+':'+req.params.id,60000)});
 
