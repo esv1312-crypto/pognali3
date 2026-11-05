@@ -109,6 +109,10 @@ t('event lifecycle enforces organizer permissions and completed-event rules', as
   assert.equal((await call(BORIS, `/events/${event.id}`, { method: 'PATCH', body: eventBody({ title: 'Чужое событие' }) })).status, 404);
   assert.equal((await call(ANNA, `/events/${event.id}`, { method: 'PATCH', body: eventBody({ title: 'Новое название' }) })).status, 200);
   assert.equal((await call(ANNA, `/events/${event.id}`)).json.event.title, 'Новое название');
+  const startEvent = await call(ANNA, `/events/${event.id}`, {
+    method: 'PATCH', body: eventBody({ title: 'Новое название', starts_at: new Date(Date.now() - 60_000).toISOString() })
+  });
+  assert.equal(startEvent.status, 200, startEvent.text);
   assert.equal((await call(ANNA, `/events/${event.id}/finish`, { method: 'POST', body: {} })).status, 200);
   assert.equal((await join(BORIS, event.id)).status, 404);
   assert.equal((await call(ANNA, `/events/${event.id}`, { method: 'DELETE' })).status, 200);
