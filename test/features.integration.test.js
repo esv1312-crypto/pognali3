@@ -34,8 +34,9 @@ async function call(user, p, { method = 'GET', body, headers = {}, prefix = '/ap
   try { json = JSON.parse(text); } catch { /* response isn't JSON */ }
   return { status: res.status, json, text };
 }
+let eventSequence = 0;
 const eventBody = (over = {}) => ({
-  title: 'Футбол во дворе', category: 'Спорт', city: 'Симферополь', address: 'Парк Салгирка',
+  title: 'Футбол во дворе ' + (++eventSequence), category: 'Спорт', city: 'Симферополь', address: 'Парк Салгирка',
   latitude: 44.95, longitude: 34.1, starts_at: new Date(Date.now() + 864e5).toISOString(),
   capacity: 5, description: 'Играем два на два', ...over
 });
@@ -101,6 +102,53 @@ t('profile edits trim and cap fields and identify administrators', async () => {
   assert.equal(long.json.user.bio.length, 500);
   assert.equal((await call(ADMIN, '/me')).json.user.is_admin, true);
   assert.equal((await call(ANNA, '/me')).json.user.is_admin, false);
+});
+
+t('automatic event moderation publishes safe events, queues suspicious ones and allows admin corrections', async () => {
+  const safe = await makeEvent(ANNA, { title: 'Футбол для автоматической проверки' });
+  assert.equal(safe.status, 'published');
+
+  const suspicious = await makeEvent(BORIS, {
+    title: 'Встреча', category: 'Другое', description: 'Подробности и регистрация https://example.com'
+  });
+  assert.equal(suspicious.status, 'pending_review');
+  const hiddenFromPublic = await call(ANNA, '/events/' + suspicious.id);
+  assert.equal(hiddenFromPublic.status, 404);
+  assert.equal((await call(BORIS, '/events/' + suspicious.id)).status, 200);
+  assert.ok((await call(BORIS, '/events/created')).json.events.some(item => String(item.id) === String(suspicious.id)));
+
+  const denied = await call(ANNA, '/admin/moderation/events?status=all');
+  assert.equal(denied.status, 403);
+  const queue = await call(ADMIN, '/admin/moderation/events?status=pending_review');
+  assert.ok(queue.json.events.some(item => String(item.id) === String(suspicious.id)));
+  const approved = await call(ADMIN, '/admin/moderation/events/' + suspicious.id, { method: 'PATCH', body: { action: 'approve' } });
+  assert.equal(approved.status, 200, approved.text);
+  assert.equal(approved.json.event.status, 'published');
+
+  const blocked = await makeEvent(VERA, {
+    title: 'Запрещённое предложение', description: 'Продам наркотики, доставка сегодня'
+  });
+  assert.equal(blocked.status, 'cancelled');
+  const blockedRow = await call(ADMIN, '/admin/moderation/events?status=cancelled');
+  assert.ok(blockedRow.json.events.some(item => String(item.id) === String(blocked.id)));
+  const restored = await call(ADMIN, '/admin/moderation/events/' + blocked.id, { method: 'PATCH', body: { action: 'restore' } });
+  assert.equal(restored.status, 200, restored.text);
+  assert.equal(restored.json.event.status, 'published');
+
+  const history = await call(ADMIN, '/admin/moderation/events/' + suspicious.id + '/actions');
+  assert.equal(history.status, 200, history.text);
+  assert.ok(history.json.actions.some(action => action.action === 'auto_sent_to_review' && action.actor_type === 'system'));
+  assert.ok(history.json.actions.some(action => action.action === 'approved_by_moderator' && Number(action.actor_id) === ADMIN.id));
+  const blockedHistory = await call(ADMIN, '/admin/moderation/events/' + blocked.id + '/actions');
+  assert.ok(blockedHistory.json.actions.some(action => action.action === 'auto_blocked' && action.actor_type === 'system'));
+  assert.ok(blockedHistory.json.actions.some(action => action.action === 'restored_by_moderator'));
+
+  const duplicateTitle = 'Повторное событие для проверки дубликатов';
+  const first = await makeEvent(ANNA, { title: duplicateTitle });
+  const duplicate = await makeEvent(VERA, { title: duplicateTitle });
+  assert.equal(first.status, 'published');
+  assert.equal(duplicate.status, 'pending_review');
+  assert.ok(duplicate.moderation_reason.includes('дубликат'));
 });
 
 t('event lifecycle enforces organizer permissions and completed-event rules', async () => {
