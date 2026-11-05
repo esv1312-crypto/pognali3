@@ -186,6 +186,16 @@ t('reporting and moderation require valid reasons, admin login and admin token',
   const fullHistory = await call(ADMIN, `/admin/moderation/reports/${row.id}/actions`);
   assert.equal(fullHistory.json.actions.length, 2);
   assert.deepEqual([fullHistory.json.actions[0].previous_status, fullHistory.json.actions[0].new_status], ['reviewing', 'resolved']);
+
+  const duplicate = await call(VERA, `/events/${event.id}/reports`, {
+    method: 'POST', body: { reason: 'spam', details: 'Повторная отправка не должна менять решение' }
+  });
+  assert.equal(duplicate.status, 200, duplicate.text);
+  assert.equal(duplicate.json.alreadyReported, true);
+  assert.equal(String(duplicate.json.reportId), String(row.id));
+  assert.equal(duplicate.json.status, 'resolved');
+  const afterDuplicate = await call(ADMIN, `/admin/moderation/reports/${row.id}/actions`);
+  assert.equal(afterDuplicate.json.actions.length, 2, 'duplicate submission must not create a moderator action');
 });
 
 t('Telegram webhook validates its secret and formats /id without a literal backslash-n', async () => {
