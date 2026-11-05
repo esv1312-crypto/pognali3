@@ -375,6 +375,16 @@ app.get('/media/avatars/:key', async (req, res) => {
   res.send(avatar.photo_data);
 });
 
+function parseAfterMessageId(req, res) {
+  if (req.query.after_id === undefined) return null;
+  const raw = req.query.after_id;
+  if (typeof raw !== 'string' || !/^\d{1,19}$/.test(raw) || BigInt(raw) > 9223372036854775807n) {
+    res.status(400).json({ error: 'after_id must be a valid message ID' });
+    return undefined;
+  }
+  return raw;
+}
+
 async function buildEventsPayload(city, category, limit) {
   const result = await pool.query(
     `SELECT e.*, COALESCE(u.display_name, u.first_name) AS creator_first_name, u.username AS creator_username,
@@ -550,11 +560,24 @@ app.post('/api/events/:id/finish', async (req, res) => {
 });
 
 app.get('/api/events/:id/messages', async (req, res) => {
+  const afterId = parseAfterMessageId(req, res);
+  if (afterId === undefined) return;
   const member = await pool.query(
     `SELECT 1 FROM events e WHERE e.id=$1 AND (e.creator_id=$2 OR EXISTS (SELECT 1 FROM event_participants ep WHERE ep.event_id=e.id AND ep.user_id=$2 AND ep.status='joined'))`,
     [req.params.id, req.telegramUser.id]
   );
   if (!member.rowCount) return res.status(403).json({ error: 'Join the event to access its chat' });
+  if (afterId !== null) {
+    const result = await pool.query(
+      `SELECT m.id, m.event_id, m.sender_id, m.body, m.created_at,
+              COALESCE(u.display_name, u.first_name) AS sender_name, u.username, u.photo_url
+       FROM event_messages m JOIN users u ON u.id=m.sender_id
+       WHERE m.event_id=$1 AND m.id>$2
+       ORDER BY m.id ASC LIMIT 500`,
+      [req.params.id, afterId]
+    );
+    return res.json({ messages: result.rows });
+  }
   const result = await pool.query(
     `SELECT recent.id, recent.event_id, recent.sender_id, recent.body, recent.created_at,
        COALESCE(recent.display_name, recent.first_name) AS sender_name, recent.username, recent.photo_url
@@ -718,6 +741,8 @@ app.post('/api/direct/:id/respond', async (req, res) => {
   notifyUser(conversation.requested_by, notice, 'dm-response:' + conversation.requested_by + ':' + conversation.id + ':' + status, 60000);
 });
 app.get('/api/direct/:id/messages', async (req, res) => {
+  const afterId = parseAfterMessageId(req, res);
+  if (afterId === undefined) return;
   const conversation = await pool.query(
     'SELECT id,status,user_low,user_high,requested_by FROM direct_conversations WHERE id=$1 AND (user_low=$2 OR user_high=$2)',
     [req.params.id, req.telegramUser.id]
@@ -733,6 +758,17 @@ app.get('/api/direct/:id/messages', async (req, res) => {
   const other = String(row.user_low) === String(req.telegramUser.id) ? row.user_high : row.user_low;
   if (await hasMessagingBlock(req.telegramUser.id, other)) {
     return res.status(403).json({ error: 'Messaging is unavailable between these users' });
+  }
+  if (afterId !== null) {
+    const messages = await pool.query(
+      `SELECT m.id, m.sender_id, m.body, m.created_at,
+              COALESCE(u.display_name, u.first_name) AS sender_name
+       FROM direct_messages m JOIN users u ON u.id=m.sender_id
+       WHERE m.conversation_id=$1 AND m.id>$2
+       ORDER BY m.id ASC LIMIT 500`,
+      [req.params.id, afterId]
+    );
+    return res.json({ messages: messages.rows });
   }
   const messages = await pool.query(
     `SELECT recent.id, recent.sender_id, recent.body, recent.created_at,
@@ -755,6 +791,8 @@ app.get('/api/messages/organized-events',async(req,res)=>{const uid=req.telegram
 app.post('/api/events/:id/participants/:participantId/contact',async(req,res)=>{const eventId=String(req.params.id||''),participant=String(req.params.participantId||''),organizer=String(req.telegramUser.id);if(!/^[1-9]\d{0,18}$/.test(eventId)||!/^[1-9]\d{0,18}$/.test(participant)||participant===organizer)return res.status(400).json({error:'Некорректный участник или событие'});const e=await pool.query("SELECT id,title FROM events WHERE id=$1 AND creator_id=$2 AND status='published'",[eventId,organizer]);if(!e.rowCount)return res.status(403).json({error:'Только организатор может написать участнику своей встречи'});const member=await pool.query("SELECT 1 FROM event_participants WHERE event_id=$1 AND user_id=$2 AND status='joined'",[eventId,participant]);if(!member.rowCount)return res.status(404).json({error:'Участник больше не записан на эту встречу'});if(await hasMessagingBlock(organizer,participant))return res.status(403).json({error:'Переписка между пользователями недоступна'});const r=await pool.query('INSERT INTO event_contact_conversations(event_id,participant_id,organizer_id) VALUES($1,$2,$3) ON CONFLICT(event_id,participant_id) DO UPDATE SET updated_at=NOW() RETURNING id,event_id,participant_id,organizer_id',[eventId,participant,organizer]);res.status(201).json({conversation:r.rows[0],eventTitle:e.rows[0].title})});
 app.post('/api/events/:id/contact',async(req,res)=>{const e=await pool.query("SELECT id,creator_id,title FROM events WHERE id=$1 AND status='published'",[req.params.id]);if(!e.rowCount)return res.status(404).json({error:'Event not found or no longer available'});const organizer=String(e.rows[0].creator_id),participant=String(req.telegramUser.id);if(organizer===participant)return res.status(400).json({error:'You are the organizer of this event'});if(await hasMessagingBlock(participant,organizer))return res.status(403).json({error:'Messaging is unavailable between these users'});const r=await pool.query('INSERT INTO event_contact_conversations(event_id,participant_id,organizer_id) VALUES($1,$2,$3) ON CONFLICT(event_id,participant_id) DO UPDATE SET updated_at=NOW() RETURNING id,event_id,participant_id,organizer_id',[req.params.id,participant,organizer]);res.status(201).json({conversation:r.rows[0],eventTitle:e.rows[0].title})});
 app.get('/api/event-contacts/:id/messages', async (req, res) => {
+  const afterId = parseAfterMessageId(req, res);
+  if (afterId === undefined) return;
   const conversation = await pool.query(
     'SELECT id,event_id,participant_id,organizer_id FROM event_contact_conversations WHERE id=$1 AND (participant_id=$2 OR organizer_id=$2)',
     [req.params.id, req.telegramUser.id]
@@ -764,6 +802,17 @@ app.get('/api/event-contacts/:id/messages', async (req, res) => {
   const other = String(row.participant_id) === String(req.telegramUser.id) ? row.organizer_id : row.participant_id;
   if (await hasMessagingBlock(req.telegramUser.id, other)) {
     return res.status(403).json({ error: 'Messaging is unavailable between these users' });
+  }
+  if (afterId !== null) {
+    const messages = await pool.query(
+      `SELECT m.id, m.sender_id, m.body, m.created_at,
+              COALESCE(u.display_name, u.first_name) AS sender_name
+       FROM event_contact_messages m JOIN users u ON u.id=m.sender_id
+       WHERE m.conversation_id=$1 AND m.id>$2
+       ORDER BY m.id ASC LIMIT 500`,
+      [req.params.id, afterId]
+    );
+    return res.json({ messages: messages.rows, conversation: row });
   }
   const messages = await pool.query(
     `SELECT recent.id, recent.sender_id, recent.body, recent.created_at,

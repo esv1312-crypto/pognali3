@@ -243,6 +243,34 @@ t('event list participant count includes organizer when organizer has no partici
   assert.ok(item, 'created event appears in the event list');
   assert.equal(item.participants_count, 2, 'organizer plus one joined participant');
 });
+t('event, direct and event-contact chats support incremental message polling', async () => {
+  const ev = await create(A, { title: 'Incremental chat', capacity: 20 });
+  await api(B, `/events/${ev.id}/join`, { method: 'POST', body: {} });
+  const firstEvent = await api(B, `/events/${ev.id}/messages`, { method: 'POST', body: { body: 'event-first' } });
+  await api(B, `/events/${ev.id}/messages`, { method: 'POST', body: { body: 'event-second' } });
+  const eventDelta = await api(A, `/events/${ev.id}/messages?after_id=${firstEvent.json.message.id}`);
+  assert.deepEqual(eventDelta.json.messages.map(message => message.body), ['event-second']);
+  assert.equal((await api(A, `/events/${ev.id}/messages?after_id=not-a-number`)).status, 400);
+
+  // The mutual-consent test earlier in this file may already have accepted A <-> B.
+  const requested = await api(A, '/direct/requests', { method: 'POST', body: { user_id: String(B.id) } });
+  const conversationId = requested.json.conversation.id;
+  if (!requested.json.alreadyAccepted) {
+    assert.equal((await api(B, `/direct/${conversationId}/respond`, { method: 'POST', body: { decision: 'accept' } })).status, 200);
+  }
+  const firstDirect = await api(A, `/direct/${conversationId}/messages`, { method: 'POST', body: { body: 'direct-first' } });
+  await api(B, `/direct/${conversationId}/messages`, { method: 'POST', body: { body: 'direct-second' } });
+  const directDelta = await api(A, `/direct/${conversationId}/messages?after_id=${firstDirect.json.message.id}`);
+  assert.deepEqual(directDelta.json.messages.map(message => message.body), ['direct-second']);
+
+  const contact = await api(B, `/events/${ev.id}/contact`, { method: 'POST', body: {} });
+  const contactId = contact.json.conversation.id;
+  const firstContact = await api(B, `/event-contacts/${contactId}/messages`, { method: 'POST', body: { body: 'contact-first' } });
+  await api(A, `/event-contacts/${contactId}/messages`, { method: 'POST', body: { body: 'contact-second' } });
+  const contactDelta = await api(B, `/event-contacts/${contactId}/messages?after_id=${firstContact.json.message.id}`);
+  assert.deepEqual(contactDelta.json.messages.map(message => message.body), ['contact-second']);
+});
+
 t('event chat returns the newest 500 messages in chronological order', async () => {
   const ev = await create(A, { title: 'История чата', capacity: 20 });
   await api(B, `/events/${ev.id}/join`, { method: 'POST', body: {} });

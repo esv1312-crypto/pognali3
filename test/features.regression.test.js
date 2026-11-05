@@ -63,3 +63,11 @@ test('event end time from the API is used by the client event-state logic', () =
   assert.ok(page.includes('endAt:x.ends_at||null'));
   assert.ok(page.includes('const explicitEnd=e.endAt||e.end_at||e.endDateTime||e.end_datetime'));
 });
+
+test('open chat polling requests only messages after the last received ID', () => {
+  assert.ok(page.includes("route.path + '?after_id=' + encodeURIComponent(state.lastMessageId || '0')"));
+  assert.ok(page.includes("box.insertAdjacentHTML('beforeend'"));
+  assert.ok(!page.includes('box.innerHTML = messages.map(message =>'));
+  assert.ok(server.includes('function parseAfterMessageId(req, res)'));
+  assert.ok((server.match(/m\.id>\$2/g) || []).length >= 3);
+});
