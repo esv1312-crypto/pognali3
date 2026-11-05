@@ -1188,7 +1188,7 @@ app.get('/api/admin/moderation/reports',requireTelegramAdmin,async(req,res)=>{
 });
 app.get('/api/admin/moderation/reports/:id/history',requireTelegramAdmin,async(req,res)=>{
   const id=String(req.params.id||'');
-  if(!/^[1-9]\\d{0,18}$/.test(id))return res.status(400).json({error:'Invalid report ID'});
+  if(!/^[1-9]\d{0,18}$/.test(id))return res.status(400).json({error:'Invalid report ID'});
   const result=await pool.query(
     'SELECT id,actor_telegram_id,from_status,to_status,changed_at FROM event_moderation_audit WHERE report_id=$1 ORDER BY changed_at DESC,id DESC LIMIT 100',
     [id]
@@ -1197,7 +1197,7 @@ app.get('/api/admin/moderation/reports/:id/history',requireTelegramAdmin,async(r
 });
 app.patch('/api/admin/moderation/reports/:id',requireTelegramAdmin,async(req,res)=>{
   const id=String(req.params.id||''),status=String(req.body?.status||'');
-  if(!/^[1-9]\\d{0,18}$/.test(id)||!['open','reviewing','resolved','dismissed'].includes(status))return res.status(400).json({error:'A valid report ID and status are required'});
+  if(!/^[1-9]\d{0,18}$/.test(id)||!['open','reviewing','resolved','dismissed'].includes(status))return res.status(400).json({error:'A valid report ID and status are required'});
   const client=await pool.connect();
   try{
     await client.query('BEGIN');
