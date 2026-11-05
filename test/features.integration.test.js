@@ -179,7 +179,12 @@ t('reporting and moderation require valid reasons, admin login and admin token',
   const unchanged = await call(ADMIN, `/admin/moderation/reports/${row.id}`, { method: 'PATCH', body: { status: 'reviewing' } });
   assert.equal(unchanged.json.changed, false);
   assert.equal((await call(ADMIN, `/admin/moderation/reports/${row.id}/actions`)).json.actions.length, 1);
-  assert.equal((await call(ADMIN, `/admin/reports/${row.id}`, { method: 'PATCH', body: { status: 'resolved' }, headers: { 'x-admin-token': 'admintoken' } })).status, 200);
+  const legacyChanged = await call(ADMIN, `/admin/reports/${row.id}`, { method: 'PATCH', body: { status: 'resolved' }, headers: { 'x-admin-token': 'admintoken' } });
+  assert.equal(legacyChanged.status, 200, legacyChanged.text);
+  assert.equal(legacyChanged.json.changed, true);
+  const completeHistory = (await call(ADMIN, `/admin/moderation/reports/${row.id}/actions`)).json.actions;
+  assert.equal(completeHistory.length, 2);
+  assert.deepEqual([completeHistory[0].previous_status, completeHistory[0].new_status], ['reviewing', 'resolved']);
 });
 
 t('Telegram webhook validates its secret and formats /id without a literal backslash-n', async () => {
