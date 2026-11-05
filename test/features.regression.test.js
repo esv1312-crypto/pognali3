@@ -109,3 +109,17 @@ test('organizer cannot finish a published event before its start time', () => {
   assert.match(route, /starts_at <= NOW\(\)/);
   assert.match(route, /status\(409\)\.json\(\{ error: 'Завершить событие можно только после начала встречи'/);
 });
+
+
+test('Telegram notification queue sends sequentially and only records successful deliveries', () => {
+  const start = server.indexOf('const notifyQueue = [];');
+  const end = server.indexOf('async function sendTelegramMessage', start);
+  const queue = server.slice(start, end);
+  assert.ok(queue.includes('const notifyPending = new Set()'));
+  assert.ok(queue.includes('let notifySending = false'));
+  assert.ok(queue.includes('if (notifySending) return'));
+  assert.ok(queue.includes('const delivered = await sendTelegramMessage(job[0], job[1])'));
+  assert.ok(queue.includes('if (delivered && job[2])'));
+  assert.ok(queue.includes('notifyPending.delete(job[2])'));
+  assert.ok(!queue.includes('notifyLastSent.set(dedupeKey, now)'));
+});
