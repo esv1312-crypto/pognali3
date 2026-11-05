@@ -521,7 +521,7 @@ function eventAgeBounds(value) {
   if (range === 'Любой возраст') return null;
   if (range === '18+') return { min: 18, max: null };
   if (range === '40+') return { min: 40, max: null };
-  const match = range.match(/^(\\d{1,2})[–-](\\d{1,2})$/);
+  const match = range.match(/^(\d{1,2})[–-](\d{1,2})$/);
   return match ? { min: Number(match[1]), max: Number(match[2]) } : null;
 }
 function ageOnDate(birthDate, eventDate) {
@@ -622,10 +622,10 @@ app.get('/api/events/:id', async (req, res) => {
      SELECT u.id, u.username, u.first_name, u.last_name, u.display_name,
        CASE WHEN viewer.can_view_private_profile THEN u.photo_url ELSE NULL END AS photo_url,
        u.city, u.bio,
-       CASE WHEN viewer.can_view_private_profile THEN u.birth_date ELSE NULL END AS birth_date,
-       CASE WHEN viewer.can_view_private_profile THEN u.birth_day ELSE NULL END AS birth_day,
-       CASE WHEN viewer.can_view_private_profile THEN u.birth_month ELSE NULL END AS birth_month,
-       CASE WHEN viewer.can_view_private_profile THEN u.birth_year ELSE NULL END AS birth_year
+       NULL::date AS birth_date,
+       NULL::smallint AS birth_day,
+       NULL::smallint AS birth_month,
+       NULL::smallint AS birth_year
      FROM event_participants ep JOIN users u ON u.id=ep.user_id
      JOIN viewer ON TRUE
      WHERE ep.event_id=$1 AND ep.status='joined' ORDER BY ep.joined_at`,
