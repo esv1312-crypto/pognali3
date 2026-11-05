@@ -525,6 +525,9 @@ t('age limits never hide meetings and organizer approval is scoped to one partic
   const approval = await call(ANNA, `/event-contacts/${conversationId}/age-approval`, { method: 'POST', body: {} });
   assert.equal(approval.status, 200, approval.text);
   assert.equal(approval.json.approved, true);
+  const approvedConversation = await call(BORIS, `/event-contacts/${conversationId}/messages`);
+  assert.equal(approvedConversation.json.conversation.age_approved, true,
+    'the participant conversation must expose the approval state so the UI can offer the join action');
   assert.equal((await join(BORIS, target.id)).status, 200,
     'the approved participant can join despite the age range');
 
