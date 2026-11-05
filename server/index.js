@@ -1188,7 +1188,7 @@ app.get('/api/admin/moderation/reports',requireTelegramAdmin,async(req,res)=>{
 });
 app.patch('/api/admin/moderation/reports/:id',requireTelegramAdmin,async(req,res)=>{
   const id=String(req.params.id||''),status=String(req.body?.status||'');
-  if(!/^[1-9]\\d{0,18}$/.test(id)||!['open','reviewing','resolved','dismissed'].includes(status))return res.status(400).json({error:'A valid report ID and status are required'});
+  if(!/^[1-9]\d{0,18}$/.test(id)||!['open','reviewing','resolved','dismissed'].includes(status))return res.status(400).json({error:'A valid report ID and status are required'});
   const result=await pool.query('UPDATE event_reports SET status=$2 WHERE id=$1 RETURNING id,event_id,status',[id,status]);
   if(!result.rowCount)return res.status(404).json({error:'Report not found'});
   res.json({report:result.rows[0]});
