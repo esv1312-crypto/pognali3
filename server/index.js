@@ -756,7 +756,7 @@ app.post('/api/events', async (req, res) => {
     return res.status(400).json({ error: 'Invalid map coordinates' });
   }
   const endsAt = b.ends_at ? new Date(b.ends_at) : null;
-  if (!endsAt || !Number.isFinite(endsAt.getTime()) || endsAt <= startsAt) return res.status(400).json({ error: 'Укажи корректное время окончания позже времени начала' });
+  if (endsAt && (!Number.isFinite(endsAt.getTime()) || endsAt <= startsAt)) return res.status(400).json({ error: 'Укажи корректное время окончания позже времени начала' });
   const ageRange = normalizeEventAgeRange(b.age_range);
   if (ageRange === null) return res.status(400).json({ error: 'Invalid age_range' });
   const liveNote = typeof b.live_note === 'string' ? b.live_note.trim().slice(0,240) : '';
@@ -860,7 +860,7 @@ app.patch('/api/events/:id', async (req, res) => {
   const lat = b.latitude == null || b.latitude === '' ? null : Number(b.latitude);
   const lon = b.longitude == null || b.longitude === '' ? null : Number(b.longitude);
   const endsAt = b.ends_at ? new Date(b.ends_at) : null;
-  if (!endsAt || !Number.isFinite(endsAt.getTime()) || endsAt <= startsAt) return res.status(400).json({ error: 'Укажи корректное время окончания позже времени начала' });
+  if (endsAt && (!Number.isFinite(endsAt.getTime()) || endsAt <= startsAt)) return res.status(400).json({ error: 'Укажи корректное время окончания позже времени начала' });
   const ageRange = b.age_range === undefined ? null : normalizeEventAgeRange(b.age_range);
   const liveNote = b.live_note === undefined ? null : (typeof b.live_note === 'string' ? b.live_note.trim().slice(0,240) : null);
   if (ageRange === null && b.age_range !== undefined) return res.status(400).json({ error: 'Invalid age_range' });
