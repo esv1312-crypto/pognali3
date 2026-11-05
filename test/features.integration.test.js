@@ -284,7 +284,7 @@ t('favorites and activity count legacy organizers without a membership row', asy
   assert.equal(ownActivity.my_role, 'organizer');
 });
 
-t('event participant photos and birthdays are visible only to event members', async () => {
+t('event participant photos are visible only to event members and birthdays remain private', async () => {
   const event = await makeEvent(ANNA, { title: 'Проверка приватности профиля участников' });
   assert.equal((await join(BORIS, event.id)).status, 200);
   assert.equal((await call(BORIS, '/me', { method: 'PATCH', body: { birth_date: '1990-04-01' } })).status, 200);
@@ -309,9 +309,10 @@ t('event participant photos and birthdays are visible only to event members', as
   const member = await call(ANNA, `/events/${event.id}`);
   const memberBoris = member.json.participants.find(person => String(person.id) === String(BORIS.id));
   assert.equal(memberBoris.photo_url, 'https://example.com/private-avatar.jpg');
-  assert.equal(String(memberBoris.birth_date).slice(0, 10), '1990-04-01');
-  assert.equal(memberBoris.birth_day, 1);
-  assert.equal(memberBoris.birth_month, 4);
+  assert.equal(memberBoris.birth_date, null, 'even event members must not receive another user\'s full birthday');
+  assert.equal(memberBoris.birth_day, null);
+  assert.equal(memberBoris.birth_month, null);
+  assert.equal(memberBoris.birth_year, null);
 });
 
 t('event chat is limited to participants and validates message length', async () => {
