@@ -247,39 +247,144 @@ function requireDatabase(_req, res, next) {
   next();
 }
 
-const notifyQueue = [];
-const notifyLastSent = new Map();
-const notifyPending = new Set();
-let notifyTimer = null;
-let notifySending = false;
-function notifyUser(chatId, text, key, intervalMs = 60000) {
-  const now = Date.now();
+let notificationWorkerTimer = null;
+let notificationWorkerRunning = false;
+let notificationLastRecoveryAt = 0;
+async function notifyUser(chatId, messageText, key, intervalMs = 60000) {
+  if (!pool || !chatId || !messageText) return false;
   const dedupeKey = key ? String(key) : null;
-  if (dedupeKey && (notifyPending.has(dedupeKey) || now - (notifyLastSent.get(dedupeKey) || 0) < intervalMs)) return;
-  if (notifyQueue.length >= 5000) {
-    const dropped = notifyQueue.shift();
-    if (dropped?.[2]) notifyPending.delete(dropped[2]);
-  }
-  if (dedupeKey) notifyPending.add(dedupeKey);
-  notifyQueue.push([chatId, text, dedupeKey, intervalMs]);
-  if (!notifyTimer) {
-    notifyTimer = setInterval(async () => {
-      if (notifySending) return;
-      const job = notifyQueue.shift();
-      if (!job) { clearInterval(notifyTimer); notifyTimer = null; return; }
-      notifySending = true;
-      try {
-        const delivered = await sendTelegramMessage(job[0], job[1]);
-        if (delivered && job[2]) {
-          if (notifyLastSent.size > 50000) notifyLastSent.clear();
-          notifyLastSent.set(job[2], Date.now());
-        }
-      } finally {
-        if (job[2]) notifyPending.delete(job[2]);
-        notifySending = false;
+  const client = await pool.connect();
+  let queued = false;
+  try {
+    await client.query('BEGIN');
+    if (dedupeKey) {
+      await client.query("SELECT pg_advisory_xact_lock(hashtextextended($1,0))", ['telegram-notify:' + dedupeKey]);
+      const recent = await client.query(
+        "SELECT 1 FROM telegram_notification_dedup WHERE dedupe_key=$1 AND last_sent_at > NOW() - ($2::double precision * INTERVAL '1 millisecond')",
+        [dedupeKey, Math.max(0, Number(intervalMs) || 0)]
+      );
+      if (recent.rowCount) {
+        await client.query('COMMIT');
+        return false;
       }
-    }, 50);
+    }
+    const count = await client.query("SELECT COUNT(*)::int AS count FROM telegram_notification_outbox WHERE status IN ('pending','sending')");
+    if (count.rows[0].count >= 5000) {
+      await client.query('COMMIT');
+      console.warn('Telegram notification queue is full; dropping a new notification');
+      return false;
+    }
+    const result = await client.query(
+      'INSERT INTO telegram_notification_outbox (chat_id,message_text,dedupe_key) VALUES ($1,$2,$3) ON CONFLICT DO NOTHING RETURNING id',
+      [String(chatId), String(messageText), dedupeKey]
+    );
+    queued = result.rowCount > 0;
+    await client.query('COMMIT');
+  } catch (error) {
+    await client.query('ROLLBACK').catch(() => {});
+    console.error('Could not enqueue Telegram notification:', error.message);
+    return false;
+  } finally {
+    client.release();
   }
+  if (queued) void processTelegramNotification();
+  return queued;
+}
+async function processTelegramNotification() {
+  if (!pool || notificationWorkerRunning) return;
+  notificationWorkerRunning = true;
+  let job = null;
+  try {
+    if (Date.now() - notificationLastRecoveryAt > 30000) {
+      await pool.query("UPDATE telegram_notification_outbox SET status='pending',available_at=NOW(),locked_at=NULL WHERE status='sending' AND locked_at < NOW() - INTERVAL '2 minutes'");
+      notificationLastRecoveryAt = Date.now();
+    }
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+      const selected = await client.query(
+        `SELECT id, chat_id, message_text, dedupe_key, attempts
+         FROM telegram_notification_outbox
+         WHERE status='pending' AND available_at <= NOW()
+         ORDER BY id
+         LIMIT 1
+         FOR UPDATE SKIP LOCKED`
+      );
+      if (!selected.rowCount) {
+        await client.query('COMMIT');
+        return;
+      }
+      const claimed = await client.query(
+        `UPDATE telegram_notification_outbox
+         SET status='sending', attempts=attempts+1, locked_at=NOW()
+         WHERE id=$1
+         RETURNING id, chat_id, message_text, dedupe_key, attempts`,
+        [selected.rows[0].id]
+      );
+      job = claimed.rows[0];
+      await client.query('COMMIT');
+    } catch (error) {
+      await client.query('ROLLBACK').catch(() => {});
+      throw error;
+    } finally {
+      client.release();
+    }
+    if (!job) return;
+    const delivered = await sendTelegramMessage(job.chat_id, job.message_text);
+    const finish = await pool.connect();
+    try {
+      await finish.query('BEGIN');
+      if (delivered) {
+        if (job.dedupe_key) {
+          await finish.query("SELECT pg_advisory_xact_lock(hashtextextended($1,0))", ['telegram-notify:' + job.dedupe_key]);
+          await finish.query(
+            `INSERT INTO telegram_notification_dedup(dedupe_key,last_sent_at)
+             VALUES($1,NOW())
+             ON CONFLICT(dedupe_key) DO UPDATE SET last_sent_at=EXCLUDED.last_sent_at`,
+            [job.dedupe_key]
+          );
+        }
+        await finish.query('DELETE FROM telegram_notification_outbox WHERE id=$1', [job.id]);
+      } else {
+        await finish.query(
+          `UPDATE telegram_notification_outbox
+           SET status=CASE WHEN attempts >= 8 THEN 'failed' ELSE 'pending' END,
+               available_at=NOW() + (LEAST(300, 5 * POWER(2, LEAST(attempts-1, 6))) * INTERVAL '1 second'),
+               locked_at=NULL,
+               last_error='Telegram delivery failed'
+           WHERE id=$1`,
+          [job.id]
+        );
+      }
+      await finish.query('COMMIT');
+    } catch (error) {
+      await finish.query('ROLLBACK').catch(() => {});
+      throw error;
+    } finally {
+      finish.release();
+    }
+  } catch (error) {
+    console.error('Telegram notification worker failed:', error.message);
+    if (job?.id && pool) {
+      await pool.query(
+        "UPDATE telegram_notification_outbox SET status='pending',available_at=NOW()+INTERVAL '10 seconds',locked_at=NULL,last_error='Notification worker error' WHERE id=$1 AND status='sending'",
+        [job.id]
+      ).catch(() => {});
+    }
+  } finally {
+    notificationWorkerRunning = false;
+  }
+}
+async function startNotificationWorker() {
+  if (!pool) return;
+  await pool.query(
+    "UPDATE telegram_notification_outbox SET status='pending',available_at=NOW(),locked_at=NULL WHERE status='sending' AND locked_at < NOW() - INTERVAL '2 minutes'"
+  );
+  if (!notificationWorkerTimer) {
+    notificationWorkerTimer = setInterval(() => { void processTelegramNotification(); }, 100);
+    notificationWorkerTimer.unref?.();
+  }
+  void processTelegramNotification();
 }
 async function sendTelegramMessage(chatId, text, replyMarkup) {
   const token = process.env.TELEGRAM_BOT_TOKEN;
@@ -287,7 +392,8 @@ async function sendTelegramMessage(chatId, text, replyMarkup) {
   try {
     const response = await fetch('https://api.telegram.org/bot' + token + '/sendMessage', {
       method: 'POST', headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ chat_id: String(chatId), text, ...(replyMarkup ? { reply_markup: replyMarkup } : {}) })
+      body: JSON.stringify({ chat_id: String(chatId), text, ...(replyMarkup ? { reply_markup: replyMarkup } : {}) }),
+      signal: AbortSignal.timeout(15000)
     });
     const result = await response.json().catch(() => null);
     if (!response.ok || !result?.ok) {
@@ -1605,6 +1711,7 @@ async function start() {
   if (pool) {
     const schema = await fs.readFile(path.join(__dirname, 'schema.sql'), 'utf8');
     await pool.query(schema);
+    await startNotificationWorker();
   }
   const port = Number(process.env.PORT || 3000);
   const server = app.listen(port, '0.0.0.0', () => {

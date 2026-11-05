@@ -111,17 +111,16 @@ test('organizer cannot finish a published event before its start time', () => {
 });
 
 
-test('Telegram notification queue sends sequentially and only records successful deliveries', () => {
-  const start = server.indexOf('const notifyQueue = [];');
-  const end = server.indexOf('async function sendTelegramMessage', start);
-  const queue = server.slice(start, end);
-  assert.ok(queue.includes('const notifyPending = new Set()'));
-  assert.ok(queue.includes('let notifySending = false'));
-  assert.ok(queue.includes('if (notifySending) return'));
-  assert.ok(queue.includes('const delivered = await sendTelegramMessage(job[0], job[1])'));
-  assert.ok(queue.includes('if (delivered && job[2])'));
-  assert.ok(queue.includes('notifyPending.delete(job[2])'));
-  assert.ok(!queue.includes('notifyLastSent.set(dedupeKey, now)'));
+test('Telegram notifications use a durable PostgreSQL outbox with retry and persistent deduplication', () => {
+  assert.ok(server.includes('telegram_notification_outbox'));
+  assert.ok(server.includes('telegram_notification_dedup'));
+  assert.ok(server.includes('FOR UPDATE SKIP LOCKED'));
+  assert.ok(server.includes("'telegram-notify:' + dedupeKey"));
+  assert.ok(server.includes("'telegram-notify:' + job.dedupe_key"));
+  assert.ok(server.includes("SET status='pending',available_at=NOW(),locked_at=NULL WHERE status='sending' AND locked_at < NOW() - INTERVAL '2 minutes'"));
+  assert.ok(server.includes("CASE WHEN attempts >= 8 THEN 'failed' ELSE 'pending' END"));
+  assert.ok(server.includes('ON CONFLICT(dedupe_key) DO UPDATE SET last_sent_at=EXCLUDED.last_sent_at'));
+  assert.ok(server.includes('await startNotificationWorker()'));
 });
 
 
