@@ -198,6 +198,7 @@ t('users can block, list and unblock accounts and blocked users cannot request d
     'blocked event-contact conversations must be hidden from the inbox');
   assert.equal((await call(ANNA, '/messages/unread-count')).json.unreadCount, unreadBeforeBlock - 2);
   assert.equal((await call(ANNA, '/messages/read', { method: 'POST', body: { type: 'direct', conversation_id: directId } })).status, 403);
+  assert.equal((await call(ANNA, '/messages/read', { method: 'POST', body: { type: 'event_contact', conversation_id: eventContact.json.conversation.id } })).status, 403);
   const list = await call(ANNA, '/users/blocked');
   assert.equal(list.status, 200, list.text);
   assert.ok(list.json.users.some(user => String(user.id) === String(BORIS.id)));
