@@ -244,6 +244,8 @@ t('event list participant count includes organizer when organizer has no partici
   assert.equal(item.participants_count, 2, 'organizer plus one joined participant');
 });
 t('event, direct and event-contact chats support incremental message polling', async () => {
+  await api(A, '/me');
+  await api(B, '/me');
   const ev = await create(A, { title: 'Incremental chat', capacity: 20 });
   await api(B, `/events/${ev.id}/join`, { method: 'POST', body: {} });
   const firstEvent = await api(B, `/events/${ev.id}/messages`, { method: 'POST', body: { body: 'event-first' } });
@@ -253,6 +255,7 @@ t('event, direct and event-contact chats support incremental message polling', a
   assert.equal((await api(A, `/events/${ev.id}/messages?after_id=not-a-number`)).status, 400);
 
   const requested = await api(A, '/direct/requests', { method: 'POST', body: { user_id: String(B.id) } });
+  assert.equal(requested.status, 201);
   const conversationId = requested.json.conversation.id;
   assert.equal((await api(B, `/direct/${conversationId}/respond`, { method: 'POST', body: { decision: 'accept' } })).status, 200);
   const firstDirect = await api(A, `/direct/${conversationId}/messages`, { method: 'POST', body: { body: 'direct-first' } });

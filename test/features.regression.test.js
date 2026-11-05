@@ -68,7 +68,7 @@ test('incremental chat polling validates numeric cursors and appends only new me
   assert.ok(server.includes('function parseAfterMessageId(req, res)'));
   assert.match(server, /!\/\^\\d\{1,19\}\$\/\.test\(raw\)/);
   assert.doesNotMatch(server, /!\/\^\\\\d\{1,19\}\$\/\.test\(raw\)/);
-  assert.ok((server.match(/m\\.id>\\$2/g) || []).length >= 3);
+  assert.ok(server.split('m.id>$2').length - 1 >= 3);
   assert.ok(page.includes("route.path + '?after_id=' + encodeURIComponent(state.lastMessageId || '0')"));
   assert.ok(page.includes("box.insertAdjacentHTML('beforeend'"));
   assert.ok(!page.includes('box.innerHTML = messages.map(message =>'));
