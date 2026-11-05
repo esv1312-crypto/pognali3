@@ -115,12 +115,19 @@ t('event lifecycle enforces organizer permissions and completed-event rules', as
   assert.equal((await call(ANNA, `/events/${event.id}`)).status, 404);
 
   const reportedEvent = await makeEvent(ANNA, { title: 'Событие с жалобой' });
+  await join(BORIS, reportedEvent.id);
+  const contact = await call(ANNA, `/events/${reportedEvent.id}/participants/${BORIS.id}/contact`, { method: 'POST', body: {} });
+  assert.equal(contact.status, 201, contact.text);
   const report = await call(BORIS, `/events/${reportedEvent.id}/reports`, { method: 'POST', body: { reason: 'unsafe', details: 'Проверка сохранения истории' } });
   assert.equal(report.status, 201, report.text);
   const deletion = await call(ANNA, `/events/${reportedEvent.id}`, { method: 'DELETE' });
   assert.equal(deletion.status, 200, deletion.text);
   assert.equal(deletion.json.archived, true);
   assert.equal((await call(ANNA, `/events/${reportedEvent.id}`)).status, 404);
+  assert.equal((await call(ANNA, `/events/${reportedEvent.id}/messages`)).status, 403);
+  assert.equal((await call(ANNA, `/events/${reportedEvent.id}/messages`, { method: 'POST', body: { body: 'После отмены' } })).status, 403);
+  assert.equal((await call(ANNA, `/event-contacts/${contact.json.conversation.id}/messages`)).status, 404);
+  assert.equal((await call(ANNA, `/event-contacts/${contact.json.conversation.id}/messages`, { method: 'POST', body: { body: 'После отмены' } })).status, 404);
   const moderationQueue = await call(ADMIN, '/admin/moderation/reports?status=all');
   assert.ok(moderationQueue.json.reports.some(item => String(item.event_id) === String(reportedEvent.id) && item.event_status === 'cancelled'),
     'deleting a reported event must preserve the report and its audit trail');
