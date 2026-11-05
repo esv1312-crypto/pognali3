@@ -46,7 +46,7 @@ test('does not block ordinary events mentioning a shooting range or video games'
 });
 
 test('routes ambiguous direct threats to manual review', () => {
-  const result = classifyEventText({ ...safe, description: 'Хочу напасть на человека после встречи' });
+  const result = classifyEventText({ ...safe, description: 'Собираюсь напасть после встречи' });
   assert.equal(result.status, 'pending_review');
 });
 
@@ -55,6 +55,8 @@ test('rejects external links, social handles and phone numbers as editable text 
     field: 'description', kind: 'link', code: 'CONTACT_DETAILS_NOT_ALLOWED'
   });
   assert.equal(validateEventContactText({ title: 'Встреча @some_user', description: '' })?.kind, 'handle');
+  assert.equal(validateEventContactText({ title: 'Встреча', description: 'Напиши me@example.com' })?.kind, 'handle');
+  assert.equal(validateEventContactText({ title: 'Встреча', description: 'Подробности example.org' })?.kind, 'link');
   assert.equal(validateEventContactText({ title: 'Встреча', description: 'Звони +7 999 123-45-67' })?.kind, 'phone');
 });
 
