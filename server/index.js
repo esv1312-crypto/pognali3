@@ -558,6 +558,15 @@ app.delete('/api/events/:id', async (req, res) => {
       // Keep reported events and their moderation/audit history instead of cascading it away.
       await client.query("UPDATE events SET status='cancelled', updated_at=NOW() WHERE id=$1", [req.params.id]);
     } else {
+      // message_reads uses polymorphic conversation IDs (no FK), so remove cursors before cascading event chats.
+      await client.query(
+        `DELETE FROM message_reads
+         WHERE (conversation_type='event' AND conversation_id=$1)
+            OR (conversation_type='event_contact' AND conversation_id IN (
+              SELECT id FROM event_contact_conversations WHERE event_id=$1
+            ))`,
+        [req.params.id]
+      );
       await client.query('DELETE FROM events WHERE id=$1 AND creator_id=$2', [req.params.id, req.telegramUser.id]);
     }
     await client.query('COMMIT');
