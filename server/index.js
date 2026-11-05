@@ -867,7 +867,20 @@ app.post('/api/events/:id/reports', async (req, res) => {
   const event = await pool.query('SELECT id, creator_id, status FROM events WHERE id = $1', [req.params.id]);
   if (!event.rowCount || event.rows[0].status !== 'published') return res.status(404).json({ error: 'Event not found' });
   if (String(event.rows[0].creator_id) === String(req.telegramUser.id)) return res.status(400).json({ error: 'You cannot report your own event' });
-  const result = await pool.query('INSERT INTO event_reports (event_id, reporter_id, reason, details) VALUES ($1, $2, $3, $4) ON CONFLICT (event_id, reporter_id) DO UPDATE SET reason = EXCLUDED.reason, details = EXCLUDED.details, created_at = NOW() RETURNING id', [req.params.id, req.telegramUser.id, reason, details || null]);
+  // One report per user/event. A repeat request must not silently reopen a resolved
+  // report, rewrite its evidence, or generate another moderator notification.
+  const result = await pool.query(
+    'INSERT INTO event_reports (event_id, reporter_id, reason, details) VALUES ($1, $2, $3, $4) ON CONFLICT (event_id, reporter_id) DO NOTHING RETURNING id',
+    [req.params.id, req.telegramUser.id, reason, details || null]
+  );
+  if (!result.rowCount) {
+    const existing = await pool.query(
+      'SELECT id, status FROM event_reports WHERE event_id=$1 AND reporter_id=$2',
+      [req.params.id, req.telegramUser.id]
+    );
+    if (!existing.rowCount) return res.status(409).json({ error: 'Could not save report; please try again' });
+    return res.status(200).json({ reported: true, alreadyReported: true, reportId: existing.rows[0].id, status: existing.rows[0].status });
+  }
   const reportId = result.rows[0].id;
   const adminChatId = process.env.ADMIN_TELEGRAM_CHAT_ID;
   if (adminChatId) {
