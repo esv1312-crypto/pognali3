@@ -34,6 +34,8 @@ test('event contact chat exposes a join action after an organizer approves an ag
   assert.ok(page.includes('Исключение разрешено — присоединиться'));
   assert.ok(server.includes('AS age_approved'));
   assert.ok(server.includes('Организатор разрешил тебе присоединиться к событию'));
+  assert.ok(page.includes('ageExceptionJoinButton'));
+  assert.ok(page.includes('result.conversation?.age_approved'));
 });
 
 test('repeat calendar only enables dates after the source event and within three years', () => {
