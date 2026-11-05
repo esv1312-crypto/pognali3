@@ -535,18 +535,49 @@ app.patch('/api/events/:id', async (req, res) => {
   if (capacity !== null && (!Number.isInteger(capacity) || capacity < 1 || capacity > 5000)) return res.status(400).json({ error: 'Invalid capacity' });
   if ((lat === null) !== (lon === null) || (lat !== null && (!Number.isFinite(lat) || lat < -90 || lat > 90 || !Number.isFinite(lon) || lon < -180 || lon > 180))) return res.status(400).json({ error: 'Invalid map coordinates' });
   if (endsAt && (!Number.isFinite(endsAt.getTime()) || endsAt < startsAt)) return res.status(400).json({ error: 'Invalid ends_at' });
-  const result = await pool.query(
-    `UPDATE events SET title=$3, description=$4, category=$5, city=$6, address=$7,
-       latitude=$8, longitude=$9, starts_at=$10, ends_at=$11, capacity=$12, emoji=$13, updated_at=NOW()
-     WHERE id=$1 AND creator_id=$2 AND status='published' RETURNING *`,
-    [req.params.id, req.telegramUser.id, title, typeof b.description === 'string' ? b.description.trim().slice(0,3000) : '',
-      typeof b.category === 'string' ? b.category.slice(0,40) : 'other', city,
-      typeof b.address === 'string' ? b.address.trim().slice(0,250) : '', lat, lon,
-      startsAt.toISOString(), endsAt ? endsAt.toISOString() : null, capacity,
-      typeof b.emoji === 'string' ? b.emoji.trim().slice(0, 32) : '']
-  );
-  if (!result.rowCount) return res.status(404).json({ error: 'Event not found or you are not its organizer' });
-  res.json({ event: result.rows[0] });
+
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const current = await client.query(
+      "SELECT id,creator_id FROM events WHERE id=$1 AND creator_id=$2 AND status='published' FOR UPDATE",
+      [req.params.id, req.telegramUser.id]
+    );
+    if (!current.rowCount) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ error: 'Event not found or you are not its organizer' });
+    }
+    if (capacity !== null) {
+      const count = await client.query(
+        `SELECT COUNT(*)::int + CASE WHEN EXISTS (
+           SELECT 1 FROM event_participants WHERE event_id=$1 AND user_id=$2 AND status='joined'
+         ) THEN 0 ELSE 1 END AS participants_count
+         FROM event_participants WHERE event_id=$1 AND status='joined'`,
+        [req.params.id, req.telegramUser.id]
+      );
+      if (capacity < count.rows[0].participants_count) {
+        await client.query('ROLLBACK');
+        return res.status(409).json({ error: 'Нельзя установить лимит меньше текущего количества участников' });
+      }
+    }
+    const result = await client.query(
+      `UPDATE events SET title=$3, description=$4, category=$5, city=$6, address=$7,
+         latitude=$8, longitude=$9, starts_at=$10, ends_at=$11, capacity=$12, emoji=$13, updated_at=NOW()
+       WHERE id=$1 AND creator_id=$2 AND status='published' RETURNING *`,
+      [req.params.id, req.telegramUser.id, title, typeof b.description === 'string' ? b.description.trim().slice(0,3000) : '',
+        typeof b.category === 'string' ? b.category.slice(0,40) : 'other', city,
+        typeof b.address === 'string' ? b.address.trim().slice(0,250) : '', lat, lon,
+        startsAt.toISOString(), endsAt ? endsAt.toISOString() : null, capacity,
+        typeof b.emoji === 'string' ? b.emoji.trim().slice(0, 32) : '']
+    );
+    await client.query('COMMIT');
+    res.json({ event: result.rows[0] });
+  } catch (error) {
+    await client.query('ROLLBACK').catch(() => {});
+    throw error;
+  } finally {
+    client.release();
+  }
 });
 
 app.delete('/api/events/:id', async (req, res) => {
