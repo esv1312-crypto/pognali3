@@ -1162,6 +1162,38 @@ app.patch('/api/admin/reports/:id', requireAdmin, async (req, res) => {
   res.json({ report: result.rows[0] });
 });
 
+// Telegram-admin moderation endpoints for the Mini App. Access is restricted to the verified Telegram ID allowlist.
+function requireTelegramAdmin(req,res,next){
+  if(!isAdminTelegramUser(req.telegramUser.id))return res.status(403).json({error:'Admin access denied'});
+  next();
+}
+app.get('/api/admin/moderation/reports',requireTelegramAdmin,async(req,res)=>{
+  const status=String(req.query.status||'open');
+  if(!['all','open','reviewing','resolved','dismissed'].includes(status))return res.status(400).json({error:'Invalid report status'});
+  const limit=Math.min(100,Math.max(1,Number.parseInt(req.query.limit,10)||50));
+  const result=await pool.query(
+    `SELECT r.id,r.event_id,r.reporter_id,r.reason,r.details,r.status,r.created_at,
+            e.title AS event_title,e.city AS event_city,e.starts_at AS event_starts_at,
+            e.status AS event_status,e.creator_id,
+            COALESCE(u.display_name,u.first_name,u.username,r.reporter_id::text) AS reporter_name
+     FROM event_reports r
+     JOIN events e ON e.id=r.event_id
+     LEFT JOIN users u ON u.id=r.reporter_id
+     WHERE ($1='all' OR r.status=$1)
+     ORDER BY r.created_at DESC
+     LIMIT $2`,
+    [status,limit]
+  );
+  res.json({reports:result.rows});
+});
+app.patch('/api/admin/moderation/reports/:id',requireTelegramAdmin,async(req,res)=>{
+  const id=String(req.params.id||''),status=String(req.body?.status||'');
+  if(!/^[1-9]\\d{0,18}$/.test(id)||!['open','reviewing','resolved','dismissed'].includes(status))return res.status(400).json({error:'A valid report ID and status are required'});
+  const result=await pool.query('UPDATE event_reports SET status=$2 WHERE id=$1 RETURNING id,event_id,status',[id,status]);
+  if(!result.rowCount)return res.status(404).json({error:'Report not found'});
+  res.json({report:result.rows[0]});
+});
+
 app.use((err, _req, res, _next) => {
   const status = Number(err.status || err.statusCode);
   if (status >= 400 && status < 500) { // bad JSON, body too large, etc. are the client's problem, not a server error
