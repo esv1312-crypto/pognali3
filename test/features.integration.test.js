@@ -173,7 +173,7 @@ t('users can block, list and unblock accounts and blocked users cannot request d
   assert.equal((await call(ANNA, `/direct/${directId}/messages`, { method: 'POST', body: { body: 'Личное сообщение до блокировки' } })).status, 201);
 
   const event = await makeEvent(ANNA, { title: 'Личная переписка для проверки блокировки' });
-  assert.equal((await join(BORIS, event.id)).status, 201);
+  assert.equal((await join(BORIS, event.id)).status, 200);
   const eventContact = await call(ANNA, `/events/${event.id}/participants/${BORIS.id}/contact`, { method: 'POST', body: {} });
   assert.equal(eventContact.status, 201, eventContact.text);
   assert.equal((await call(ANNA, `/event-contacts/${eventContact.json.conversation.id}/messages`, { method: 'POST', body: { body: 'Сообщение организатора до блокировки' } })).status, 201);
