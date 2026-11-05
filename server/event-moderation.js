@@ -70,12 +70,12 @@ async function evaluateEventModeration(db, event) {
   const city = normalize(event.city);
 
   const duplicate = await db.query(
-    \`SELECT id FROM events
+    `SELECT id FROM events
      WHERE status IN ('published','pending_review')
        AND LOWER(BTRIM(title)) = LOWER(BTRIM($1))
        AND LOWER(city) = $2
        AND starts_at BETWEEN $3::timestamptz - INTERVAL '24 hours' AND $3::timestamptz + INTERVAL '24 hours'
-     LIMIT 1\`,
+     LIMIT 1`,
     [event.title, city, event.starts_at]
   );
   if (duplicate.rowCount) {
@@ -93,10 +93,10 @@ async function evaluateEventModeration(db, event) {
   }
 
   const reportHistory = await db.query(
-    \`SELECT COUNT(DISTINCT r.id)::int AS count
+    `SELECT COUNT(DISTINCT r.id)::int AS count
      FROM event_reports r JOIN events e ON e.id=r.event_id
      WHERE e.creator_id=$1 AND r.created_at > NOW() - INTERVAL '30 days'
-       AND r.status IN ('open','reviewing','resolved')\`,
+       AND r.status IN ('open','reviewing','resolved')`,
     [event.creator_id]
   );
   if (Number(reportHistory.rows[0]?.count || 0) >= 2) {
