@@ -253,12 +253,13 @@ async function notifyUser(chatId, messageText, key, intervalMs = 60000) {
   if (!pool || !chatId || !messageText) return false;
   try {
     const result = await pool.query(
-      `INSERT INTO telegram_notification_outbox (chat_id, message_text, dedupe_key, cooldown_ms)
-       SELECT $1, $2, $3, $4
-       WHERE $3::text IS NULL OR NOT EXISTS (
+      `INSERT INTO telegram_notification_outbox (chat_id, message_text, dedupe_key)
+       SELECT $1, $2, $3
+       WHERE (SELECT COUNT(*) FROM telegram_notification_outbox WHERE status IN ('pending','sending')) < 5000
+         AND ($3::text IS NULL OR NOT EXISTS (
          SELECT 1 FROM telegram_notification_dedup
          WHERE dedupe_key=$3 AND last_sent_at > NOW() - ($4::double precision * INTERVAL '1 millisecond')
-       )
+       ))
        ON CONFLICT DO NOTHING
        RETURNING id`,
       [String(chatId), String(messageText), key ? String(key) : null, Math.max(0, Number(intervalMs) || 0)]
