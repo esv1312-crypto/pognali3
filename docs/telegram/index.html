@@ -1895,7 +1895,24 @@ function initTelegramMiniApp(){
       const u=tg.initDataUnsafe.user;
       const name=[u.first_name,u.last_name].filter(Boolean).join(' ').trim();
       if(name&&db.profile&&(!db.profile.name||db.profile.name==='Стас'))db.profile.name=name;
-      if(u.photo_url&&db.profile&&!db.profile.photo)db.profile.telegramPhoto=u.ph// Стартовая заставка отключена: приложение открывается сразу, без блокирующего экрана.ent.getElementById('modal')?.classList.contains('open'))void loadDirectInbox()},30000);
+      if(u.photo_url&&db.profile&&!db.profile.photo)db.profile.telegramPhoto=u.photo_url;
+    }
+    if(API_MODE){void openSharedEventFromStartParam();refreshApiData().catch(e=>{console.error('Pognali API:',e);showToast(e.message||'Сервер пока не настроен','error')}).finally(()=>{openSharedEventFromStartParam()})}else{setTimeout(openSharedEventFromStartParam,0)}
+  }catch(e){console.warn('Telegram Mini App initialization:',e)}
+}
+
+initTelegramMiniApp();
+window.addEventListener('pognali-maplibre-failed', () => {
+  if (currentTab === 'events' && eventView === 'map') {
+    eventView = 'list';
+    renderList();
+    showToast('Карта временно недоступна. Показываем события списком.', 'error');
+  }
+});
+if(API_MODE){
+  updateUnreadBadge();
+  setInterval(()=>{if(document.visibilityState==='visible')void updateUnreadBadge()},15000);
+  setInterval(()=>{if(document.visibilityState==='visible'&&currentTab==='messages'&&!document.getElementById('modal')?.classList.contains('open'))void loadDirectInbox()},30000);
   window.addEventListener('focus',()=>void updateUnreadBadge());
   window.addEventListener('pageshow',()=>void updateUnreadBadge());
   document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')void updateUnreadBadge()});
