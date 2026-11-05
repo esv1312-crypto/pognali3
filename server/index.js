@@ -719,6 +719,7 @@ app.get('/api/events/:id', async (req, res) => {
      SELECT u.id, u.username, u.first_name, u.last_name, u.display_name,
        CASE WHEN viewer.can_view_private_profile THEN u.photo_url ELSE NULL END AS photo_url,
        u.city, u.bio,
+       CASE WHEN u.birth_date IS NULL THEN NULL ELSE date_part('year', age(CURRENT_DATE, u.birth_date))::int END AS age,
        NULL::date AS birth_date,
        NULL::smallint AS birth_day,
        NULL::smallint AS birth_month,
@@ -755,7 +756,7 @@ app.post('/api/events', async (req, res) => {
     return res.status(400).json({ error: 'Invalid map coordinates' });
   }
   const endsAt = b.ends_at ? new Date(b.ends_at) : null;
-  if (endsAt && (!Number.isFinite(endsAt.getTime()) || endsAt < startsAt)) return res.status(400).json({ error: 'Invalid ends_at' });
+  if (endsAt && (!Number.isFinite(endsAt.getTime()) || endsAt <= startsAt)) return res.status(400).json({ error: 'Укажи корректное время окончания позже времени начала' });
   const ageRange = normalizeEventAgeRange(b.age_range);
   if (ageRange === null) return res.status(400).json({ error: 'Invalid age_range' });
   const liveNote = typeof b.live_note === 'string' ? b.live_note.trim().slice(0,240) : '';
@@ -859,6 +860,7 @@ app.patch('/api/events/:id', async (req, res) => {
   const lat = b.latitude == null || b.latitude === '' ? null : Number(b.latitude);
   const lon = b.longitude == null || b.longitude === '' ? null : Number(b.longitude);
   const endsAt = b.ends_at ? new Date(b.ends_at) : null;
+  if (endsAt && (!Number.isFinite(endsAt.getTime()) || endsAt <= startsAt)) return res.status(400).json({ error: 'Укажи корректное время окончания позже времени начала' });
   const ageRange = b.age_range === undefined ? null : normalizeEventAgeRange(b.age_range);
   const liveNote = b.live_note === undefined ? null : (typeof b.live_note === 'string' ? b.live_note.trim().slice(0,240) : null);
   if (ageRange === null && b.age_range !== undefined) return res.status(400).json({ error: 'Invalid age_range' });
@@ -1135,6 +1137,21 @@ app.get('/api/users/search', async (req, res) => {
   );
   res.json({ users: result.rows });
 });
+app.get('/api/users/:id/profile', async (req, res) => {
+  const result = await pool.query(
+    `SELECT u.id, COALESCE(u.display_name,u.first_name) AS display_name, u.city, u.bio, u.photo_url,
+       CASE WHEN u.birth_date IS NULL THEN NULL ELSE date_part('year', age(CURRENT_DATE, u.birth_date))::int END AS age,
+       (SELECT COUNT(*)::int FROM events e WHERE e.creator_id=u.id AND e.status='completed') AS organized_count,
+       (SELECT COUNT(DISTINCT ep.event_id)::int
+          FROM event_participants ep JOIN events e ON e.id=ep.event_id
+         WHERE ep.user_id=u.id AND ep.status='joined' AND e.status='completed' AND e.creator_id<>u.id) AS attended_count
+     FROM users u WHERE u.id=$1`,
+    [req.params.id]
+  );
+  if (!result.rowCount) return res.status(404).json({ error: 'Пользователь не найден' });
+  res.json({ profile: result.rows[0] });
+});
+
 app.get('/api/messages/unread-count', async (req, res) => {
   const uid = req.telegramUser.id;
   const result = await pool.query(
@@ -2100,11 +2117,33 @@ async function configureTelegramWebhook() {
   }
 }
 
+async function startEventCompletionWorker() {
+  if (!pool) return;
+  const completeExpiredEvents = async () => {
+    try {
+      const result = await pool.query(
+        `UPDATE events SET status='completed', updated_at=NOW()
+         WHERE status='published' AND (
+           (ends_at IS NOT NULL AND ends_at <= NOW()) OR
+           (ends_at IS NULL AND starts_at <= NOW() - INTERVAL '3 hours')
+         )`
+      );
+      if (result.rowCount) eventsCache.clear();
+    } catch (error) {
+      console.error('Automatic event completion failed:', error.message);
+    }
+  };
+  await completeExpiredEvents();
+  const timer = setInterval(completeExpiredEvents, 30 * 1000);
+  timer.unref?.();
+}
+
 async function start() {
   if (pool) {
     const schema = await fs.readFile(path.join(__dirname, 'schema.sql'), 'utf8');
     await pool.query(schema);
     await startNotificationWorker();
+    await startEventCompletionWorker();
   }
   const port = Number(process.env.PORT || 3000);
   const server = app.listen(port, '0.0.0.0', () => {
