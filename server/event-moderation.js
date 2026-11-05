@@ -72,11 +72,11 @@ async function evaluateEventModeration(db, event) {
   const duplicate = await db.query(
     \`SELECT id FROM events
      WHERE status IN ('published','pending_review')
-       AND LOWER(REGEXP_REPLACE(title, '[^[:alnum:]]+', ' ', 'g')) = $1
+       AND LOWER(BTRIM(title)) = LOWER(BTRIM($1))
        AND LOWER(city) = $2
        AND starts_at BETWEEN $3::timestamptz - INTERVAL '24 hours' AND $3::timestamptz + INTERVAL '24 hours'
      LIMIT 1\`,
-    [title, city, event.starts_at]
+    [event.title, city, event.starts_at]
   );
   if (duplicate.rowCount) {
     score += 5;
