@@ -865,6 +865,23 @@ app.post('/api/events/:id/messages', async (req, res) => {
 function sortedUserPair(a,b){return BigInt(a)<BigInt(b)?[String(a),String(b)]:[String(b),String(a)]}
 async function lockMessagingPair(client,a,b){const [low,high]=sortedUserPair(a,b);await client.query("SELECT pg_advisory_xact_lock(hashtextextended($1,0))",['messaging:'+low+':'+high]);}
 async function hasMessagingBlock(a,b){const r=await pool.query("SELECT 1 FROM user_blocks WHERE (blocker_id=$1 AND blocked_id=$2) OR (blocker_id=$2 AND blocked_id=$1) LIMIT 1",[a,b]);return r.rowCount>0}
+async function readMessagingHistory(a,b,read){
+  const client=await pool.connect();
+  try{
+    await client.query('BEGIN');
+    await lockMessagingPair(client,a,b);
+    const blocked=await client.query("SELECT 1 FROM user_blocks WHERE (blocker_id=$1 AND blocked_id=$2) OR (blocker_id=$2 AND blocked_id=$1) LIMIT 1",[a,b]);
+    if(blocked.rowCount){await client.query('ROLLBACK');return null;}
+    const result=await read(client);
+    await client.query('COMMIT');
+    return result;
+  }catch(error){
+    await client.query('ROLLBACK').catch(()=>{});
+    throw error;
+  }finally{
+    client.release();
+  }
+}
 app.get('/api/users/search', async (req, res) => {
   const query = typeof req.query.q === 'string' ? req.query.q.trim().slice(0, 80) : '';
   if (query.length < 2) return res.json({ users: [] });
