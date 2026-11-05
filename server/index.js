@@ -1092,7 +1092,8 @@ app.get('/api/me/activity', async (req, res) => {
   const result = await pool.query(
     `SELECT e.id,e.title,e.category,e.emoji,e.city,e.address,e.starts_at,e.ends_at,e.status,e.creator_id,
        CASE WHEN e.creator_id=$1 THEN 'organizer' ELSE 'participant' END AS my_role,
-       COUNT(ep.user_id) FILTER (WHERE ep.status='joined')::int AS participants_count
+       (COUNT(ep.user_id) FILTER (WHERE ep.status='joined')
+       + CASE WHEN COUNT(ep.user_id) FILTER (WHERE ep.user_id=e.creator_id AND ep.status='joined') > 0 THEN 0 ELSE 1 END)::int AS participants_count
      FROM events e LEFT JOIN event_participants ep ON ep.event_id=e.id
      WHERE e.status <> 'cancelled' AND (e.creator_id=$1 OR EXISTS(
        SELECT 1 FROM event_participants mine WHERE mine.event_id=e.id AND mine.user_id=$1 AND mine.status='joined'))
