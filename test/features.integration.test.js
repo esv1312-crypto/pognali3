@@ -535,3 +535,27 @@ t('age limits never hide meetings and organizer approval is scoped to one partic
   assert.equal(otherEventDenied.status, 403,
     'approval for one meeting must not grant access to another meeting');
 });
+
+
+t('simultaneous joins cannot exceed capacity and simultaneous repeat requests create one series', async () => {
+  const full = await makeEvent(ANNA, { title: 'Одновременная запись на последнее место', capacity: 2 });
+  const joins = await Promise.all([join(BORIS, full.id), join(VERA, full.id)]);
+  assert.deepEqual(joins.map(result => result.status).sort(), [200, 409],
+    'only one of two simultaneous users can claim the final place');
+  const detail = await call(ANNA, `/events/${full.id}`);
+  assert.equal(detail.json.event.participants_count, 2, 'capacity must remain exact after concurrent joins');
+
+  const base = await makeEvent(ANNA, {
+    title: 'Двойной запрос повтора',
+    starts_at: new Date(Date.now() + 4 * 864e5).toISOString()
+  });
+  const date = new Date(Date.now() + 8 * 864e5).toISOString();
+  const repeats = await Promise.all([
+    call(ANNA, `/events/${base.id}/repeat`, { method: 'POST', body: { dates: [date] } }),
+    call(ANNA, `/events/${base.id}/repeat`, { method: 'POST', body: { dates: [date] } })
+  ]);
+  assert.deepEqual(repeats.map(result => result.status).sort(), [201, 409],
+    'only one simultaneous repeat request may create the series');
+  const event = await call(ANNA, `/events/${base.id}`);
+  assert.ok(event.json.event.series_id, 'the original event must belong to the single created series');
+});

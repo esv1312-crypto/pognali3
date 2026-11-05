@@ -663,20 +663,30 @@ app.post('/api/events', async (req, res) => {
   const ageRange = normalizeEventAgeRange(b.age_range);
   if (ageRange === null) return res.status(400).json({ error: 'Invalid age_range' });
   const liveNote = typeof b.live_note === 'string' ? b.live_note.trim().slice(0,240) : '';
-  const result = await pool.query(
-    `INSERT INTO events (creator_id,title,description,category,city,address,latitude,longitude,starts_at,ends_at,capacity,emoji,age_range,live_note)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14) RETURNING *`,
-    [req.telegramUser.id, title, typeof b.description === 'string' ? b.description.trim().slice(0,3000) : '',
-      typeof b.category === 'string' ? b.category.slice(0,40) : 'other', city, typeof b.address === 'string' ? b.address.trim().slice(0,250) : '',
-      lat, lon, startsAt.toISOString(), endsAt ? endsAt.toISOString() : null, capacity,
-      typeof b.emoji === 'string' ? b.emoji.trim().slice(0, 32) : '', ageRange, liveNote]
-  );
-  await pool.query(
-    `INSERT INTO event_participants (event_id,user_id,status) VALUES ($1,$2,'joined')
-     ON CONFLICT (event_id,user_id) DO UPDATE SET status='joined', joined_at=NOW()`,
-    [result.rows[0].id, req.telegramUser.id]
-  );
-  res.status(201).json({ event: { ...result.rows[0], participants_count: 1, joined_by_me: true } });
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const result = await client.query(
+      `INSERT INTO events (creator_id,title,description,category,city,address,latitude,longitude,starts_at,ends_at,capacity,emoji,age_range,live_note)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14) RETURNING *`,
+      [req.telegramUser.id, title, typeof b.description === 'string' ? b.description.trim().slice(0,3000) : '',
+        typeof b.category === 'string' ? b.category.slice(0,40) : 'other', city, typeof b.address === 'string' ? b.address.trim().slice(0,250) : '',
+        lat, lon, startsAt.toISOString(), endsAt ? endsAt.toISOString() : null, capacity,
+        typeof b.emoji === 'string' ? b.emoji.trim().slice(0, 32) : '', ageRange, liveNote]
+    );
+    await client.query(
+      `INSERT INTO event_participants (event_id,user_id,status) VALUES ($1,$2,'joined')
+       ON CONFLICT (event_id,user_id) DO UPDATE SET status='joined', joined_at=NOW()`,
+      [result.rows[0].id, req.telegramUser.id]
+    );
+    await client.query('COMMIT');
+    res.status(201).json({ event: { ...result.rows[0], participants_count: 1, joined_by_me: true } });
+  } catch (error) {
+    await client.query('ROLLBACK').catch(() => {});
+    throw error;
+  } finally {
+    client.release();
+  }
 });
 
 app.patch('/api/events/:id', async (req, res) => {
@@ -887,27 +897,51 @@ app.get('/api/events/:id/messages', async (req, res) => {
 app.post('/api/events/:id/messages', async (req, res) => {
   const body = typeof req.body.body === 'string' ? req.body.body.trim() : '';
   if (!body || body.length > 2000) return res.status(400).json({ error: 'Message must contain 1–2000 characters' });
-  const member = await pool.query(
-    `SELECT 1 FROM events e WHERE e.id=$1 AND e.status <> 'cancelled' AND (e.creator_id=$2 OR EXISTS (SELECT 1 FROM event_participants ep WHERE ep.event_id=e.id AND ep.user_id=$2 AND ep.status='joined'))`,
-    [req.params.id, req.telegramUser.id]
-  );
-  if (!member.rowCount) return res.status(403).json({ error: 'Join the event to send messages' });
-  const result = await pool.query(
-    'INSERT INTO event_messages (event_id, sender_id, body) VALUES ($1,$2,$3) RETURNING id, event_id, sender_id, body, created_at',
-    [req.params.id, req.telegramUser.id, body]
-  );
-  res.status(201).json({ message: result.rows[0] });
-  const recipients = await pool.query(
-    `SELECT audience.user_id FROM (
-       SELECT creator_id AS user_id FROM events WHERE id=$1
+  const client = await pool.connect();
+  let recipients = [];
+  let title = 'событие';
+  try {
+    await client.query('BEGIN');
+    // Hold the event row until the message is committed. Leave/cancel use the same lock.
+    const event = await client.query(
+      `SELECT id, creator_id, title FROM events WHERE id=$1 AND status <> 'cancelled' FOR UPDATE`,
+      [req.params.id]
+    );
+    if (!event.rowCount) {
+      await client.query('ROLLBACK');
+      return res.status(403).json({ error: 'Join the event to send messages' });
+    }
+    const member = String(event.rows[0].creator_id) === String(req.telegramUser.id)
+      ? true
+      : (await client.query(
+          `SELECT 1 FROM event_participants WHERE event_id=$1 AND user_id=$2 AND status='joined'`,
+          [req.params.id, req.telegramUser.id]
+        )).rowCount > 0;
+    if (!member) {
+      await client.query('ROLLBACK');
+      return res.status(403).json({ error: 'Join the event to send messages' });
+    }
+    const result = await client.query(
+      'INSERT INTO event_messages (event_id, sender_id, body) VALUES ($1,$2,$3) RETURNING id, event_id, sender_id, body, created_at',
+      [req.params.id, req.telegramUser.id, body]
+    );
+    const audience = await client.query(
+      `SELECT creator_id AS user_id FROM events WHERE id=$1
        UNION
-       SELECT ep.user_id FROM event_participants ep WHERE ep.event_id=$1 AND ep.status='joined'
-     ) audience WHERE audience.user_id<>$2`,
-    [req.params.id, req.telegramUser.id]
-  );
-  const eventTitle = await pool.query('SELECT title FROM events WHERE id=$1', [req.params.id]);
-  const title = eventTitle.rows[0]?.title || 'событие';
-  for (const recipient of recipients.rows) notifyUser(recipient.user_id, '💬 Новое сообщение в чате события «' + title + '». Открой «Погнали», чтобы ответить.', 'chat:' + recipient.user_id + ':' + req.params.id, 5 * 60 * 1000);
+       SELECT ep.user_id FROM event_participants ep WHERE ep.event_id=$1 AND ep.status='joined'`,
+      [req.params.id]
+    );
+    recipients = audience.rows.filter(row => String(row.user_id) !== String(req.telegramUser.id));
+    title = event.rows[0].title || 'событие';
+    await client.query('COMMIT');
+    res.status(201).json({ message: result.rows[0] });
+  } catch (error) {
+    await client.query('ROLLBACK').catch(() => {});
+    throw error;
+  } finally {
+    client.release();
+  }
+  for (const recipient of recipients) notifyUser(recipient.user_id, '💬 Новое сообщение в чате события «' + title + '». Открой «Погнали», чтобы ответить.', 'chat:' + recipient.user_id + ':' + req.params.id, 5 * 60 * 1000);
 });
 
 
@@ -1031,22 +1065,55 @@ app.post('/api/direct/:id/respond', async (req, res) => {
   const decision = req.body && req.body.decision;
   const status = decision === 'accept' ? 'accepted' : decision === 'reject' ? 'rejected' : '';
   if (!status) return res.status(400).json({ error: 'decision must be accept or reject' });
-  const pending = await pool.query(
-    "SELECT user_low,user_high FROM direct_conversations WHERE id=$1 AND (user_low=$2 OR user_high=$2) AND requested_by<>$2 AND status='pending'",
-    [req.params.id, req.telegramUser.id]
-  );
-  if (!pending.rowCount) return res.status(404).json({ error: 'Pending request not found' });
-  const other = String(pending.rows[0].user_low) === String(req.telegramUser.id)
-    ? pending.rows[0].user_high : pending.rows[0].user_low;
-  if (await hasMessagingBlock(req.telegramUser.id, other)) {
-    return res.status(403).json({ error: 'Messaging is unavailable between these users' });
+  const client = await pool.connect();
+  let conversation;
+  try {
+    await client.query('BEGIN');
+    const pending = await client.query(
+      "SELECT user_low,user_high FROM direct_conversations WHERE id=$1 AND (user_low=$2 OR user_high=$2) AND requested_by<>$2 AND status='pending'",
+      [req.params.id, req.telegramUser.id]
+    );
+    if (!pending.rowCount) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ error: 'Pending request not found' });
+    }
+    const other = String(pending.rows[0].user_low) === String(req.telegramUser.id)
+      ? pending.rows[0].user_high : pending.rows[0].user_low;
+    // Acquire the pair lock before locking the conversation row, matching
+    // the lock order used by request creation and block/unblock.
+    await lockMessagingPair(client, req.telegramUser.id, other);
+    const lockedPending = await client.query(
+      "SELECT id FROM direct_conversations WHERE id=$1 AND (user_low=$2 OR user_high=$2) AND requested_by<>$2 AND status='pending' FOR UPDATE",
+      [req.params.id, req.telegramUser.id]
+    );
+    if (!lockedPending.rowCount) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ error: 'Pending request not found' });
+    }
+    const blocked = await client.query(
+      "SELECT 1 FROM user_blocks WHERE (blocker_id=$1 AND blocked_id=$2) OR (blocker_id=$2 AND blocked_id=$1) LIMIT 1",
+      [req.telegramUser.id, other]
+    );
+    if (blocked.rowCount) {
+      await client.query('ROLLBACK');
+      return res.status(403).json({ error: 'Messaging is unavailable between these users' });
+    }
+    const result = await client.query(
+      "UPDATE direct_conversations SET status=$2,updated_at=NOW() WHERE id=$1 AND (user_low=$3 OR user_high=$3) AND requested_by<>$3 AND status='pending' RETURNING id,status,requested_by",
+      [req.params.id, status, req.telegramUser.id]
+    );
+    if (!result.rowCount) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ error: 'Pending request not found' });
+    }
+    conversation = result.rows[0];
+    await client.query('COMMIT');
+  } catch (error) {
+    await client.query('ROLLBACK').catch(() => {});
+    throw error;
+  } finally {
+    client.release();
   }
-  const result = await pool.query(
-    "UPDATE direct_conversations SET status=$2,updated_at=NOW() WHERE id=$1 AND (user_low=$3 OR user_high=$3) AND requested_by<>$3 AND status='pending' AND NOT EXISTS (SELECT 1 FROM user_blocks ub WHERE (ub.blocker_id=$3 AND ub.blocked_id=CASE WHEN user_low=$3 THEN user_high ELSE user_low END) OR (ub.blocker_id=CASE WHEN user_low=$3 THEN user_high ELSE user_low END AND ub.blocked_id=$3)) RETURNING id,status,requested_by",
-    [req.params.id, status, req.telegramUser.id]
-  );
-  if (!result.rowCount) return res.status(404).json({ error: 'Pending request not found' });
-  const conversation = result.rows[0];
   res.json({ conversation: { id: conversation.id, status: conversation.status } });
   const notice = status === 'accepted'
     ? '✓ Твой запрос на личную переписку в «Погнали» принят. Теперь можно общаться.'
@@ -1480,15 +1547,31 @@ app.post('/api/events/:id/join', async (req, res) => {
 });
 
 app.post('/api/events/:id/leave', async (req, res) => {
-  const own = await pool.query('SELECT creator_id FROM events WHERE id=$1', [req.params.id]);
-  if (own.rowCount && String(own.rows[0].creator_id) === String(req.telegramUser.id)) {
-    return res.status(409).json({ error: 'Организатор не может выйти из своего события. Заверши или удали его.' });
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    // Serialize leave with join, chat sends and event cancellation.
+    const event = await client.query('SELECT creator_id FROM events WHERE id=$1 FOR UPDATE', [req.params.id]);
+    if (!event.rowCount) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ error: 'Event not found' });
+    }
+    if (String(event.rows[0].creator_id) === String(req.telegramUser.id)) {
+      await client.query('ROLLBACK');
+      return res.status(409).json({ error: 'Организатор не может выйти из своего события. Заверши или удали его.' });
+    }
+    const result = await client.query(
+      `UPDATE event_participants SET status='left' WHERE event_id=$1 AND user_id=$2 AND status='joined'`,
+      [req.params.id, req.telegramUser.id]
+    );
+    await client.query('COMMIT');
+    res.json({ left: result.rowCount > 0, eventId: String(req.params.id) });
+  } catch (error) {
+    await client.query('ROLLBACK').catch(() => {});
+    throw error;
+  } finally {
+    client.release();
   }
-  const result = await pool.query(
-    `UPDATE event_participants SET status='left' WHERE event_id=$1 AND user_id=$2 AND status='joined'`,
-    [req.params.id, req.telegramUser.id]
-  );
-  res.json({ left: result.rowCount > 0, eventId: String(req.params.id) });
 });
 
 app.get('/api/my/events', async (req, res) => {
