@@ -169,6 +169,15 @@ t('reporting and moderation require valid reasons, admin login and admin token',
   assert.equal(miniList.status, 200, miniList.text);
   assert.ok(miniList.json.reports.some(item => item.event_id === event.id));
   assert.equal((await call(ADMIN, `/admin/moderation/reports/${row.id}`, { method: 'PATCH', body: { status: 'reviewing' } })).status, 200);
+  const audit = await call(ADMIN, `/admin/moderation/reports/${row.id}/history`);
+  assert.equal(audit.status, 200, audit.text);
+  assert.equal(audit.json.history.length, 1);
+  assert.equal(audit.json.history[0].from_status, 'open');
+  assert.equal(audit.json.history[0].to_status, 'reviewing');
+  assert.equal(String(audit.json.history[0].actor_telegram_id), String(ADMIN.id));
+  assert.equal((await call(ANNA, `/admin/moderation/reports/${row.id}/history`)).status, 403);
+  assert.equal((await call(ADMIN, `/admin/moderation/reports/${row.id}`, { method: 'PATCH', body: { status: 'reviewing' } })).status, 200);
+  assert.equal((await call(ADMIN, `/admin/moderation/reports/${row.id}/history`)).json.history.length, 1);
   assert.equal((await call(ADMIN, `/admin/reports/${row.id}`, { method: 'PATCH', body: { status: 'resolved' }, headers: { 'x-admin-token': 'admintoken' } })).status, 200);
 });
 
