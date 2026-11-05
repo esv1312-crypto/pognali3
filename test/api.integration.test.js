@@ -364,6 +364,15 @@ t('moderator event cancellations are transactional and leave an admin-only audit
 
   const denied = await api(B, `/admin/moderation/events/${ev.id}/actions`);
   assert.equal(denied.status, 403);
+
+  // An organizer must not physically delete an event after moderation,
+  // because that would cascade-delete the moderator's audit history.
+  const organizerRemoval = await api(B, `/events/${ev.id}`, { method: 'DELETE' });
+  assert.equal(organizerRemoval.status, 200);
+  assert.equal(organizerRemoval.json.archived, true);
+  const retained = await ctx.db.query('SELECT status FROM events WHERE id=$1', [ev.id]);
+  assert.equal(retained.rows[0].status, 'cancelled');
+
   const repeated = await api(A, `/events/${ev.id}`, { method: 'DELETE' });
   assert.equal(repeated.status, 404);
   const unchangedHistory = await api(A, `/admin/moderation/events/${ev.id}/actions`);

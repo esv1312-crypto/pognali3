@@ -742,8 +742,14 @@ app.delete('/api/events/:id', async (req, res) => {
       await client.query('ROLLBACK');
       return res.status(404).json({ error: 'Event not found or you are not its organizer' });
     }
-    const existingReports = await client.query('SELECT 1 FROM event_reports WHERE event_id=$1 LIMIT 1', [req.params.id]);
-    const archived = existingReports.rowCount > 0;
+    const existingModerationHistory = await client.query(
+      `SELECT 1 FROM event_reports WHERE event_id=$1
+       UNION ALL
+       SELECT 1 FROM event_moderation_actions WHERE event_id=$1
+       LIMIT 1`,
+      [req.params.id]
+    );
+    const archived = existingModerationHistory.rowCount > 0;
     if (archived) {
       // Keep reported events and their moderation/audit history instead of cascading it away.
       await client.query("UPDATE events SET status='cancelled', updated_at=NOW() WHERE id=$1", [req.params.id]);

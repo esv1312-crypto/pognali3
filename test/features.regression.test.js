@@ -164,3 +164,12 @@ test('moderator event cancellation records an audit action transactionally', () 
   assert.ok(server.includes("app.get('/api/admin/moderation/events/:id/actions',requireTelegramAdmin"));
   assert.ok(server.includes('event_moderation_actions'));
 });
+
+
+test('organizer removal archives events with moderator audit history', () => {
+  const start = server.indexOf("app.delete('/api/events/:id'");
+  const end = server.indexOf("app.post('/api/events/:id/finish'", start);
+  const route = server.slice(start, end);
+  assert.ok(route.includes('FROM event_moderation_actions WHERE event_id=$1'));
+  assert.ok(route.includes('const archived = existingModerationHistory.rowCount > 0'));
+});
