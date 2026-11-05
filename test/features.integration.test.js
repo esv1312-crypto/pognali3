@@ -225,6 +225,53 @@ t('event lifecycle enforces organizer permissions and completed-event rules', as
     'deleting a reported event must preserve the report and its audit trail');
 });
 
+t('attendance confirmations are role-checked and activity counts are idempotent', async () => {
+  const event = await makeEvent(ANNA, { title: 'Встреча для подтверждения посещения' });
+  assert.equal((await join(BORIS, event.id)).status, 200);
+
+  const { Client } = require('pg');
+  const db = new Client({ connectionString: process.env.DATABASE_URL });
+  await db.connect();
+  try {
+    await db.query("UPDATE events SET status='completed',attendance_confirmation_requested_at=NOW() WHERE id=$1", [event.id]);
+  } finally { await db.end(); }
+
+  const profile = async user => (await call(user, '/users/' + user.id + '/profile')).json.profile;
+  assert.equal(Number((await profile(ANNA)).organized_count), 0);
+  assert.equal(Number((await profile(BORIS)).attended_count), 0);
+
+  const callback = async (user, data) => {
+    const response = await fetch(ctx.base + '/telegram/webhook', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', 'x-telegram-bot-api-secret-token': 'hook' },
+      body: JSON.stringify({
+        callback_query: {
+          id: 'attendance-' + data + '-' + user.id,
+          from: user,
+          data,
+          message: { chat: { id: user.id }, message_id: 1, text: 'Подтверди встречу' }
+        }
+      })
+    });
+    return { status: response.status, json: await response.json() };
+  };
+
+  assert.equal((await callback(ANNA, 'att:o:y:' + event.id)).status, 200);
+  assert.equal(Number((await profile(ANNA)).organized_count), 0,
+    'organizer confirmation alone must not count without a participant confirmation');
+
+  assert.equal((await callback(BORIS, 'att:p:y:' + event.id)).status, 200);
+  assert.equal((await callback(BORIS, 'att:p:y:' + event.id)).status, 200,
+    'repeated taps must update the same attendance record, not add another count');
+  assert.equal(Number((await profile(ANNA)).organized_count), 1);
+  assert.equal(Number((await profile(BORIS)).attended_count), 1);
+
+  const outsider = await callback(VERA, 'att:p:y:' + event.id);
+  assert.equal(outsider.status, 200);
+  assert.equal(Number((await profile(VERA)).attended_count), 0,
+    'users who were not joined participants cannot confirm attendance');
+});
+
 t('joining is idempotent, capacity is enforced, and organizer cannot leave', async () => {
   const event = await makeEvent(ANNA, { capacity: 2 });
   const { Client } = require('pg');
