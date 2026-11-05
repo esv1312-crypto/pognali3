@@ -234,6 +234,15 @@ t('direct message requests notify both users and mutual consent gates messages',
   assert.ok(inbox.json.messages.some(message => message.body === 'Теперь можно общаться'));
 });
 
+t('event list participant count includes organizer when organizer has no participant row', async () => {
+  const ev = await create(A, { title: 'Счётчик организатора', capacity: 20 });
+  await api(B, `/events/${ev.id}/join`, { method: 'POST', body: {} });
+  await ctx.db.query('DELETE FROM event_participants WHERE event_id=$1 AND user_id=$2', [ev.id, A.id]);
+  const listed = await api(A, '/events?limit=500');
+  const item = listed.json.events.find(event => String(event.id) === String(ev.id));
+  assert.ok(item, 'created event appears in the event list');
+  assert.equal(item.participants_count, 2, 'organizer plus one joined participant');
+});
 t('event chat returns the newest 500 messages in chronological order', async () => {
   const ev = await create(A, { title: 'История чата', capacity: 20 });
   await api(B, `/events/${ev.id}/join`, { method: 'POST', body: {} });
