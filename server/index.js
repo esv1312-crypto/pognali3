@@ -117,6 +117,10 @@ app.post('/telegram/webhook', webhookRateLimit, async (req, res) => {
     let resultMessage = '';
     try {
       await client.query('BEGIN');
+      await client.query(
+        'INSERT INTO users(id,first_name,last_name,username) VALUES($1,$2,$3,$4) ON CONFLICT(id) DO NOTHING',
+        [actorId, String(callbackQuery.from?.first_name || ''), String(callbackQuery.from?.last_name || ''), callbackQuery.from?.username || null]
+      );
       const current = await client.query('SELECT id,title,status FROM events WHERE id=$1 FOR UPDATE', [eventId]);
       if (!current.rowCount || current.rows[0].status !== 'published') {
         await client.query('ROLLBACK');
@@ -753,15 +757,15 @@ app.post('/api/events', async (req, res) => {
         || (req.telegramUser.username ? '@' + req.telegramUser.username : String(req.telegramUser.id));
       const when = startsAt.toLocaleString('ru-RU', { dateStyle: 'medium', timeStyle: 'short', timeZone: 'Europe/Moscow' });
       const place = [addressInput, city].filter(Boolean).join(', ');
-      const eventUrl = new URL(miniAppUrl);
-      eventUrl.searchParams.set('startapp', 'event_' + result.rows[0].id);
+      const botUsername = String(process.env.TELEGRAM_BOT_USERNAME || 'Pognali_pognali_bot').replace(/^@/, '').trim();
+      const eventUrl = 'https://t.me/' + botUsername + '?startapp=' + encodeURIComponent('event_' + result.rows[0].id);
       const replyMarkup = {
         inline_keyboard: [
           [
             { text: '✓ Оставить опубликованным', callback_data: 'eventmod:keep:' + result.rows[0].id },
             { text: '✕ Заблокировать', callback_data: 'eventmod:block:' + result.rows[0].id }
           ],
-          [{ text: 'Открыть событие', web_app: { url: eventUrl.toString() } }]
+          [{ text: 'Открыть событие', url: eventUrl }]
         ]
       };
       const note = [
