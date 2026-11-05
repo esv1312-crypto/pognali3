@@ -89,3 +89,13 @@ test('participant list hydrates real members and Telegram IDs before showing pro
   assert.match(handler, /telegramId:String\(p\.id\)/);
   assert.match(handler, /showToast\(error\.message\|\|'Не удалось загрузить участников'/);
 });
+
+
+test('event detail hydrates organizer Telegram ID even for legacy events without a participant row', () => {
+  const start = page.indexOf('async function openEvent');
+  const end = page.indexOf('function reportEvent', start);
+  const handler = page.slice(start, end);
+  assert.ok(start >= 0 && end > start);
+  assert.match(handler, /ev\.owner=localUserId\(raw\.creator_id\);if\(ev\.owner!==2\)db\.users\[ev\.owner\]=/);
+  assert.match(handler, /telegramId:String\(raw\.creator_id\)/);
+});
