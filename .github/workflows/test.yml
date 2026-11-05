@@ -4,9 +4,11 @@ on:
   push:
     branches:
       - feature/telegram-mini-app
+      - feature/event-duration-profile-stats
   pull_request:
     branches:
       - feature/telegram-mini-app
+      - feature/event-duration-profile-stats
 
 jobs:
   test:
