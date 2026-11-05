@@ -669,6 +669,21 @@ app.get('/api/events', async (req, res) => {
   return res.send(json);
 });
 
+app.get('/api/events/created', async (req, res) => {
+  const result = await pool.query(
+    \`SELECT e.*, COALESCE(u.display_name,u.first_name) AS creator_first_name, u.username AS creator_username,
+       (COUNT(ep.user_id) FILTER (WHERE ep.status='joined')
+         + CASE WHEN COUNT(ep.user_id) FILTER (WHERE ep.user_id=e.creator_id AND ep.status='joined') > 0 THEN 0 ELSE 1 END)::int AS participants_count,
+       (COALESCE(BOOL_OR(ep.user_id=$1 AND ep.status='joined'),FALSE) OR e.creator_id=$1) AS joined_by_me
+     FROM events e JOIN users u ON u.id=e.creator_id
+     LEFT JOIN event_participants ep ON ep.event_id=e.id
+     WHERE e.creator_id=$1
+     GROUP BY e.id,u.id ORDER BY e.created_at DESC LIMIT 100\`,
+    [req.telegramUser.id]
+  );
+  res.json({events:result.rows});
+});
+
 app.get('/api/events/joined-ids', async (req, res) => {
   const mine = await pool.query(
     `SELECT ep.event_id FROM event_participants ep JOIN events e ON e.id=ep.event_id WHERE ep.user_id=$1 AND ep.status='joined' AND e.status='published' UNION SELECT id AS event_id FROM events WHERE creator_id=$1 AND status='published'`,
