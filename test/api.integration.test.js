@@ -56,7 +56,7 @@ test.before(async () => {
   const port = 30000 + Math.floor(Math.random() * 10000);
   Object.assign(process.env, {
     DATABASE_URL: `postgres://postgres:pw@127.0.0.1:${dbPort}/pognali`, DATABASE_SSL: 'disable', PORT: String(port),
-    TELEGRAM_BOT_TOKEN: TOKEN, TELEGRAM_BOT_USERNAME: 'test_bot', MINI_APP_URL: 'https://app.test', TELEGRAM_WEBHOOK_SECRET: 's', ADMIN_API_TOKEN: 'adm'
+    TELEGRAM_BOT_TOKEN: TOKEN, TELEGRAM_BOT_USERNAME: 'test_bot', MINI_APP_URL: 'https://app.test', TELEGRAM_WEBHOOK_SECRET: 's', ADMIN_API_TOKEN: 'adm', ADMIN_TELEGRAM_IDS: String(A.id)
   });
   ctx.db = new Pool({ connectionString: process.env.DATABASE_URL, ssl: false });
   const realFetch = global.fetch;
