@@ -123,3 +123,18 @@ test('Telegram notification queue sends sequentially and only records successful
   assert.ok(queue.includes('notifyPending.delete(job[2])'));
   assert.ok(!queue.includes('notifyLastSent.set(dedupeKey, now)'));
 });
+
+
+test('message sends and direct requests serialize with block operations using a shared pair lock', () => {
+  const helper = server.slice(server.indexOf('function sortedUserPair'), server.indexOf("app.get('/api/users/search'"));
+  assert.ok(helper.includes('async function lockMessagingPair(client,a,b)'));
+  assert.ok(helper.includes('pg_advisory_xact_lock(hashtextextended'));
+  const block = server.slice(server.indexOf("app.post('/api/users/:id/block'"), server.indexOf("app.get('/api/messages/organized-events'"));
+  assert.ok(block.includes('await lockMessagingPair(client,actor,target)'));
+  const direct = server.slice(server.indexOf("app.post('/api/direct/:id/messages'"), server.indexOf("app.get('/api/users/blocked'"));
+  assert.ok(direct.includes('await lockMessagingPair(client,actor,other)'));
+  const contact = server.slice(server.indexOf("app.post('/api/event-contacts/:id/messages'"), server.indexOf('async function recordEventShareAction'));
+  assert.ok(contact.includes('await lockMessagingPair(client,actor,other)'));
+  const requests = server.slice(server.indexOf("app.post('/api/direct/requests'"), server.indexOf("app.post('/api/direct/:id/respond'"));
+  assert.ok(requests.includes('await lockMessagingPair(client,actor,target)'));
+});
