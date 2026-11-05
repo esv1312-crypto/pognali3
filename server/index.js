@@ -1429,64 +1429,6 @@ app.get('/api/me/activity', async (req, res) => {
   res.json({ events: result.rows });
 });
 
-app.post('/api/events/:id/repeat', async (req, res) => {
-  const rawDates = Array.isArray(req.body?.dates) ? req.body.dates : [];
-  if (!rawDates.length || rawDates.length > 51) {
-    return res.status(400).json({ error: 'Выбери от 1 до 51 дополнительной даты в календаре' });
-  }
-  const dates = rawDates.map(value => new Date(value));
-  if (rawDates.some(value => typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/.test(value)) ||
-      dates.some(date => !Number.isFinite(date.getTime())) ||
-      new Set(rawDates.map(value => value.slice(0, 10))).size !== rawDates.length) {
-    return res.status(400).json({ error: 'Проверь выбранные даты: даты должны быть корректными и не повторяться' });
-  }
-  const client = await pool.connect();
-  try {
-    await client.query('BEGIN');
-    const base = await client.query("SELECT * FROM events WHERE id=$1 AND creator_id=$2 AND status='published' FOR UPDATE", [req.params.id, req.telegramUser.id]);
-    if (!base.rowCount) { await client.query('ROLLBACK'); return res.status(404).json({ error: 'Повторить встречу может только организатор опубликованного события' }); }
-    const event = base.rows[0];
-    const baseTime = new Date(event.starts_at).getTime();
-    if (baseTime <= Date.now()) { await client.query('ROLLBACK'); return res.status(400).json({ error: 'Повторять можно только предстоящую встречу' }); }
-    if (event.series_id) { await client.query('ROLLBACK'); return res.status(409).json({ error: 'Эта встреча уже входит в серию' }); }
-    const now = Date.now();
-    const maxStart = now + 3 * 365 * 24 * 60 * 60 * 1000;
-    if (dates.some(date => date.getTime() <= Math.max(now, baseTime))) {
-      await client.query('ROLLBACK');
-      return res.status(400).json({ error: 'Выбирай даты позже исходной встречи' });
-    }
-    if (dates.some(date => date.getTime() > maxStart)) {
-      await client.query('ROLLBACK');
-      return res.status(400).json({ error: 'Повторить встречу можно не дальше чем на 3 года вперёд' });
-    }
-    dates.sort((a,b) => a.getTime()-b.getTime());
-    const series = await client.query(
-      "INSERT INTO event_series(creator_id,base_event_id,recurrence_rule,interval_count,occurrence_count) VALUES($1,$2,'custom',1,$3) RETURNING id",
-      [req.telegramUser.id, event.id, dates.length + 1]
-    );
-    const seriesId = series.rows[0].id;
-    await client.query('UPDATE events SET series_id=$2,series_index=1 WHERE id=$1', [event.id, seriesId]);
-    const created = [{ id: String(event.id), starts_at: event.starts_at }];
-    const duration = event.ends_at ? new Date(event.ends_at).getTime() - baseTime : null;
-    for (let index=0; index<dates.length; index++) {
-      const next = dates[index];
-      const nextEnd = duration === null ? null : new Date(next.getTime() + duration);
-      const inserted = await client.query(
-        `INSERT INTO events(creator_id,title,description,category,emoji,city,address,latitude,longitude,starts_at,ends_at,capacity,age_range,live_note,status,series_id,series_index)
-         VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,'published',$15,$16) RETURNING id,starts_at`,
-        [event.creator_id,event.title,event.description,event.category,event.emoji,event.city,event.address,event.latitude,event.longitude,next.toISOString(),nextEnd?.toISOString()||null,event.capacity,event.age_range,event.live_note,seriesId,index+2]
-      );
-      await client.query("INSERT INTO event_participants(event_id,user_id,status) VALUES($1,$2,'joined')", [inserted.rows[0].id, req.telegramUser.id]);
-      created.push({ id: String(inserted.rows[0].id), starts_at: inserted.rows[0].starts_at });
-    }
-    await client.query('COMMIT');
-    res.status(201).json({ series_id: String(seriesId), created_count: created.length, events: created });
-  } catch (error) {
-    await client.query('ROLLBACK');
-    throw error;
-  } finally { client.release(); }
-});
-
 app.post('/api/events/:id/join', async (req, res) => {
   const client = await pool.connect();
   try {
