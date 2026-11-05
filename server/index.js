@@ -699,10 +699,10 @@ app.post('/api/messages/read', async (req, res) => {
     const r = await pool.query("SELECT 1 FROM events e WHERE e.id=$1 AND e.status <> 'cancelled' AND (e.creator_id=$2 OR EXISTS (SELECT 1 FROM event_participants ep WHERE ep.event_id=e.id AND ep.user_id=$2 AND ep.status='joined'))", [id, uid]);
     allowed = r.rowCount > 0;
   } else if (type === 'direct') {
-    const r = await pool.query("SELECT 1 FROM direct_conversations WHERE id=$1 AND status='accepted' AND (user_low=$2 OR user_high=$2)", [id, uid]);
+    const r = await pool.query("SELECT 1 FROM direct_conversations c WHERE c.id=$1 AND c.status='accepted' AND (c.user_low=$2 OR c.user_high=$2) AND NOT EXISTS (SELECT 1 FROM user_blocks ub WHERE (ub.blocker_id=$2 AND ub.blocked_id=CASE WHEN c.user_low=$2 THEN c.user_high ELSE c.user_low END) OR (ub.blocker_id=CASE WHEN c.user_low=$2 THEN c.user_high ELSE c.user_low END AND ub.blocked_id=$2))", [id, uid]);
     allowed = r.rowCount > 0;
   } else {
-    const r = await pool.query("SELECT 1 FROM event_contact_conversations c JOIN events e ON e.id=c.event_id WHERE c.id=$1 AND e.status <> 'cancelled' AND (c.participant_id=$2 OR c.organizer_id=$2)", [id, uid]);
+    const r = await pool.query("SELECT 1 FROM event_contact_conversations c JOIN events e ON e.id=c.event_id WHERE c.id=$1 AND e.status <> 'cancelled' AND (c.participant_id=$2 OR c.organizer_id=$2) AND NOT EXISTS (SELECT 1 FROM user_blocks ub WHERE (ub.blocker_id=$2 AND ub.blocked_id=CASE WHEN c.participant_id=$2 THEN c.organizer_id ELSE c.participant_id END) OR (ub.blocker_id=CASE WHEN c.participant_id=$2 THEN c.organizer_id ELSE c.participant_id END AND ub.blocked_id=$2))", [id, uid]);
     allowed = r.rowCount > 0;
   }
   if (!allowed) return res.status(403).json({ error: 'Conversation is not available to this user' });
