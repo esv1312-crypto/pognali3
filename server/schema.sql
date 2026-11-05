@@ -139,6 +139,17 @@ CREATE TABLE IF NOT EXISTS event_reports (
  UNIQUE(event_id, reporter_id)
 );
 CREATE INDEX IF NOT EXISTS event_reports_status_created_idx ON event_reports(status, created_at DESC);
+-- Append-only audit trail for moderation decisions.
+CREATE TABLE IF NOT EXISTS event_moderation_audit (
+ id BIGSERIAL PRIMARY KEY,
+ report_id BIGINT NOT NULL,
+ actor_telegram_id TEXT NOT NULL,
+ from_status TEXT NOT NULL CHECK (from_status IN ('open','reviewing','resolved','dismissed')),
+ to_status TEXT NOT NULL CHECK (to_status IN ('open','reviewing','resolved','dismissed')),
+ changed_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS event_moderation_audit_report_idx ON event_moderation_audit(report_id, changed_at DESC);
+
 
 -- Event sharing attribution and share/open analytics.
 ALTER TABLE event_participants ADD COLUMN IF NOT EXISTS join_source TEXT NOT NULL DEFAULT 'organic';
