@@ -104,12 +104,34 @@ t('profile edits trim and cap fields and identify administrators', async () => {
   assert.equal((await call(ANNA, '/me')).json.user.is_admin, false);
 });
 
-t('automatic event moderation publishes safe events, queues suspicious ones and allows admin corrections', async () => {
-  const safe = await makeEvent(ANNA, { title: 'Футбол для автоматической проверки' });
+t('agreed moderation policy publishes normal events and rejects contact details without review', async () => {
+  const safe = await makeEvent(ANNA, { title: 'Футбол для автоматической проверки', capacity: 1000 });
   assert.equal(safe.status, 'published');
 
+  const vague = await makeEvent(BORIS, { title: 'Встреча', category: 'Другое', description: '', city: 'Не указан' });
+  assert.equal(vague.status, 'published', 'short descriptions and missing places must not trigger manual review');
+
+  const shootingRange = await makeEvent(VERA, { title: 'Пойдём в тир', description: 'Постреляем по мишеням' });
+  assert.equal(shootingRange.status, 'published');
+  const videoGame = await makeEvent(VERA, { title: 'Играем в стрелялки' });
+  assert.equal(videoGame.status, 'published');
+
+  const link = await call(BORIS, '/events', {
+    method: 'POST', body: eventBody({ title: 'Встреча со ссылкой', description: 'Подробности https://example.com' })
+  });
+  assert.equal(link.status, 400);
+  assert.equal(link.json.code, 'CONTACT_DETAILS_NOT_ALLOWED');
+  assert.equal(link.json.field, 'description');
+
+  const phone = await call(BORIS, '/events', {
+    method: 'POST', body: eventBody({ title: 'Встреча +7 999 123-45-67' })
+  });
+  assert.equal(phone.status, 400);
+  assert.equal(phone.json.code, 'CONTACT_DETAILS_NOT_ALLOWED');
+  assert.equal(phone.json.field, 'title');
+
   const suspicious = await makeEvent(BORIS, {
-    title: 'Встреча', category: 'Другое', description: 'Подробности и регистрация https://example.com'
+    title: 'Встреча', category: 'Другое', description: 'Собираюсь напасть после встречи'
   });
   assert.equal(suspicious.status, 'pending_review');
   const hiddenFromPublic = await call(ANNA, '/events/' + suspicious.id);
@@ -147,10 +169,8 @@ t('automatic event moderation publishes safe events, queues suspicious ones and 
   const first = await makeEvent(ANNA, { title: duplicateTitle });
   const duplicate = await makeEvent(VERA, { title: duplicateTitle });
   assert.equal(first.status, 'published');
-  assert.equal(duplicate.status, 'pending_review');
-  assert.ok(duplicate.moderation_reason.includes('дубликат'));
+  assert.equal(duplicate.status, 'published', 'duplicates alone must not trigger manual review');
 });
-
 t('event lifecycle enforces organizer permissions and completed-event rules', async () => {
   const event = await makeEvent(ANNA);
   assert.equal((await call(BORIS, `/events/${event.id}`)).status, 200);
@@ -162,7 +182,7 @@ t('event lifecycle enforces organizer permissions and completed-event rules', as
   });
   assert.equal(startEvent.status, 200, startEvent.text);
   assert.equal((await call(ANNA, `/events/${event.id}/finish`, { method: 'POST', body: {} })).status, 200);
-  assert.equal((await join(BORIS, event.id)).status, 404);
+  assert.equal((await join(BORIS, event.id)).status, 409, 'an early finish closes joining immediately while the confirmation worker completes the event');
   assert.equal((await call(ANNA, `/events/${event.id}`, { method: 'DELETE' })).status, 200);
   assert.equal((await call(ANNA, `/events/${event.id}`)).status, 404);
 
