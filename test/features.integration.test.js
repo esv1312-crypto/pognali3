@@ -128,6 +128,12 @@ t('event lifecycle enforces organizer permissions and completed-event rules', as
 
 t('joining is idempotent, capacity is enforced, and organizer cannot leave', async () => {
   const event = await makeEvent(ANNA, { capacity: 2 });
+  const { Client } = require('pg');
+  const db = new Client({ connectionString: process.env.DATABASE_URL });
+  await db.connect();
+  try {
+    await db.query("DELETE FROM event_participants WHERE event_id=$1 AND user_id=$2", [event.id, ANNA.id]);
+  } finally { await db.end(); }
   assert.equal((await join(BORIS, event.id)).status, 200);
   assert.equal((await join(BORIS, event.id)).status, 200);
   assert.equal((await join(VERA, event.id)).status, 409);
