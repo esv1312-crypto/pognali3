@@ -211,6 +211,12 @@ t('direct message requests notify both users and mutual consent gates messages',
   await api(A, '/me');
   await api(B, '/me');
   ctx.telegram.length = 0;
+  // A previous consent test may have left an accepted conversation for this fixture pair.
+  // Re-arm it as a rejected request from B so this test exercises a fresh A -> B acceptance.
+  await ctx.db.query(
+    "UPDATE direct_conversations SET status='rejected', requested_by=$1 WHERE user_low=LEAST($1::bigint,$2::bigint) AND user_high=GREATEST($1::bigint,$2::bigint)",
+    [B.id, A.id]
+  );
   const requested = await api(A, '/direct/requests', { method: 'POST', body: { user_id: String(B.id) } });
   assert.equal(requested.status, 201);
   const conversationId = requested.json.conversation.id;
