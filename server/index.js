@@ -701,7 +701,7 @@ app.get('/api/events/:id', async (req, res) => {
        e.series_id, e.series_index
      FROM events e JOIN users u ON u.id=e.creator_id
      LEFT JOIN event_participants ep ON ep.event_id=e.id
-     WHERE e.id=$1 AND (e.status='published' OR e.creator_id=$2 OR $3::boolean)
+     WHERE e.id=$1 AND (e.status='published' OR (e.status='pending_review' AND e.creator_id=$2) OR $3::boolean)
      GROUP BY e.id, u.id`,
     [req.params.id, req.telegramUser.id, isAdminTelegramUser(req.telegramUser.id)]
   );
@@ -968,7 +968,7 @@ app.delete('/api/events/:id', async (req, res) => {
     const existingModerationHistory = await client.query(
       `SELECT 1 FROM event_reports WHERE event_id=$1
        UNION ALL
-       SELECT 1 FROM event_moderation_actions WHERE event_id=$1
+       SELECT 1 FROM event_moderation_actions WHERE event_id=$1 AND action <> 'auto_published'
        LIMIT 1`,
       [req.params.id]
     );
