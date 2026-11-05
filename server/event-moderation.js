@@ -104,7 +104,7 @@ async function evaluateEventModeration(db, event) {
     reasons.push('У организатора есть несколько недавних жалоб на другие события');
   }
 
-  const manual = score >= 3;
+  const manual = score >= 2;
   return {
     status: manual ? 'pending_review' : 'published',
     decision: manual ? 'auto_sent_to_review' : 'auto_published',
