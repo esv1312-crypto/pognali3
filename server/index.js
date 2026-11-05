@@ -2219,7 +2219,7 @@ async function startEventCompletionWorker() {
              (ends_at IS NULL AND starts_at <= NOW() - INTERVAL '3 hours')
            )
            ORDER BY COALESCE(ends_at, starts_at + INTERVAL '3 hours')
-           FOR UPDATE SKIP LOCKED LIMIT 100
+           LIMIT 100 FOR UPDATE SKIP LOCKED
          )
          UPDATE events e SET status='completed', attendance_confirmation_requested_at=NOW(), updated_at=NOW()
          FROM due WHERE e.id=due.id
