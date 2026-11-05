@@ -1087,7 +1087,7 @@ app.post('/api/events/:id/join', async (req, res) => {
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
-    const event = await client.query('SELECT id, capacity, status, starts_at, ends_at FROM events WHERE id=$1 FOR UPDATE', [req.params.id]);
+    const event = await client.query('SELECT id, creator_id, capacity, status, starts_at, ends_at FROM events WHERE id=$1 FOR UPDATE', [req.params.id]);
     if (!event.rowCount || event.rows[0].status !== 'published') {
       await client.query('ROLLBACK'); return res.status(404).json({ error: 'Event not found' });
     }
@@ -1105,7 +1105,7 @@ app.post('/api/events/:id/join', async (req, res) => {
       [req.params.id, req.telegramUser.id]
     );
     if (existing.rows[0]?.status !== 'joined' && event.rows[0].capacity !== null) {
-      const count = await client.query(`SELECT COUNT(*)::int AS n FROM event_participants WHERE event_id=$1 AND status='joined'`, [req.params.id]);
+      const count = await client.query(`SELECT COUNT(*)::int + CASE WHEN EXISTS (SELECT 1 FROM event_participants WHERE event_id=$1 AND user_id=$2 AND status='joined') THEN 0 ELSE 1 END AS n FROM event_participants WHERE event_id=$1 AND status='joined'`, [req.params.id, event.rows[0].creator_id]);
       if (count.rows[0].n >= event.rows[0].capacity) {
         await client.query('ROLLBACK'); return res.status(409).json({ error: 'Event is full' });
       }
