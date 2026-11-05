@@ -1565,7 +1565,7 @@ async function startOrganizerParticipantChat(eventId,participantId){try{const d=
 async function searchMessageUsers(){const input=document.getElementById('userSearch'),out=document.getElementById('userSearchResults');if(!input||!out)return;const q=input.value.trim();if(q.length<2){out.innerHTML='';return}try{const d=await apiRequest('/users/search?q='+encodeURIComponent(q));out.innerHTML=(d.users||[]).map(u=>'<div class="message-item"><span style="flex:1"><b>'+esc(u.display_name||u.first_name||u.username||'Пользователь')+'</b><small>'+esc(u.username?'@'+u.username:'')+(u.city?' · '+esc(u.city):'')+'</small></span><button class="secondary" onclick="requestDirectMessage(&quot;'+String(u.id)+'&quot;)">Запросить общение</button></div>').join('')||'<div class="empty">Ничего не найдено</div>'}catch(e){out.innerHTML='<div class="empty">'+esc(e.message||'Ошибка поиска')+'</div>'}}
 async function blockUserFromProfile(userId,name){
   if(!API_MODE||!/^\\d+$/.test(String(userId||'')))return;
-  showConfirm('Заблокировать пользователя?','Пользователь не сможет переписываться с тобой. Существующие сообщения и встречи не удаляются.',async()=>{
+  showConfirm('Заблокировать пользователя?','Личные сообщения и переписка один на один по встречам станут недоступны. Общие чаты встреч останутся доступны; существующие сообщения и встречи не удаляются.',async()=>{
     try{await apiRequest('/users/'+encodeURIComponent(userId)+'/block',{method:'POST',body:JSON.stringify({})});closeModal();showToast('Пользователь заблокирован','success')}
     catch(error){showToast(error.message||'Не удалось заблокировать пользователя','error')}
   },'Заблокировать');
