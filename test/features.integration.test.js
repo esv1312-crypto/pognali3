@@ -219,6 +219,28 @@ t('event capacity cannot be reduced below the current joined participant count',
   assert.equal(exact.json.event.capacity, 2);
 });
 
+t('favorites and activity count legacy organizers without a membership row', async () => {
+  const event = await makeEvent(ANNA, { title: 'Старое событие без строки организатора' });
+  const { Client } = require('pg');
+  const db = new Client({ connectionString: process.env.DATABASE_URL });
+  await db.connect();
+  try {
+    await db.query('DELETE FROM event_participants WHERE event_id=$1 AND user_id=$2', [event.id, ANNA.id]);
+  } finally {
+    await db.end();
+  }
+
+  assert.equal((await call(ANNA, `/events/${event.id}/favorite`, { method: 'POST', body: {} })).status, 200);
+  const favorites = await call(ANNA, '/favorites');
+  const favorite = favorites.json.events.find(item => String(item.id) === String(event.id));
+  assert.equal(favorite.participants_count, 1);
+
+  const activity = await call(ANNA, '/me/activity');
+  const ownActivity = activity.json.events.find(item => String(item.id) === String(event.id));
+  assert.equal(ownActivity.participants_count, 1);
+  assert.equal(ownActivity.my_role, 'organizer');
+});
+
 t('event participant photos and birthdays are visible only to event members', async () => {
   const event = await makeEvent(ANNA, { title: 'Проверка приватности профиля участников' });
   assert.equal((await join(BORIS, event.id)).status, 200);
