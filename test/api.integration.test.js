@@ -254,16 +254,18 @@ t('event, direct and event-contact chats support incremental message polling', a
   assert.deepEqual(eventDelta.json.messages.map(message => message.body), ['event-second']);
   assert.equal((await api(A, `/events/${ev.id}/messages?after_id=not-a-number`)).status, 400);
 
-  const requested = await api(A, '/direct/requests', { method: 'POST', body: { user_id: String(B.id) } });
+  await api(C, '/me');
+  const requested = await api(A, '/direct/requests', { method: 'POST', body: { user_id: String(C.id) } });
   assert.equal(requested.status, 201);
   const conversationId = requested.json.conversation.id;
-  assert.equal((await api(B, `/direct/${conversationId}/respond`, { method: 'POST', body: { decision: 'accept' } })).status, 200);
+  assert.equal((await api(C, `/direct/${conversationId}/respond`, { method: 'POST', body: { decision: 'accept' } })).status, 200);
   const firstDirect = await api(A, `/direct/${conversationId}/messages`, { method: 'POST', body: { body: 'direct-first' } });
   await api(B, `/direct/${conversationId}/messages`, { method: 'POST', body: { body: 'direct-second' } });
   const directDelta = await api(A, `/direct/${conversationId}/messages?after_id=${firstDirect.json.message.id}`);
   assert.deepEqual(directDelta.json.messages.map(message => message.body), ['direct-second']);
 
-  const contact = await api(B, `/events/${ev.id}/contact`, { method: 'POST', body: {} });
+  const contact = await api(A, `/events/${ev.id}/participants/${B.id}/contact`, { method: 'POST', body: {} });
+  assert.equal(contact.status, 201);
   const contactId = contact.json.conversation.id;
   const firstContact = await api(B, `/event-contacts/${contactId}/messages`, { method: 'POST', body: { body: 'contact-first' } });
   await api(A, `/event-contacts/${contactId}/messages`, { method: 'POST', body: { body: 'contact-second' } });
