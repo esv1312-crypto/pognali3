@@ -98,7 +98,7 @@ app.post('/telegram/webhook', webhookRateLimit, async (req, res) => {
   const callbackQuery = req.body?.callback_query;
   if (callbackQuery) {
     const callbackData = String(callbackQuery.data || '');
-    const match = callbackData.match(/^eventmod:(keep|block):(\\d{1,15})$/);
+    const match = callbackData.match(/^eventmod:(keep|block):(\d{1,15})$/);
     const callbackId = callbackQuery.id;
     const actorId = callbackQuery.from?.id;
     const answer = async (message, alert = false) => {
