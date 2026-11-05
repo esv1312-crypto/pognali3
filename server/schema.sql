@@ -89,6 +89,16 @@ CREATE TABLE IF NOT EXISTS event_participants (
 );
 CREATE INDEX IF NOT EXISTS event_participants_user_idx ON event_participants (user_id, status);
 
+-- Organizer-approved exceptions to an event's suggested age range.
+CREATE TABLE IF NOT EXISTS event_age_approvals (
+  event_id BIGINT NOT NULL REFERENCES events(id) ON DELETE CASCADE,
+  user_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  approved_by BIGINT NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
+  approved_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  PRIMARY KEY (event_id, user_id)
+);
+CREATE INDEX IF NOT EXISTS event_age_approvals_approver_idx ON event_age_approvals(approved_by, approved_at DESC);
+
 CREATE TABLE IF NOT EXISTS event_messages (
   id BIGSERIAL PRIMARY KEY,
   event_id BIGINT NOT NULL REFERENCES events(id) ON DELETE CASCADE,
