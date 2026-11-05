@@ -52,6 +52,7 @@ ALTER TABLE events ADD COLUMN IF NOT EXISTS emoji TEXT NOT NULL DEFAULT '';
 ALTER TABLE events ADD COLUMN IF NOT EXISTS age_range TEXT NOT NULL DEFAULT 'Любой возраст';
 ALTER TABLE events ADD COLUMN IF NOT EXISTS live_note TEXT NOT NULL DEFAULT '';
 ALTER TABLE events ADD COLUMN IF NOT EXISTS time_zone TEXT NOT NULL DEFAULT 'Europe/Moscow';
+CREATE INDEX IF NOT EXISTS events_expired_published_idx ON events(ends_at) WHERE status='published' AND ends_at IS NOT NULL;
 ALTER TABLE events ADD COLUMN IF NOT EXISTS attendance_confirmation_requested_at TIMESTAMPTZ;
 ALTER TABLE events ADD COLUMN IF NOT EXISTS organizer_confirmation BOOLEAN;
 ALTER TABLE events ADD COLUMN IF NOT EXISTS organizer_confirmation_at TIMESTAMPTZ;
