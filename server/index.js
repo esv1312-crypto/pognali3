@@ -1114,7 +1114,7 @@ app.post('/api/events/:id/reports', async (req, res) => {
     const reporter = req.telegramUser.username ? '@' + req.telegramUser.username : [req.telegramUser.first_name, req.telegramUser.last_name].filter(Boolean).join(' ') || String(req.telegramUser.id);
     const reasonLabels = { spam: 'Спам или реклама', fake: 'Обман или фальшивое событие', inappropriate: 'Неприемлемый контент', unsafe: 'Опасное событие', other: 'Другое' };
     const note = '🚨 Новая жалоба на событие\n' + 'Жалоба №' + reportId + '\n' + 'Событие: ' + (eventInfo.rows[0]?.title || ('#' + req.params.id)) + '\n' + 'Город: ' + (eventInfo.rows[0]?.city || 'не указан') + '\n' + 'Причина: ' + reasonLabels[reason] + '\n' + 'От: ' + reporter + '\n' + (details ? 'Подробности: ' + details.slice(0, 700) + '\n' : '') + 'Статус: open';
-    void sendTelegramMessage(adminChatId, note).then(delivered => { if (!delivered) console.warn('Admin report notification was not delivered; check ADMIN_TELEGRAM_CHAT_ID and that the admin started the bot.'); });
+    void notifyUser(adminChatId, note, 'event-report:' + reportId, 0).then(queued => { if (!queued) console.warn('Admin report notification was not queued; check ADMIN_TELEGRAM_CHAT_ID and notification outbox health.'); });
   } else {
     console.warn('Report saved without Telegram notification: ADMIN_TELEGRAM_CHAT_ID is not configured.');
   }
