@@ -137,3 +137,12 @@ test('message sends and direct requests serialize with block operations using a 
   const requests = server.slice(server.indexOf("app.post('/api/direct/requests'"), server.indexOf("app.post('/api/direct/:id/respond'"));
   assert.ok(requests.includes('await lockMessagingPair(client,actor,target)'));
 });
+
+
+test('new report notifications use the durable PostgreSQL outbox', () => {
+  const start = server.indexOf("app.post('/api/events/:id/reports'");
+  const end = server.indexOf("app.post('/api/events/:id/prepare-share'", start);
+  const route = server.slice(start, end);
+  assert.ok(route.includes("notifyUser(adminChatId, note, 'event-report:' + reportId, 0)"));
+  assert.ok(!route.includes('sendTelegramMessage(adminChatId, note)'));
+});
