@@ -140,6 +140,18 @@ CREATE TABLE IF NOT EXISTS event_reports (
 );
 CREATE INDEX IF NOT EXISTS event_reports_status_created_idx ON event_reports(status, created_at DESC);
 
+-- Append-only history of moderator decisions for each report.
+CREATE TABLE IF NOT EXISTS event_report_actions (
+ id BIGSERIAL PRIMARY KEY,
+ report_id BIGINT NOT NULL REFERENCES event_reports(id) ON DELETE CASCADE,
+ actor_id BIGINT NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
+ previous_status TEXT NOT NULL CHECK (previous_status IN ('open','reviewing','resolved','dismissed')),
+ new_status TEXT NOT NULL CHECK (new_status IN ('open','reviewing','resolved','dismissed')),
+ created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS event_report_actions_report_created_idx ON event_report_actions(report_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS event_report_actions_actor_created_idx ON event_report_actions(actor_id, created_at DESC);
+
 -- Event sharing attribution and share/open analytics.
 ALTER TABLE event_participants ADD COLUMN IF NOT EXISTS join_source TEXT NOT NULL DEFAULT 'organic';
 CREATE INDEX IF NOT EXISTS event_participants_source_idx ON event_participants (event_id, join_source) WHERE status = 'joined';

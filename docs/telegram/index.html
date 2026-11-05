@@ -1605,13 +1605,28 @@ async function openAdminReports(status=adminReportStatus){
       if(report.status!=='reviewing')actions.push('<button class="secondary" onclick="updateAdminReport('+Number(report.id)+',\'reviewing\')">В работу</button>');
       if(report.status!=='resolved')actions.push('<button class="secondary" onclick="updateAdminReport('+Number(report.id)+',\'resolved\')">Решить</button>');
       if(report.status!=='dismissed')actions.push('<button class="secondary" onclick="updateAdminReport('+Number(report.id)+',\'dismissed\')">Отклонить</button>');
-      return '<div class="card" style="margin-top:12px"><b>'+esc(report.event_title||'Событие')+'</b><div class="meta">'+esc(report.event_city||'')+' · '+esc(new Date(report.event_starts_at).toLocaleString('ru-RU'))+'</div><p><b>Причина:</b> '+esc(reasons[report.reason]||report.reason)+'</p>'+(report.details?'<p>'+esc(report.details)+'</p>':'')+'<div class="meta">Жалоба от: '+esc(report.reporter_name||'Участник')+' · '+esc(new Date(report.created_at).toLocaleString('ru-RU'))+'<br>Статус: '+esc(labels[report.status]||report.status)+'</div><div class="actions"><button class="secondary" onclick="openEvent('+Number(report.event_id)+')">Открыть событие</button>'+actions.join('')+'</div></div>';
+      return '<div class="card" style="margin-top:12px"><b>'+esc(report.event_title||'Событие')+'</b><div class="meta">'+esc(report.event_city||'')+' · '+esc(new Date(report.event_starts_at).toLocaleString('ru-RU'))+'</div><p><b>Причина:</b> '+esc(reasons[report.reason]||report.reason)+'</p>'+(report.details?'<p>'+esc(report.details)+'</p>':'')+'<div class="meta">Жалоба от: '+esc(report.reporter_name||'Участник')+' · '+esc(new Date(report.created_at).toLocaleString('ru-RU'))+'<br>Статус: '+esc(labels[report.status]||report.status)+'</div><div class="actions"><button class="secondary" onclick="openEvent('+Number(report.event_id)+')">Открыть событие</button><button class="secondary" onclick="openAdminReportHistory('+Number(report.id)+')">История</button>'+actions.join('')+'</div></div>';
     }).join('');
     const sheet=document.getElementById('sheet');
     if(sheet)sheet.innerHTML='<button class="close" onclick="closeModal()">✕</button><h2>Модерация жалоб</h2><div class="actions">'+tabs+'</div>'+(cards||'<div class="empty">В этой категории жалоб нет.</div>');
   }catch(error){
     const sheet=document.getElementById('sheet');
     if(sheet)sheet.innerHTML='<button class="close" onclick="closeModal()">✕</button><h2>Модерация жалоб</h2><div class="empty">'+esc(error.message||'Не удалось загрузить жалобы')+'</div>';
+  }
+}
+async function openAdminReportHistory(id){
+  if(!db.profile?.isAdmin)return showToast('Нет прав администратора','error');
+  openModal('<button class="close" onclick="closeModal()">✕</button><h2>История жалобы</h2><div class="empty">Загружаем историю…</div>');
+  try{
+    const result=await apiRequest('/admin/moderation/reports/'+encodeURIComponent(id)+'/actions');
+    const labels={open:'Новая',reviewing:'В работе',resolved:'Решена',dismissed:'Отклонена'};
+    const rows=result.actions||[];
+    const html=rows.length?rows.map(action=>'<div class="message-item"><div><b>'+esc(action.actor_name||'Администратор')+'</b><div class="meta">'+esc(labels[action.previous_status]||action.previous_status)+' → '+esc(labels[action.new_status]||action.new_status)+'</div><small>'+esc(new Date(action.created_at).toLocaleString('ru-RU'))+'</small></div></div>').join(''):'<div class="empty">История пока пуста. Здесь появятся изменения статуса и имя администратора.</div>';
+    const sheet=document.getElementById('sheet');
+    if(sheet)sheet.innerHTML='<button class="close" onclick="closeModal()">✕</button><h2>История жалобы</h2>'+html;
+  }catch(error){
+    const sheet=document.getElementById('sheet');
+    if(sheet)sheet.innerHTML='<button class="close" onclick="closeModal()">✕</button><h2>История жалобы</h2><div class="empty">'+esc(error.message||'Не удалось загрузить историю')+'</div>';
   }
 }
 async function updateAdminReport(id,status){
