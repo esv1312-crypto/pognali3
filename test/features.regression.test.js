@@ -157,3 +157,10 @@ test('legacy admin middleware checks both Telegram allowlist and timing-safe tok
   assert.ok(middleware.includes('timingSafeEqual'));
   assert.ok(middleware.includes('supplied.length !== configured.length'));
 });
+
+
+test('moderator event cancellation records an audit action transactionally', () => {
+  assert.ok(server.includes("INSERT INTO event_moderation_actions(event_id,actor_id,action,previous_status,new_status)"));
+  assert.ok(server.includes("app.get('/api/admin/moderation/events/:id/actions',requireTelegramAdmin"));
+  assert.ok(server.includes('event_moderation_actions'));
+});
