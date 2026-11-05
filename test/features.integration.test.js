@@ -510,5 +510,4 @@ t('simultaneous joins cannot exceed event capacity', async () => {
     'only one of two simultaneous users can claim the final place');
   const detail = await call(ANNA, `/events/${full.id}`);
   assert.equal(detail.json.event.participants_count, 2, 'capacity must remain exact after concurrent joins');
-
-
+});
