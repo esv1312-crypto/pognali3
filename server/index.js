@@ -10,6 +10,7 @@ const { rateLimit } = require('express-rate-limit');
 const sharp = require('sharp');
 const { verifyTelegramInitData } = require('./telegram-auth');
 const { syncTelegramProfile } = require('./telegram-profile');
+const { evaluateEventModeration } = require('./event-moderation');
 
 const app = express();
 // Ids in URLs are numeric: answer 404 for anything else instead of letting PostgreSQL fail with a 500.
@@ -98,7 +99,7 @@ app.post('/telegram/webhook', webhookRateLimit, async (req, res) => {
   const callbackQuery = req.body?.callback_query;
   if (callbackQuery) {
     const callbackData = String(callbackQuery.data || '');
-    const match = callbackData.match(/^eventmod:(keep|block):(\d{1,15})$/);
+    const match = callbackData.match(/^eventmod:(approve|reject|keep|block|restore):(\d{1,15})$/);
     const callbackId = callbackQuery.id;
     const actorId = callbackQuery.from?.id;
     const answer = async (message, alert = false) => {
@@ -121,27 +122,36 @@ app.post('/telegram/webhook', webhookRateLimit, async (req, res) => {
         'INSERT INTO users(id,first_name,last_name,username) VALUES($1,$2,$3,$4) ON CONFLICT(id) DO NOTHING',
         [actorId, String(callbackQuery.from?.first_name || ''), String(callbackQuery.from?.last_name || ''), callbackQuery.from?.username || null]
       );
-      const current = await client.query('SELECT id,title,status FROM events WHERE id=$1 FOR UPDATE', [eventId]);
-      if (!current.rowCount || current.rows[0].status !== 'published') {
+      const current = await client.query('SELECT id,title,status,moderation_decision,moderation_reason FROM events WHERE id=$1 FOR UPDATE', [eventId]);
+      const event = current.rows[0];
+      const allowed = event && (
+        (event.status === 'pending_review' && ['approve','reject'].includes(action)) ||
+        (event.status === 'published' && ['keep','block'].includes(action)) ||
+        (event.status === 'cancelled' && event.moderation_decision === 'auto_blocked' && action === 'restore')
+      );
+      if (!allowed) {
         await client.query('ROLLBACK');
-        await answer('Событие уже изменено или недоступно', true);
+        await answer('Событие уже изменено или это действие недоступно', true);
         return res.json({ ok: true });
       }
-      if (action === 'block') {
-        await client.query("UPDATE events SET status='cancelled',updated_at=NOW() WHERE id=$1", [eventId]);
-        await client.query(
-          "INSERT INTO event_moderation_actions(event_id,actor_id,action,previous_status,new_status) VALUES($1,$2,'cancelled_by_moderator','published','cancelled')",
-          [eventId, actorId]
-        );
-        resultMessage = 'Событие заблокировано';
-      } else {
-        await client.query(
-          "INSERT INTO event_moderation_actions(event_id,actor_id,action,previous_status,new_status) VALUES($1,$2,'kept_published_by_moderator','published','published')",
-          [eventId, actorId]
-        );
-        resultMessage = 'Событие оставлено опубликованным';
-      }
+      const transitions = {
+        approve: { status: 'published', decision: 'approved_by_moderator', audit: 'approved_by_moderator', label: 'Событие одобрено и опубликовано' },
+        reject: { status: 'cancelled', decision: 'rejected_by_moderator', audit: 'rejected_by_moderator', label: 'Событие отклонено' },
+        keep: { status: 'published', decision: 'kept_published_by_moderator', audit: 'kept_published_by_moderator', label: 'Событие оставлено опубликованным' },
+        block: { status: 'cancelled', decision: 'blocked_by_moderator', audit: 'cancelled_by_moderator', label: 'Событие снято с публикации' },
+        restore: { status: 'published', decision: 'restored_by_moderator', audit: 'restored_by_moderator', label: 'Событие восстановлено и опубликовано' }
+      };
+      const transition = transitions[action];
+      await client.query(
+        'UPDATE events SET status=$2,moderation_decision=$3,moderation_reason=CASE WHEN $4 THEN $5 ELSE moderation_reason END,moderated_at=NOW(),updated_at=NOW() WHERE id=$1',
+        [eventId, transition.status, transition.decision, action === 'restore', action === 'restore' ? '' : event.moderation_reason]
+      );
+      await client.query(
+        "INSERT INTO event_moderation_actions(event_id,actor_id,actor_type,action,previous_status,new_status,reason) VALUES($1,$2,'admin',$3,$4,$5,$6)",
+        [eventId, actorId, transition.audit, event.status, transition.status, transition.label]
+      );
       await client.query('COMMIT');
+      resultMessage = transition.label;
     } catch (error) {
       await client.query('ROLLBACK').catch(() => {});
       throw error;
@@ -156,7 +166,7 @@ app.post('/telegram/webhook', webhookRateLimit, async (req, res) => {
         method: 'POST', headers: { 'content-type': 'application/json' },
         body: JSON.stringify({
           chat_id: message.chat.id, message_id: message.message_id,
-          text: originalText + '\n\n' + (action === 'block' ? '⛔ ' : '✅ ') + resultMessage,
+          text: originalText + '\n\n' + (action === 'block' || action === 'reject' ? '⛔ ' : '✅ ') + resultMessage,
           reply_markup: { inline_keyboard: [] }
         })
       }).catch(error => console.warn('Telegram moderation message update failed:', error.message));
@@ -676,9 +686,9 @@ app.get('/api/events/:id', async (req, res) => {
        e.series_id, e.series_index
      FROM events e JOIN users u ON u.id=e.creator_id
      LEFT JOIN event_participants ep ON ep.event_id=e.id
-     WHERE e.id=$1 AND e.status <> 'cancelled'
+     WHERE e.id=$1 AND (e.status='published' OR e.creator_id=$2 OR $3::boolean)
      GROUP BY e.id, u.id`,
-    [req.params.id, req.telegramUser.id]
+    [req.params.id, req.telegramUser.id, isAdminTelegramUser(req.telegramUser.id)]
   );
   if (!result.rowCount) return res.status(404).json({ error: 'Event not found' });
   const people = await pool.query(
@@ -711,7 +721,6 @@ app.post('/api/events', async (req, res) => {
   const title = typeof b.title === 'string' ? b.title.trim() : '';
   const cityInput = typeof b.city === 'string' ? b.city.trim().slice(0, 120) : '';
   const addressInput = typeof b.address === 'string' ? b.address.trim().slice(0, 120) : '';
-  // A map-picked point can be valid even when reverse geocoding cannot identify a city.
   const city = cityInput || addressInput || 'Не указан';
   const startsAt = new Date(b.starts_at);
   const startMs = startsAt.getTime();
@@ -735,61 +744,85 @@ app.post('/api/events', async (req, res) => {
   const ageRange = normalizeEventAgeRange(b.age_range);
   if (ageRange === null) return res.status(400).json({ error: 'Invalid age_range' });
   const liveNote = typeof b.live_note === 'string' ? b.live_note.trim().slice(0,240) : '';
+  const description = typeof b.description === 'string' ? b.description.trim().slice(0,3000) : '';
+  const category = typeof b.category === 'string' ? b.category.slice(0,40) : 'other';
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
+    const draft = {
+      creator_id: req.telegramUser.id, title, description, category, city,
+      address: typeof b.address === 'string' ? b.address.trim().slice(0,250) : '',
+      starts_at: startsAt.toISOString(), capacity
+    };
+    const moderation = await evaluateEventModeration(client, draft);
     const result = await client.query(
-      `INSERT INTO events (creator_id,title,description,category,city,address,latitude,longitude,starts_at,ends_at,capacity,emoji,age_range,live_note)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14) RETURNING *`,
-      [req.telegramUser.id, title, typeof b.description === 'string' ? b.description.trim().slice(0,3000) : '',
-        typeof b.category === 'string' ? b.category.slice(0,40) : 'other', city, typeof b.address === 'string' ? b.address.trim().slice(0,250) : '',
+      \`INSERT INTO events (creator_id,title,description,category,city,address,latitude,longitude,starts_at,ends_at,capacity,emoji,age_range,live_note,status,moderation_decision,moderation_reason,moderated_at)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,NOW()) RETURNING *\`,
+      [req.telegramUser.id, title, description, category, city, draft.address,
         lat, lon, startsAt.toISOString(), endsAt ? endsAt.toISOString() : null, capacity,
-        typeof b.emoji === 'string' ? b.emoji.trim().slice(0, 32) : '', ageRange, liveNote]
+        typeof b.emoji === 'string' ? b.emoji.trim().slice(0, 32) : '', ageRange, liveNote,
+        moderation.status, moderation.decision, moderation.reasons.join('; ').slice(0,1000)]
     );
+    const created = result.rows[0];
+    if (created.status === 'published') {
+      await client.query(
+        \`INSERT INTO event_participants (event_id,user_id,status) VALUES ($1,$2,'joined')
+         ON CONFLICT (event_id,user_id) DO UPDATE SET status='joined', joined_at=NOW()\`,
+        [created.id, req.telegramUser.id]
+      );
+    }
     await client.query(
-      `INSERT INTO event_participants (event_id,user_id,status) VALUES ($1,$2,'joined')
-       ON CONFLICT (event_id,user_id) DO UPDATE SET status='joined', joined_at=NOW()`,
-      [result.rows[0].id, req.telegramUser.id]
+      "INSERT INTO event_moderation_actions(event_id,actor_id,actor_type,action,previous_status,new_status,reason) VALUES($1,NULL,'system',$2,'new',$3,$4)",
+      [created.id, moderation.decision, created.status, moderation.reasons.join('; ').slice(0,1000)]
     );
     const adminTargets = getAdminNotificationChatIds();
     if (adminTargets.length) {
       const creatorName = [req.telegramUser.first_name, req.telegramUser.last_name].filter(Boolean).join(' ')
         || (req.telegramUser.username ? '@' + req.telegramUser.username : String(req.telegramUser.id));
       const when = startsAt.toLocaleString('ru-RU', { dateStyle: 'medium', timeStyle: 'short', timeZone: 'Europe/Moscow' });
-      const place = [addressInput, city].filter(Boolean).join(', ');
+      const place = [draft.address, city].filter(Boolean).join(', ');
       const botUsername = String(process.env.TELEGRAM_BOT_USERNAME || 'Pognali_pognali_bot').replace(/^@/, '').trim();
-      const eventUrl = 'https://t.me/' + botUsername + '?startapp=' + encodeURIComponent('event_' + result.rows[0].id);
-      const replyMarkup = {
-        inline_keyboard: [
-          [
-            { text: '✓ Оставить опубликованным', callback_data: 'eventmod:keep:' + result.rows[0].id },
-            { text: '✕ Заблокировать', callback_data: 'eventmod:block:' + result.rows[0].id }
-          ],
-          [{ text: 'Открыть событие', url: eventUrl }]
-        ]
-      };
+      const eventUrl = 'https://t.me/' + botUsername + '?startapp=' + encodeURIComponent('event_' + created.id);
+      let keyboard = [];
+      if (created.status === 'pending_review') {
+        keyboard = [[
+          { text: '✓ Одобрить и опубликовать', callback_data: 'eventmod:approve:' + created.id },
+          { text: '✕ Отклонить', callback_data: 'eventmod:reject:' + created.id }
+        ]];
+      } else if (created.status === 'published') {
+        keyboard = [[
+          { text: '✓ Оставить опубликованным', callback_data: 'eventmod:keep:' + created.id },
+          { text: '✕ Снять с публикации', callback_data: 'eventmod:block:' + created.id }
+        ]];
+      } else if (moderation.decision === 'auto_blocked') {
+        keyboard = [[{ text: '↩ Восстановить ошибочно заблокированное', callback_data: 'eventmod:restore:' + created.id }]];
+      }
+      keyboard.push([{ text: 'Открыть событие', url: eventUrl }]);
+      const statusLabel = created.status === 'published' ? 'Автоматически опубликовано'
+        : created.status === 'pending_review' ? 'Ожидает ручной проверки' : 'Автоматически заблокировано';
       const note = [
-        '🆕 Создано новое событие',
-        'Статус: опубликовано',
+        '🆕 Новое событие — результат автоматической модерации',
+        'Статус: ' + statusLabel,
         'Название: ' + title,
         'Создатель: ' + creatorName + (req.telegramUser.username ? ' (@' + req.telegramUser.username + ')' : ''),
         'Telegram ID: ' + req.telegramUser.id,
         'Когда: ' + when,
         'Где: ' + place,
-        typeof b.description === 'string' && b.description.trim() ? 'Описание: ' + b.description.trim().slice(0, 700) : ''
+        description ? 'Описание: ' + description.slice(0, 700) : '',
+        moderation.reasons.length ? 'Причина проверки: ' + moderation.reasons.join('; ') : ''
       ].filter(Boolean).join('\n');
       for (const adminChatId of adminTargets) {
         await client.query(
-          `INSERT INTO telegram_notification_outbox (chat_id,message_text,dedupe_key,reply_markup)
-           VALUES ($1,$2,$3,$4::jsonb) ON CONFLICT DO NOTHING`,
-          [adminChatId, note, 'new-event:' + result.rows[0].id + ':' + adminChatId, JSON.stringify(replyMarkup)]
+          \`INSERT INTO telegram_notification_outbox (chat_id,message_text,dedupe_key,reply_markup)
+           VALUES ($1,$2,$3,$4::jsonb) ON CONFLICT DO NOTHING\`,
+          [adminChatId, note, 'new-event:' + created.id + ':' + adminChatId, JSON.stringify({ inline_keyboard: keyboard })]
         );
       }
     } else {
       console.warn('New event saved without admin notification: configure ADMIN_TELEGRAM_CHAT_ID or ADMIN_TELEGRAM_IDS.');
     }
     await client.query('COMMIT');
-    res.status(201).json({ event: { ...result.rows[0], participants_count: 1, joined_by_me: true } });
+    res.status(201).json({ event: { ...created, participants_count: created.status === 'published' ? 1 : 0, joined_by_me: created.status === 'published' } });
   } catch (error) {
     await client.query('ROLLBACK').catch(() => {});
     throw error;
@@ -1708,12 +1741,69 @@ function requireTelegramAdmin(req,res,next){
   if(!isAdminTelegramUser(req.telegramUser.id))return res.status(403).json({error:'Admin access denied'});
   next();
 }
+app.get('/api/admin/moderation/events',requireTelegramAdmin,async(req,res)=>{
+  const status=String(req.query.status||'all');
+  if(!['all','published','pending_review','cancelled'].includes(status))return res.status(400).json({error:'Invalid event status'});
+  const limit=Math.min(100,Math.max(1,Number.parseInt(req.query.limit,10)||50));
+  const result=await pool.query(
+    \`SELECT e.id,e.title,e.description,e.category,e.city,e.address,e.starts_at,e.status,
+            e.moderation_decision,e.moderation_reason,e.created_at,e.creator_id,
+            COALESCE(u.display_name,u.first_name,u.username,e.creator_id::text) AS creator_name,
+            COUNT(r.id)::int AS reports_count
+     FROM events e JOIN users u ON u.id=e.creator_id
+     LEFT JOIN event_reports r ON r.event_id=e.id
+     WHERE ($1='all' OR e.status=$1)
+     GROUP BY e.id,u.id
+     ORDER BY CASE e.status WHEN 'pending_review' THEN 0 WHEN 'cancelled' THEN 1 ELSE 2 END,
+              e.created_at DESC
+     LIMIT $2\`,
+    [status,limit]
+  );
+  res.json({events:result.rows});
+});
+app.patch('/api/admin/moderation/events/:id',requireTelegramAdmin,async(req,res)=>{
+  const id=String(req.params.id||''),action=String(req.body?.action||'');
+  if(!/^[1-9]\d{0,18}$/.test(id)||!['approve','reject','keep','block','restore'].includes(action))return res.status(400).json({error:'A valid event ID and action are required'});
+  const client=await pool.connect();
+  try{
+    await client.query('BEGIN');
+    const found=await client.query('SELECT id,status,moderation_decision,moderation_reason FROM events WHERE id=$1 FOR UPDATE',[id]);
+    const event=found.rows[0];
+    const allowed=event&&(
+      (event.status==='pending_review'&&['approve','reject'].includes(action))||
+      (event.status==='published'&&['keep','block'].includes(action))||
+      (event.status==='cancelled'&&event.moderation_decision==='auto_blocked'&&action==='restore')
+    );
+    if(!allowed){await client.query('ROLLBACK');return res.status(409).json({error:'Событие уже изменено или действие недоступно'});}
+    const transitions={
+      approve:{status:'published',decision:'approved_by_moderator',audit:'approved_by_moderator',reason:'Одобрено администратором'},
+      reject:{status:'cancelled',decision:'rejected_by_moderator',audit:'rejected_by_moderator',reason:'Отклонено администратором'},
+      keep:{status:'published',decision:'kept_published_by_moderator',audit:'kept_published_by_moderator',reason:'Оставлено опубликованным администратором'},
+      block:{status:'cancelled',decision:'blocked_by_moderator',audit:'cancelled_by_moderator',reason:'Снято с публикации администратором'},
+      restore:{status:'published',decision:'restored_by_moderator',audit:'restored_by_moderator',reason:'Восстановлено администратором'}
+    };
+    const next=transitions[action];
+    await client.query(
+      "UPDATE events SET status=$2,moderation_decision=$3,moderation_reason=CASE WHEN $4 THEN '' ELSE moderation_reason END,moderated_at=NOW(),updated_at=NOW() WHERE id=$1",
+      [id,next.status,next.decision,action==='restore']
+    );
+    await client.query(
+      "INSERT INTO event_moderation_actions(event_id,actor_id,actor_type,action,previous_status,new_status,reason) VALUES($1,$2,'admin',$3,$4,$5,$6)",
+      [id,req.telegramUser.id,next.audit,event.status,next.status,next.reason]
+    );
+    await client.query('COMMIT');
+    eventsCache.clear();
+    res.json({event:{id,status:next.status,moderation_decision:next.decision}});
+  }catch(error){await client.query('ROLLBACK').catch(()=>{});throw error;}
+  finally{client.release();}
+});
 app.get('/api/admin/moderation/events/:id/actions',requireTelegramAdmin,async(req,res)=>{
   const id=String(req.params.id||'');
   if(!/^[1-9]\d{0,18}$/.test(id))return res.status(400).json({error:'Invalid event ID'});
   const result=await pool.query(
-    `SELECT a.id,a.action,a.previous_status,a.new_status,a.created_at,a.actor_id,
-            COALESCE(u.display_name,u.first_name,u.username,a.actor_id::text) AS actor_name
+    `SELECT a.id,a.action,a.previous_status,a.new_status,a.created_at,a.actor_id,a.actor_type,a.reason,
+            CASE WHEN a.actor_type='system' THEN 'Автоматическая модерация'
+                 ELSE COALESCE(u.display_name,u.first_name,u.username,a.actor_id::text,'Администратор') END AS actor_name
      FROM event_moderation_actions a
      LEFT JOIN users u ON u.id=a.actor_id
      WHERE a.event_id=$1
