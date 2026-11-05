@@ -149,7 +149,16 @@ t('joining is idempotent, capacity is enforced, and organizer cannot leave', asy
   try {
     await db.query("DELETE FROM event_participants WHERE event_id=$1 AND user_id=$2", [event.id, ANNA.id]);
   } finally { await db.end(); }
+  const legacyDetail = await call(ANNA, `/events/${event.id}`);
+  assert.equal(legacyDetail.status, 200, legacyDetail.text);
+  assert.equal(legacyDetail.json.event.participants_count, 1, 'detail count includes organizer without membership row');
+  assert.equal(legacyDetail.json.event.joined_by_me, true, 'organizer remains joined without membership row');
+  assert.ok((await call(ANNA, '/events/joined-ids')).json.ids.includes(String(event.id)));
+  const myEvents = await call(ANNA, '/my/events');
+  assert.ok(myEvents.json.events.some(item => String(item.id) === String(event.id) && item.my_status === 'joined' && item.participants_count === 1));
   assert.equal((await join(BORIS, event.id)).status, 200);
+  const detailAfterJoin = await call(ANNA, `/events/${event.id}`);
+  assert.equal(detailAfterJoin.json.event.participants_count, 2);
   assert.equal((await join(BORIS, event.id)).status, 200);
   assert.equal((await join(VERA, event.id)).status, 409);
   assert.equal((await call(BORIS, `/events/${event.id}/leave`, { method: 'POST', body: {} })).status, 200);
