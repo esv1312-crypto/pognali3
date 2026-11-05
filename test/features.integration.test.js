@@ -116,9 +116,17 @@ t('event lifecycle enforces organizer permissions and completed-event rules', as
 
   const reportedEvent = await makeEvent(ANNA, { title: 'Событие с жалобой' });
   await join(BORIS, reportedEvent.id);
+  const groupMessage = await call(BORIS, `/events/${reportedEvent.id}/messages`, { method: 'POST', body: { body: 'Сообщение в общем чате перед отменой' } });
+  assert.equal(groupMessage.status, 201, groupMessage.text);
   const contact = await call(ANNA, `/events/${reportedEvent.id}/participants/${BORIS.id}/contact`, { method: 'POST', body: {} });
   assert.equal(contact.status, 201, contact.text);
   assert.equal((await call(BORIS, `/event-contacts/${contact.json.conversation.id}/messages`, { method: 'POST', body: { body: 'Сообщение перед отменой' } })).status, 201);
+  assert.equal((await call(VERA, `/event-contacts/${contact.json.conversation.id}/messages`)).status, 404,
+    'users outside an event-contact conversation must not read its messages');
+  assert.equal((await call(VERA, `/event-contacts/${contact.json.conversation.id}/messages`, { method: 'POST', body: { body: 'Чужое сообщение' } })).status, 404,
+    'users outside an event-contact conversation must not send messages');
+  assert.equal((await call(VERA, `/events/${reportedEvent.id}/participants/${BORIS.id}/contact`, { method: 'POST', body: {} })).status, 403,
+    'only the event organizer may open an organizer-to-participant conversation');
   const unreadBeforeCancel = (await call(ANNA, '/messages/unread-count')).json.unreadCount;
   const report = await call(BORIS, `/events/${reportedEvent.id}/reports`, { method: 'POST', body: { reason: 'unsafe', details: 'Проверка сохранения истории' } });
   assert.equal(report.status, 201, report.text);
@@ -130,12 +138,14 @@ t('event lifecycle enforces organizer permissions and completed-event rules', as
   assert.equal((await call(ANNA, `/events/${reportedEvent.id}/messages`, { method: 'POST', body: { body: 'После отмены' } })).status, 403);
   assert.equal((await call(ANNA, `/event-contacts/${contact.json.conversation.id}/messages`)).status, 404);
   assert.equal((await call(ANNA, `/event-contacts/${contact.json.conversation.id}/messages`, { method: 'POST', body: { body: 'После отмены' } })).status, 404);
-  assert.equal((await call(ANNA, '/messages/unread-count')).json.unreadCount, unreadBeforeCancel - 1);
+  assert.equal((await call(ANNA, '/messages/unread-count')).json.unreadCount, unreadBeforeCancel - 2);
   assert.equal((await call(ANNA, '/messages/read', { method: 'POST', body: { type: 'event_contact', conversation_id: contact.json.conversation.id } })).status, 403);
   const inboxAfterCancellation = await call(ANNA, '/messages');
   assert.equal(inboxAfterCancellation.status, 200, inboxAfterCancellation.text);
   assert.equal(inboxAfterCancellation.json.eventContacts.some(item => String(item.id) === String(contact.json.conversation.id)), false,
     'cancelled event-contact conversations must not appear in the messages inbox');
+  assert.equal(inboxAfterCancellation.json.eventChats.some(item => String(item.event_id) === String(reportedEvent.id)), false,
+    'cancelled event group chats must not appear in the messages inbox');
   const moderationQueue = await call(ADMIN, '/admin/moderation/reports?status=all');
   assert.ok(moderationQueue.json.reports.some(item => String(item.event_id) === String(reportedEvent.id) && item.event_status === 'cancelled'),
     'deleting a reported event must preserve the report and its audit trail');
