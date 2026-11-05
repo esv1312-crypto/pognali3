@@ -168,7 +168,17 @@ t('reporting and moderation require valid reasons, admin login and admin token',
   const miniList = await call(ADMIN, '/admin/moderation/reports?status=all');
   assert.equal(miniList.status, 200, miniList.text);
   assert.ok(miniList.json.reports.some(item => item.event_id === event.id));
-  assert.equal((await call(ADMIN, `/admin/moderation/reports/${row.id}`, { method: 'PATCH', body: { status: 'reviewing' } })).status, 200);
+  assert.equal((await call(ANNA, `/admin/moderation/reports/${row.id}/actions`)).status, 403);
+  const changed = await call(ADMIN, `/admin/moderation/reports/${row.id}`, { method: 'PATCH', body: { status: 'reviewing' } });
+  assert.equal(changed.status, 200, changed.text);
+  assert.equal(changed.json.changed, true);
+  const history = await call(ADMIN, `/admin/moderation/reports/${row.id}/actions`);
+  assert.equal(history.status, 200, history.text);
+  assert.equal(history.json.actions.length, 1);
+  assert.deepEqual([history.json.actions[0].previous_status, history.json.actions[0].new_status, Number(history.json.actions[0].actor_id)], ['open', 'reviewing', ADMIN.id]);
+  const unchanged = await call(ADMIN, `/admin/moderation/reports/${row.id}`, { method: 'PATCH', body: { status: 'reviewing' } });
+  assert.equal(unchanged.json.changed, false);
+  assert.equal((await call(ADMIN, `/admin/moderation/reports/${row.id}/actions`)).json.actions.length, 1);
   assert.equal((await call(ADMIN, `/admin/reports/${row.id}`, { method: 'PATCH', body: { status: 'resolved' }, headers: { 'x-admin-token': 'admintoken' } })).status, 200);
 });
 
