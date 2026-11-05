@@ -429,7 +429,7 @@ app.get('/api/events', async (req, res) => {
 
 app.get('/api/events/joined-ids', async (req, res) => {
   const mine = await pool.query(
-    `SELECT event_id FROM event_participants WHERE user_id=$1 AND status='joined'`,
+    `SELECT event_id FROM event_participants WHERE user_id=$1 AND status='joined' UNION SELECT id AS event_id FROM events WHERE creator_id=$1 AND status='published'`,
     [req.telegramUser.id]
   );
   res.json({ ids: mine.rows.map(row => String(row.event_id)) });
@@ -438,8 +438,8 @@ app.get('/api/events/joined-ids', async (req, res) => {
 app.get('/api/events/:id', async (req, res) => {
   const result = await pool.query(
     `SELECT e.*, COALESCE(u.display_name, u.first_name) AS creator_first_name, u.username AS creator_username,
-       COUNT(ep.user_id) FILTER (WHERE ep.status='joined')::int AS participants_count,
-       BOOL_OR(ep.user_id=$2 AND ep.status='joined') AS joined_by_me,
+       (COUNT(ep.user_id) FILTER (WHERE ep.status='joined') + CASE WHEN COUNT(ep.user_id) FILTER (WHERE ep.user_id=e.creator_id AND ep.status='joined') > 0 THEN 0 ELSE 1 END)::int AS participants_count,
+       (COALESCE(BOOL_OR(ep.user_id=$2 AND ep.status='joined'), FALSE) OR e.creator_id=$2) AS joined_by_me,
        EXISTS(SELECT 1 FROM event_favorites ef WHERE ef.event_id=e.id AND ef.user_id=$2) AS is_favorite,
        e.series_id, e.series_index
      FROM events e JOIN users u ON u.id=e.creator_id
@@ -1153,11 +1153,12 @@ app.post('/api/events/:id/leave', async (req, res) => {
 
 app.get('/api/my/events', async (req, res) => {
   const result = await pool.query(
-    `SELECT e.*, ep.status AS my_status,
-       COUNT(allp.user_id) FILTER (WHERE allp.status='joined')::int AS participants_count
-     FROM event_participants ep JOIN events e ON e.id=ep.event_id
+    `SELECT e.*, COALESCE(ep.status, 'joined') AS my_status,
+       (COUNT(allp.user_id) FILTER (WHERE allp.status='joined') + CASE WHEN COUNT(allp.user_id) FILTER (WHERE allp.user_id=e.creator_id AND allp.status='joined') > 0 THEN 0 ELSE 1 END)::int AS participants_count
+     FROM events e
+     LEFT JOIN event_participants ep ON ep.event_id=e.id AND ep.user_id=$1 AND ep.status='joined'
      LEFT JOIN event_participants allp ON allp.event_id=e.id
-     WHERE ep.user_id=$1 AND ep.status='joined' AND e.status='published'
+     WHERE e.status='published' AND (e.creator_id=$1 OR ep.user_id IS NOT NULL)
      GROUP BY e.id, ep.status ORDER BY e.starts_at ASC`,
     [req.telegramUser.id]
   );
