@@ -87,7 +87,7 @@ async function evaluateEventModeration(db, event) {
     "SELECT COUNT(*)::int AS count FROM events WHERE creator_id=$1 AND created_at > NOW() - INTERVAL '24 hours'",
     [event.creator_id]
   );
-  if (Number(recentEvents.rows[0]?.count || 0) >= 4) {
+  if (Number(recentEvents.rows[0]?.count || 0) >= 20) {
     score += 3;
     reasons.push('Организатор создал необычно много событий за сутки');
   }
@@ -99,7 +99,7 @@ async function evaluateEventModeration(db, event) {
        AND r.status IN ('open','reviewing','resolved')`,
     [event.creator_id]
   );
-  if (Number(reportHistory.rows[0]?.count || 0) >= 2) {
+  if (Number(reportHistory.rows[0]?.count || 0) >= 5) {
     score += 3;
     reasons.push('У организатора есть несколько недавних жалоб на другие события');
   }
