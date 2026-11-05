@@ -328,6 +328,10 @@ t('users can block, list and unblock accounts and blocked users cannot request d
   assert.equal((await call(ANNA, '/messages/unread-count')).json.unreadCount, unreadBeforeBlock - 2);
   assert.equal((await call(ANNA, '/messages/read', { method: 'POST', body: { type: 'direct', conversation_id: directId } })).status, 403);
   assert.equal((await call(ANNA, '/messages/read', { method: 'POST', body: { type: 'event_contact', conversation_id: eventContact.json.conversation.id } })).status, 403);
+  assert.equal((await call(ANNA, `/direct/${directId}/messages`)).status, 403,
+    'blocked direct conversations must not expose message history');
+  assert.equal((await call(ANNA, `/event-contacts/${eventContact.json.conversation.id}/messages`)).status, 403,
+    'blocked event-contact conversations must not expose message history');
   const list = await call(ANNA, '/users/blocked');
   assert.equal(list.status, 200, list.text);
   assert.ok(list.json.users.some(user => String(user.id) === String(BORIS.id)));
