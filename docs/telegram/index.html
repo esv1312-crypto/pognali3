@@ -1507,12 +1507,13 @@ function renderMessagesTab(){if(API_MODE){document.getElementById('content').inn
 async function toggleEventFavorite(id){const e=db.events.find(x=>x.id===Number(id));if(!e||!API_MODE)return;try{const method=e.apiFavorite?'DELETE':'POST';await apiRequest('/events/'+encodeURIComponent(id)+'/favorite',{method,body:method==='POST'?JSON.stringify({}):undefined});e.apiFavorite=!e.apiFavorite;openEvent(id,true);showToast(e.apiFavorite?'Добавлено в избранное':'Убрано из избранного','success')}catch(err){showToast(err.message||'Не удалось изменить избранное','error')}}
 async function openFavorites(){if(!API_MODE)return showToast('Избранное доступно в Telegram','info');try{const d=await apiRequest('/favorites');const rows=d.events||[];openModal('<button class="close" onclick="closeModal()">✕</button><h2>☆ Избранное</h2>'+(rows.length?rows.map(e=>'<button class="message-item" onclick="closeModal();openEvent('+Number(e.id)+')"><span style="flex:1;min-width:0"><b>'+esc(e.title)+'</b><small>'+esc(e.city||'')+' · '+new Date(e.starts_at).toLocaleString('ru-RU',{dateStyle:'medium',timeStyle:'short'})+'</small></span>›</button>').join(''):'<div class="empty">Пока ничего не сохранено. Добавляй интересные события в избранное.</div>'))}catch(e){showToast(e.message||'Не удалось загрузить избранное','error')}}
 async function openActivityHistory(){if(!API_MODE)return showToast('История доступна в Telegram','info');try{const d=await apiRequest('/me/activity');const rows=d.events||[];openModal('<button class="close" onclick="closeModal()">✕</button><h2>◷ История участия</h2>'+(rows.length?rows.map(e=>'<button class="message-item" onclick="closeModal();openEvent('+Number(e.id)+')"><span style="flex:1;min-width:0"><b>'+esc(e.title)+'</b><small>'+esc(e.my_role==='organizer'?'Организатор':'Участник')+' · '+esc(e.city||'')+' · '+new Date(e.starts_at).toLocaleDateString('ru-RU')+' · '+esc(e.status)+'</small></span>›</button>').join(''):'<div class="empty">Здесь появятся события, которые ты создал или в которых участвовал.</div>'))}catch(e){showToast(e.message||'Не удалось загрузить историю','error')}}
-let repeatCalendarMonth=null,repeatSelectedDates=[],repeatBaseTime='19:00';
+let repeatCalendarMonth=null,repeatSelectedDates=[],repeatBaseTime='19:00',repeatBaseDate='';
 function openRepeatEvent(id){
  const event=db.events.find(x=>x.id===Number(id));
  if(!event)return showToast('Не удалось найти исходную встречу','error');
  repeatSelectedDates=[];
  repeatBaseTime=/^\d{2}:\d{2}$/.test(event.time||'')?event.time:'19:00';
+ repeatBaseDate=event.date||localDateKey(eventStart(event));
  const now=new Date();
  repeatCalendarMonth=new Date(now.getFullYear(),now.getMonth(),1);
  openModal('<button class="close" onclick="openEvent('+Number(id)+')">✕</button><h2>🔁 Повторить встречу</h2><p class="meta">Выбери в календаре даты, на которые создать такие же встречи.</p><div id="repeatCalendar"></div><div id="repeatSelection" class="meta" style="margin:10px 0">Даты не выбраны</div><button id="repeatCreateButton" class="primary full" disabled onclick="submitRepeatEvent('+Number(id)+')">СОЗДАТЬ ВСТРЕЧИ</button>');
@@ -1522,12 +1523,12 @@ function renderRepeatCalendar(){
  const root=document.getElementById('repeatCalendar');if(!root||!repeatCalendarMonth)return;
  const year=repeatCalendarMonth.getFullYear(),month=repeatCalendarMonth.getMonth();
  const first=new Date(year,month,1),offset=(first.getDay()+6)%7,last=new Date(year,month+1,0).getDate();
- const today=localDateKey();
+ const today=localDateKey(),maxDateObj=new Date();maxDateObj.setFullYear(maxDateObj.getFullYear()+3);const maxDate=localDateKey(maxDateObj);
  let days='<div class="calendar-week">'+['Пн','Вт','Ср','Чт','Пт','Сб','Вс'].map(x=>'<span>'+x+'</span>').join('')+'</div><div class="calendar-grid">';
  for(let i=0;i<offset;i++)days+='<span class="cal-day empty-day"></span>';
  for(let day=1;day<=last;day++){
   const date=year+'-'+String(month+1).padStart(2,'0')+'-'+String(day).padStart(2,'0');
-  const past=date<=today,active=repeatSelectedDates.includes(date);
+  const past=date<=today||date<=repeatBaseDate||date>maxDate,active=repeatSelectedDates.includes(date);
   days+='<button type="button" class="cal-day'+(active?' active':'')+(date===today?' today':'')+'" '+(past?'disabled':'')+' onclick="toggleRepeatDate(\''+date+'\')"><span>'+day+'</span></button>';
  }
  days+='</div>';
