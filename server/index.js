@@ -876,7 +876,7 @@ app.post('/api/events', async (req, res) => {
     if (adminTargets.length) {
       const creatorName = [req.telegramUser.first_name, req.telegramUser.last_name].filter(Boolean).join(' ')
         || (req.telegramUser.username ? '@' + req.telegramUser.username : String(req.telegramUser.id));
-      const when = startsAt.toLocaleString('ru-RU', { dateStyle: 'medium', timeStyle: 'short', timeZone: 'Europe/Moscow' });
+      const when = startsAt.toLocaleString('ru-RU', { dateStyle: 'medium', timeStyle: 'short', timeZone });
       const place = [draft.address, city].filter(Boolean).join(', ');
       const botUsername = String(process.env.TELEGRAM_BOT_USERNAME || 'Pognali_pognali_bot').replace(/^@/, '').trim();
       const eventUrl = 'https://t.me/' + botUsername + '?startapp=' + encodeURIComponent('event_' + created.id);
@@ -1088,7 +1088,7 @@ app.delete('/api/events/:id', async (req, res) => {
 
 app.post('/api/events/:id/finish', async (req, res) => {
   const result = await pool.query(
-    `UPDATE events SET status='completed', updated_at=NOW()
+    `UPDATE events SET ends_at=NOW(), updated_at=NOW()
      WHERE id=$1 AND creator_id=$2 AND status='published' AND starts_at <= NOW() RETURNING id`,
     [req.params.id, req.telegramUser.id]
   );
