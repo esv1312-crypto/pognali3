@@ -216,6 +216,25 @@ t('users can block, list and unblock accounts and blocked users cannot request d
   assert.equal((await call(ANNA, `/users/${BORIS.id}/block`, { method: 'DELETE' })).json.unblocked, false);
 });
 
+t('a blocked pending direct-message request cannot be accepted', async () => {
+  const request = await call(VERA, '/direct/requests', { method: 'POST', body: { user_id: ANNA.id } });
+  assert.equal(request.status, 201, request.text);
+  const conversationId = request.json.conversation.id;
+
+  const block = await call(ANNA, `/users/${VERA.id}/block`, { method: 'POST', body: {} });
+  assert.equal(block.status, 200, block.text);
+
+  const response = await call(ANNA, `/direct/${conversationId}/respond`, {
+    method: 'POST', body: { decision: 'accept' }
+  });
+  assert.equal(response.status, 403, response.text);
+  assert.match(response.json.error, /unavailable/i);
+
+  const inbox = await call(ANNA, '/messages');
+  assert.equal(inbox.json.direct.some(item => String(item.id) === String(conversationId)), false);
+  assert.equal((await call(ANNA, `/users/${VERA.id}/block`, { method: 'DELETE' })).json.blocked, false);
+});
+
 t('reporting and moderation require valid reasons, admin login and admin token', async () => {
   const event = await makeEvent(ANNA, { title: 'Проверка жалоб' });
   assert.equal((await call(BORIS, `/events/${event.id}/reports`, { method: 'POST', body: { reason: 'неизвестная причина' } })).status, 400);
