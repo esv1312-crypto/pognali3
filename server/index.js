@@ -282,7 +282,7 @@ async function notifyUser(chatId, messageText, key, intervalMs = 60000) {
     queued = result.rowCount > 0;
     await client.query('COMMIT');
   } catch (error) {
-    await client.query('ROLLBACK').catch(() => {});
+    if (client) await client.query('ROLLBACK').catch(() => {});
     console.error('Could not enqueue Telegram notification:', error.message);
     return false;
   } finally {
