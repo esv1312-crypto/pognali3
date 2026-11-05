@@ -249,6 +249,7 @@ function requireDatabase(_req, res, next) {
 
 let notificationWorkerTimer = null;
 let notificationWorkerRunning = false;
+let notificationLastRecoveryAt = 0;
 async function notifyUser(chatId, messageText, key, intervalMs = 60000) {
   if (!pool || !chatId || !messageText) return false;
   try {
@@ -275,6 +276,10 @@ async function processTelegramNotification() {
   notificationWorkerRunning = true;
   let job = null;
   try {
+    if (Date.now() - notificationLastRecoveryAt > 30000) {
+      await pool.query("UPDATE telegram_notification_outbox SET status='pending',available_at=NOW(),locked_at=NULL WHERE status='sending' AND locked_at < NOW() - INTERVAL '2 minutes'");
+      notificationLastRecoveryAt = Date.now();
+    }
     const client = await pool.connect();
     try {
       await client.query('BEGIN');
@@ -367,7 +372,8 @@ async function sendTelegramMessage(chatId, text, replyMarkup) {
   try {
     const response = await fetch('https://api.telegram.org/bot' + token + '/sendMessage', {
       method: 'POST', headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ chat_id: String(chatId), text, ...(replyMarkup ? { reply_markup: replyMarkup } : {}) })
+      body: JSON.stringify({ chat_id: String(chatId), text, ...(replyMarkup ? { reply_markup: replyMarkup } : {}) }),
+      signal: AbortSignal.timeout(15000)
     });
     const result = await response.json().catch(() => null);
     if (!response.ok || !result?.ok) {
