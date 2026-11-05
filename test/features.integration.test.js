@@ -118,6 +118,8 @@ t('event lifecycle enforces organizer permissions and completed-event rules', as
   await join(BORIS, reportedEvent.id);
   const contact = await call(ANNA, `/events/${reportedEvent.id}/participants/${BORIS.id}/contact`, { method: 'POST', body: {} });
   assert.equal(contact.status, 201, contact.text);
+  assert.equal((await call(BORIS, `/event-contacts/${contact.json.conversation.id}/messages`, { method: 'POST', body: { body: 'Сообщение перед отменой' } })).status, 201);
+  const unreadBeforeCancel = (await call(ANNA, '/messages/unread-count')).json.unreadCount;
   const report = await call(BORIS, `/events/${reportedEvent.id}/reports`, { method: 'POST', body: { reason: 'unsafe', details: 'Проверка сохранения истории' } });
   assert.equal(report.status, 201, report.text);
   const deletion = await call(ANNA, `/events/${reportedEvent.id}`, { method: 'DELETE' });
@@ -128,6 +130,8 @@ t('event lifecycle enforces organizer permissions and completed-event rules', as
   assert.equal((await call(ANNA, `/events/${reportedEvent.id}/messages`, { method: 'POST', body: { body: 'После отмены' } })).status, 403);
   assert.equal((await call(ANNA, `/event-contacts/${contact.json.conversation.id}/messages`)).status, 404);
   assert.equal((await call(ANNA, `/event-contacts/${contact.json.conversation.id}/messages`, { method: 'POST', body: { body: 'После отмены' } })).status, 404);
+  assert.equal((await call(ANNA, '/messages/unread-count')).json.unreadCount, unreadBeforeCancel - 1);
+  assert.equal((await call(ANNA, '/messages/read', { method: 'POST', body: { type: 'event_contact', conversation_id: contact.json.conversation.id } })).status, 403);
   const inboxAfterCancellation = await call(ANNA, '/messages');
   assert.equal(inboxAfterCancellation.status, 200, inboxAfterCancellation.text);
   assert.equal(inboxAfterCancellation.json.eventContacts.some(item => String(item.id) === String(contact.json.conversation.id)), false,
@@ -170,13 +174,14 @@ t('users can block, list and unblock accounts and blocked users cannot request d
   assert.equal(directRequest.status, 201, directRequest.text);
   const directId = directRequest.json.conversation.id;
   assert.equal((await call(BORIS, `/direct/${directId}/respond`, { method: 'POST', body: { decision: 'accept' } })).status, 200);
-  assert.equal((await call(ANNA, `/direct/${directId}/messages`, { method: 'POST', body: { body: 'Личное сообщение до блокировки' } })).status, 201);
+  assert.equal((await call(BORIS, `/direct/${directId}/messages`, { method: 'POST', body: { body: 'Личное сообщение до блокировки' } })).status, 201);
 
   const event = await makeEvent(ANNA, { title: 'Личная переписка для проверки блокировки' });
   assert.equal((await join(BORIS, event.id)).status, 200);
   const eventContact = await call(ANNA, `/events/${event.id}/participants/${BORIS.id}/contact`, { method: 'POST', body: {} });
   assert.equal(eventContact.status, 201, eventContact.text);
-  assert.equal((await call(ANNA, `/event-contacts/${eventContact.json.conversation.id}/messages`, { method: 'POST', body: { body: 'Сообщение организатора до блокировки' } })).status, 201);
+  assert.equal((await call(BORIS, `/event-contacts/${eventContact.json.conversation.id}/messages`, { method: 'POST', body: { body: 'Сообщение участника до блокировки' } })).status, 201);
+  const unreadBeforeBlock = (await call(ANNA, '/messages/unread-count')).json.unreadCount;
 
   assert.equal((await call(ANNA, '/messages')).json.direct.some(item => String(item.id) === String(directId)), true);
   assert.equal((await call(ANNA, '/messages')).json.eventContacts.some(item => String(item.id) === String(eventContact.json.conversation.id)), true);
@@ -191,6 +196,8 @@ t('users can block, list and unblock accounts and blocked users cannot request d
     'blocked direct conversations must be hidden from the inbox');
   assert.equal(inboxWhileBlocked.json.eventContacts.some(item => String(item.id) === String(eventContact.json.conversation.id)), false,
     'blocked event-contact conversations must be hidden from the inbox');
+  assert.equal((await call(ANNA, '/messages/unread-count')).json.unreadCount, unreadBeforeBlock - 2);
+  assert.equal((await call(ANNA, '/messages/read', { method: 'POST', body: { type: 'direct', conversation_id: directId } })).status, 403);
   const list = await call(ANNA, '/users/blocked');
   assert.equal(list.status, 200, list.text);
   assert.ok(list.json.users.some(user => String(user.id) === String(BORIS.id)));
@@ -203,6 +210,7 @@ t('users can block, list and unblock accounts and blocked users cannot request d
     'unblocking restores the direct conversation in the inbox');
   assert.equal(inboxAfterUnblock.json.eventContacts.some(item => String(item.id) === String(eventContact.json.conversation.id)), true,
     'unblocking restores the event-contact conversation in the inbox');
+  assert.equal((await call(ANNA, '/messages/unread-count')).json.unreadCount, unreadBeforeBlock);
   assert.equal((await call(ANNA, '/users/blocked')).json.users.some(user => String(user.id) === String(BORIS.id)), false);
   assert.equal((await call(ANNA, `/users/${BORIS.id}/block`, { method: 'DELETE' })).json.unblocked, false);
 });
