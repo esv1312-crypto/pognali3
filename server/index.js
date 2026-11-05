@@ -559,7 +559,7 @@ app.get('/api/events', async (req, res) => {
 
 app.get('/api/events/joined-ids', async (req, res) => {
   const mine = await pool.query(
-    `SELECT event_id FROM event_participants WHERE user_id=$1 AND status='joined' UNION SELECT id AS event_id FROM events WHERE creator_id=$1 AND status='published'`,
+    `SELECT ep.event_id FROM event_participants ep JOIN events e ON e.id=ep.event_id WHERE ep.user_id=$1 AND ep.status='joined' AND e.status='published' UNION SELECT id AS event_id FROM events WHERE creator_id=$1 AND status='published'`,
     [req.telegramUser.id]
   );
   res.json({ ids: mine.rows.map(row => String(row.event_id)) });
