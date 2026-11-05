@@ -1119,6 +1119,7 @@ app.get('/api/my/events', async (req, res) => {
 
 // Moderation API: requires both a valid Telegram session and a separately configured admin token.
 function requireAdmin(req, res, next) {
+  if (!isAdminTelegramUser(req.telegramUser.id)) return res.status(403).json({ error: 'Admin access denied' });
   const configured = process.env.ADMIN_API_TOKEN;
   const supplied = req.get('x-admin-token') || '';
   if (!configured) return res.status(503).json({ error: 'Admin moderation is not configured' });
@@ -1154,12 +1155,30 @@ app.patch('/api/admin/reports/:id', requireAdmin, async (req, res) => {
   if (!/^[1-9]\d{0,18}$/.test(id) || !['open', 'reviewing', 'resolved', 'dismissed'].includes(status)) {
     return res.status(400).json({ error: 'A valid report ID and status are required' });
   }
-  const result = await pool.query(
-    'UPDATE event_reports SET status = $2 WHERE id = $1 RETURNING id, event_id, status',
-    [id, status]
-  );
-  if (!result.rowCount) return res.status(404).json({ error: 'Report not found' });
-  res.json({ report: result.rows[0] });
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const current = await client.query('SELECT id,event_id,status FROM event_reports WHERE id=$1 FOR UPDATE', [id]);
+    if (!current.rowCount) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ error: 'Report not found' });
+    }
+    const previous = current.rows[0];
+    if (previous.status !== status) {
+      await client.query('UPDATE event_reports SET status=$2 WHERE id=$1', [id, status]);
+      await client.query(
+        'INSERT INTO event_report_actions(report_id,actor_id,previous_status,new_status) VALUES($1,$2,$3,$4)',
+        [id, req.telegramUser.id, previous.status, status]
+      );
+    }
+    await client.query('COMMIT');
+    res.json({ report: { id: previous.id, event_id: previous.event_id, status }, changed: previous.status !== status });
+  } catch (error) {
+    await client.query('ROLLBACK').catch(() => {});
+    throw error;
+  } finally {
+    client.release();
+  }
 });
 
 // Telegram-admin moderation endpoints for the Mini App. Access is restricted to the verified Telegram ID allowlist.
