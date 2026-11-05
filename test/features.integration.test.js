@@ -113,6 +113,17 @@ t('event lifecycle enforces organizer permissions and completed-event rules', as
   assert.equal((await join(BORIS, event.id)).status, 404);
   assert.equal((await call(ANNA, `/events/${event.id}`, { method: 'DELETE' })).status, 200);
   assert.equal((await call(ANNA, `/events/${event.id}`)).status, 404);
+
+  const reportedEvent = await makeEvent(ANNA, { title: 'Событие с жалобой' });
+  const report = await call(BORIS, `/events/${reportedEvent.id}/reports`, { method: 'POST', body: { reason: 'unsafe', details: 'Проверка сохранения истории' } });
+  assert.equal(report.status, 201, report.text);
+  const deletion = await call(ANNA, `/events/${reportedEvent.id}`, { method: 'DELETE' });
+  assert.equal(deletion.status, 200, deletion.text);
+  assert.equal(deletion.json.archived, true);
+  assert.equal((await call(ANNA, `/events/${reportedEvent.id}`)).status, 404);
+  const moderationQueue = await call(ADMIN, '/admin/moderation/reports?status=all');
+  assert.ok(moderationQueue.json.reports.some(item => String(item.event_id) === String(reportedEvent.id) && item.event_status === 'cancelled'),
+    'deleting a reported event must preserve the report and its audit trail');
 });
 
 t('joining is idempotent, capacity is enforced, and organizer cannot leave', async () => {
