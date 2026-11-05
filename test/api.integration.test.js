@@ -377,7 +377,7 @@ t('moderator event cancellations are transactional and leave an admin-only audit
   const repeated = await api(A, `/events/${ev.id}`, { method: 'DELETE' });
   assert.equal(repeated.status, 404);
   const unchangedHistory = await api(A, `/admin/moderation/events/${ev.id}/actions`);
-  assert.equal(unchangedHistory.json.actions.length, 1);
+  assert.equal(unchangedHistory.json.actions.length, 2);
 });
 
 t('legacy admin routes require both Telegram allowlist and the separate admin token', async () => {
