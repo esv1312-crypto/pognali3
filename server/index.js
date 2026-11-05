@@ -620,7 +620,7 @@ app.post('/api/events/:id/messages', async (req, res) => {
   const body = typeof req.body.body === 'string' ? req.body.body.trim() : '';
   if (!body || body.length > 2000) return res.status(400).json({ error: 'Message must contain 1–2000 characters' });
   const member = await pool.query(
-    `SELECT 1 FROM events e WHERE e.id=$1 AND (e.creator_id=$2 OR EXISTS (SELECT 1 FROM event_participants ep WHERE ep.event_id=e.id AND ep.user_id=$2 AND ep.status='joined'))`,
+    `SELECT 1 FROM events e WHERE e.id=$1 AND e.status <> 'cancelled' AND (e.creator_id=$2 OR EXISTS (SELECT 1 FROM event_participants ep WHERE ep.event_id=e.id AND ep.user_id=$2 AND ep.status='joined'))`,
     [req.params.id, req.telegramUser.id]
   );
   if (!member.rowCount) return res.status(403).json({ error: 'Join the event to send messages' });
