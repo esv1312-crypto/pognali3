@@ -1,116 +1,64 @@
+// Moderation is intentionally narrow: ordinary events are published automatically.
+// Contact details are rejected by validateEventContactText before moderation; they do not
+// trigger account penalties or a manual-review queue.
 const BLOCK_PATTERNS = [
-  /(?:продам|куплю|продаж\w*|купить|достав\w*).{0,45}(?:наркот\w*|кокаин\w*|героин\w*|мефедрон\w*|закладк\w*|метамфетамин\w*)/iu,
-  /(?:наркот\w*|кокаин\w*|героин\w*|мефедрон\w*|закладк\w*|метамфетамин\w*).{0,45}(?:продам|куплю|продаж\w*|купить|достав\w*)/iu,
-  /(?:проститут\w*|эскорт\w*|интимн\w* услуг\w*|секс[- ]услуг\w*|секс за деньги)/iu,
-  /(?:купить|продать|сбыт\w*).{0,35}(?:оруж\w*|пистолет\w*|автомат\w*|взрывчат\w*)/iu,
-  /(?:теракт\w*|террористическ\w* акт\w*|взрывчат\w* изготов\w*)/iu,
-  /(?:планирую|давайте|нужно|хочу).{0,35}(?:убить|избить|напасть|поджечь|взорвать).{0,35}(?:человек\w*|люд\w*|здан\w*|школ\w*|толп\w*)/iu
+  /(?:продам|продажа|купить|куплю|доставка|закладки|заказать).{0,60}(?:наркот\w*|кокаин\w*|героин\w*|мефедрон\w*|метамфетамин\w*)/iu,
+  /(?:наркот\w*|кокаин\w*|героин\w*|мефедрон\w*|метамфетамин\w*).{0,60}(?:продам|продажа|купить|куплю|доставка|закладки|заказать)/iu,
+  /(?:эксплуатац\w*|торговл\w* людьми|вовлечени\w*).{0,50}(?:несовершеннолетн\w*|дет\w*|человек\w*)/iu,
+  /(?:несовершеннолетн\w*|дет\w*).{0,50}(?:проституц\w*|эскорт\w*|эксплуатац\w*)/iu,
+  /(?:давайте|собираемся|планирую|хочу|нужно|мы).{0,45}(?:убить|избить|напасть|поджечь|взорвать|похитить).{0,45}(?:человек\w*|люд\w*|здан\w*|школ\w*|толп\w*|кого-то|кого нибудь)/iu,
+  /(?:организуем|планируем|готовим).{0,45}(?:нападени\w*|теракт\w*|поджог\w*|похищени\w*|разбой\w*)/iu
 ];
 
 const REVIEW_PATTERNS = [
-  { pattern: /(?:https?:\/\/|www\.|t\.me\/|telegram\.me\/)/iu, reason: 'В описании есть внешняя ссылка' },
-  { pattern: /(?:реклам\w*|продам|куплю|продаж\w*|скидк\w*|промокод\w*|прайс\w*|закаж\w*|подписывай\w*|партнёрск\w* ссылк\w*)/iu, reason: 'Возможная реклама или коммерческое предложение' },
-  { pattern: /(?:казино|букмекер\w*|ставк\w*|криптовалют\w*|инвестиц\w*|заработ\w*|доход от вложен\w*|реферал\w*)/iu, reason: 'Финансовое или азартное предложение требует проверки' },
-  { pattern: /(?:\+?\d[\d ()-]{7,}\d)/u, reason: 'В тексте указан телефонный номер' },
-  { pattern: /(?:18\+|только для взрослых|алкогол\w*|вейп\w*|табак\w*)/iu, reason: 'Возрастное или регулируемое предложение требует проверки' }
+  /(?:хочу|планирую|собираюсь|давайте).{0,40}(?:убить|избить|напасть|поджечь|взорвать|похитить)/iu,
+  /(?:организуем|планируем|готовим).{0,40}(?:нападени\w*|теракт\w*|поджог\w*|похищени\w*)/iu,
+  /(?:принуждени\w*|шантаж\w*|угроз\w* расправ\w*|насильственн\w* удержани\w*)/iu
 ];
 
 function normalize(value) {
-  return String(value || '').normalize('NFKC').toLocaleLowerCase('ru-RU').replace(/ё/g, 'е').replace(/[^\p{L}\p{N}]+/gu, ' ').trim().replace(/\s+/g, ' ');
+  return String(value || '').normalize('NFKC').toLocaleLowerCase('ru-RU')
+    .replace(/ё/g, 'е').replace(/[^\p{L}\p{N}]+/gu, ' ').trim().replace(/\s+/g, ' ');
+}
+
+// URLs, social handles and phone numbers are not allowed in event title/description.
+// Physical addresses and venue names are separate fields and remain allowed.
+function findForbiddenContact(value) {
+  const text = String(value || '').normalize('NFKC');
+  const url = /(?:https?:\/\/|www\.)\S+|(?:^|\s)(?:t\.me|telegram\.me|wa\.me|vk\.com|instagram\.com|facebook\.com|youtube\.com|discord\.gg)\/?\S*/iu;
+  if (url.test(text)) return 'link';
+  if (/(?:^|\s)@[a-z0-9_]{4,}/iu.test(text)) return 'handle';
+  const candidates = text.match(/(?:\+|(?<!\w)(?:7|8)[\s().-]*)?(?:\d[\s().-]*){9,14}\d/gu) || [];
+  if (candidates.some(candidate => {
+    const digits = candidate.replace(/\D/g, '');
+    return digits.length >= 10 && digits.length <= 15;
+  })) return 'phone';
+  return null;
+}
+
+function validateEventContactText(event) {
+  for (const field of ['title', 'description']) {
+    const kind = findForbiddenContact(event?.[field]);
+    if (kind) return { field, kind, code: 'CONTACT_DETAILS_NOT_ALLOWED' };
+  }
+  return null;
 }
 
 function classifyEventText(event) {
-  const title = String(event.title || '');
-  const description = String(event.description || '');
-  const category = String(event.category || '');
-  const text = [title, description, category].join(' ');
-  const blocked = BLOCK_PATTERNS.find(pattern => pattern.test(text));
-  if (blocked) return { status: 'cancelled', decision: 'auto_blocked', reasons: ['Обнаружено предложение запрещённой или опасной деятельности'] };
-
-  const reasons = [];
-  let score = 0;
-  for (const item of REVIEW_PATTERNS) {
-    if (item.pattern.test(text)) {
-      score += item.reason.includes('ссылк') || item.reason.includes('реклам') ? 3 : 2;
-      reasons.push(item.reason);
-    }
+  const text = [event.title, event.description, event.category].map(value => String(value || '')).join('\n');
+  if (BLOCK_PATTERNS.some(pattern => pattern.test(text))) {
+    return { status: 'cancelled', decision: 'auto_blocked', reasons: ['Обнаружено явное предложение запрещённой или опасной деятельности'] };
   }
-
-  const normalizedTitle = normalize(title);
-  const genericTitles = new Set(['встреча', 'мероприятие', 'тусовка', 'отдых', 'событие', 'план', 'ищу компанию']);
-  if ((!description.trim() || description.trim().length < 10) && (genericTitles.has(normalizedTitle) || !category.trim() || category.toLowerCase() === 'other')) {
-    score += 2;
-    reasons.push('Недостаточно подробностей: непонятно, что именно планируется');
+  if (REVIEW_PATTERNS.some(pattern => pattern.test(text))) {
+    return { status: 'pending_review', decision: 'auto_sent_to_review', reasons: ['Нужна проверка возможной угрозы или насилия'] };
   }
-
-  if (!String(event.city || '').trim() || String(event.city).trim().toLowerCase() === 'не указан') {
-    score += 2;
-    reasons.push('Не удалось определить место проведения');
-  }
-  if (Number(event.capacity) > 500) {
-    score += 2;
-    reasons.push('Необычно большая вместимость события');
-  }
-
-  return {
-    status: score >= 2 ? 'pending_review' : 'published',
-    decision: score >= 2 ? 'auto_sent_to_review' : 'auto_published',
-    score,
-    reasons: [...new Set(reasons)]
-  };
+  return { status: 'published', decision: 'auto_published', reasons: [] };
 }
 
-async function evaluateEventModeration(db, event) {
-  const textDecision = classifyEventText(event);
-  if (textDecision.decision === 'auto_blocked') return textDecision;
-
-  const reasons = [...textDecision.reasons];
-  let score = textDecision.score || 0;
-  const title = normalize(event.title);
-  const city = normalize(event.city);
-
-  const duplicate = await db.query(
-    `SELECT id FROM events
-     WHERE status IN ('published','pending_review')
-       AND LOWER(BTRIM(title)) = LOWER(BTRIM($1))
-       AND LOWER(city) = $2
-       AND starts_at BETWEEN $3::timestamptz - INTERVAL '24 hours' AND $3::timestamptz + INTERVAL '24 hours'
-     LIMIT 1`,
-    [event.title, city, event.starts_at]
-  );
-  if (duplicate.rowCount) {
-    score += 5;
-    reasons.push('Похоже на дубликат уже созданного события');
-  }
-
-  const recentEvents = await db.query(
-    "SELECT COUNT(*)::int AS count FROM events WHERE creator_id=$1 AND created_at > NOW() - INTERVAL '24 hours'",
-    [event.creator_id]
-  );
-  if (Number(recentEvents.rows[0]?.count || 0) >= 20) {
-    score += 3;
-    reasons.push('Организатор создал необычно много событий за сутки');
-  }
-
-  const reportHistory = await db.query(
-    `SELECT COUNT(DISTINCT r.id)::int AS count
-     FROM event_reports r JOIN events e ON e.id=r.event_id
-     WHERE e.creator_id=$1 AND r.created_at > NOW() - INTERVAL '30 days'
-       AND r.status IN ('open','reviewing','resolved')`,
-    [event.creator_id]
-  );
-  if (Number(reportHistory.rows[0]?.count || 0) >= 5) {
-    score += 3;
-    reasons.push('У организатора есть несколько недавних жалоб на другие события');
-  }
-
-  const manual = score >= 2;
-  return {
-    status: manual ? 'pending_review' : 'published',
-    decision: manual ? 'auto_sent_to_review' : 'auto_published',
-    score,
-    reasons: [...new Set(reasons)]
-  };
+async function evaluateEventModeration(_db, event) {
+  // No automatic penalties for event frequency, duplicates, capacity, location,
+  // short descriptions, unusual themes, commercial format or a user's interests.
+  return classifyEventText(event);
 }
 
-module.exports = { classifyEventText, evaluateEventModeration, normalize };
+module.exports = { classifyEventText, evaluateEventModeration, findForbiddenContact, validateEventContactText, normalize };
