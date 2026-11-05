@@ -1064,7 +1064,8 @@ app.post('/api/events/:id/share-opened', async (req, res) => {
 app.get('/api/favorites', async (req, res) => {
   const result = await pool.query(
     `SELECT e.*, COALESCE(u.display_name,u.first_name) AS creator_first_name,
-       COUNT(ep.user_id) FILTER (WHERE ep.status='joined')::int AS participants_count
+       (COUNT(ep.user_id) FILTER (WHERE ep.status='joined')
+         + CASE WHEN COUNT(ep.user_id) FILTER (WHERE ep.user_id=e.creator_id AND ep.status='joined') > 0 THEN 0 ELSE 1 END)::int AS participants_count
      FROM event_favorites f JOIN events e ON e.id=f.event_id
      JOIN users u ON u.id=e.creator_id
      LEFT JOIN event_participants ep ON ep.event_id=e.id
