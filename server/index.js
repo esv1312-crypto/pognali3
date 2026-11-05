@@ -252,25 +252,43 @@ let notificationWorkerRunning = false;
 let notificationLastRecoveryAt = 0;
 async function notifyUser(chatId, messageText, key, intervalMs = 60000) {
   if (!pool || !chatId || !messageText) return false;
+  const dedupeKey = key ? String(key) : null;
+  const client = await pool.connect();
+  let queued = false;
   try {
-    const result = await pool.query(
-      `INSERT INTO telegram_notification_outbox (chat_id, message_text, dedupe_key)
-       SELECT $1, $2, $3
-       WHERE (SELECT COUNT(*) FROM telegram_notification_outbox WHERE status IN ('pending','sending')) < 5000
-         AND ($3::text IS NULL OR NOT EXISTS (
-         SELECT 1 FROM telegram_notification_dedup
-         WHERE dedupe_key=$3 AND last_sent_at > NOW() - ($4::double precision * INTERVAL '1 millisecond')
-       ))
-       ON CONFLICT DO NOTHING
-       RETURNING id`,
-      [String(chatId), String(messageText), key ? String(key) : null, Math.max(0, Number(intervalMs) || 0)]
+    await client.query('BEGIN');
+    if (dedupeKey) {
+      await client.query("SELECT pg_advisory_xact_lock(hashtextextended($1,0))", ['telegram-notify:' + dedupeKey]);
+      const recent = await client.query(
+        "SELECT 1 FROM telegram_notification_dedup WHERE dedupe_key=$1 AND last_sent_at > NOW() - ($2::double precision * INTERVAL '1 millisecond')",
+        [dedupeKey, Math.max(0, Number(intervalMs) || 0)]
+      );
+      if (recent.rowCount) {
+        await client.query('COMMIT');
+        return false;
+      }
+    }
+    const count = await client.query("SELECT COUNT(*)::int AS count FROM telegram_notification_outbox WHERE status IN ('pending','sending')");
+    if (count.rows[0].count >= 5000) {
+      await client.query('COMMIT');
+      console.warn('Telegram notification queue is full; dropping a new notification');
+      return false;
+    }
+    const result = await client.query(
+      'INSERT INTO telegram_notification_outbox (chat_id,message_text,dedupe_key) VALUES ($1,$2,$3) ON CONFLICT DO NOTHING RETURNING id',
+      [String(chatId), String(messageText), dedupeKey]
     );
-    if (result.rowCount) void processTelegramNotification();
-    return result.rowCount > 0;
+    queued = result.rowCount > 0;
+    await client.query('COMMIT');
   } catch (error) {
+    await client.query('ROLLBACK').catch(() => {});
     console.error('Could not enqueue Telegram notification:', error.message);
     return false;
+  } finally {
+    client.release();
   }
+  if (queued) void processTelegramNotification();
+  return queued;
 }
 async function processTelegramNotification() {
   if (!pool || notificationWorkerRunning) return;
@@ -318,6 +336,7 @@ async function processTelegramNotification() {
       await finish.query('BEGIN');
       if (delivered) {
         if (job.dedupe_key) {
+          await finish.query("SELECT pg_advisory_xact_lock(hashtextextended($1,0))", ['telegram-notify:' + job.dedupe_key]);
           await finish.query(
             `INSERT INTO telegram_notification_dedup(dedupe_key,last_sent_at)
              VALUES($1,NOW())
