@@ -348,6 +348,18 @@ t('static delivery: split script is immutable, index has ETag/304, vendor files 
   assert.equal((await fetch(ctx.base + '/vendor/missing.js')).status, 404);
 });
 
+t('legacy admin routes require both Telegram allowlist and the separate admin token', async () => {
+  const adminProfile = await api(A, '/me');
+  const regularProfile = await api(B, '/me');
+  assert.equal(adminProfile.json.user.is_admin, true);
+  assert.equal(regularProfile.json.user.is_admin, false);
+
+  assert.equal((await api(A, '/admin/reports')).status, 403);
+  assert.equal((await api(A, '/admin/reports', { headers: { 'x-admin-token': 'wrong' } })).status, 403);
+  assert.equal((await api(B, '/admin/reports', { headers: { 'x-admin-token': 'adm' } })).status, 403);
+  assert.equal((await api(A, '/admin/reports', { headers: { 'x-admin-token': 'adm' } })).status, 200);
+});
+
 t('admin can update a report with a numeric ID', async () => {
   const ev = await create(A, { title: 'Событие для жалобы' });
   const reported = await api(B, `/events/${ev.id}/reports`, { method: 'POST', body: { reason: 'other', details: 'Проверка модерации' } });

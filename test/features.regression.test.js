@@ -146,3 +146,14 @@ test('new report notifications use the durable PostgreSQL outbox', () => {
   assert.ok(route.includes("notifyUser(adminChatId, note, 'event-report:' + reportId, 0)"));
   assert.ok(!route.includes('sendTelegramMessage(adminChatId, note)'));
 });
+
+
+test('legacy admin middleware checks both Telegram allowlist and timing-safe token validation', () => {
+  const start = server.indexOf('function requireAdmin(req, res, next)');
+  const end = server.indexOf("app.get('/api/admin/reports'", start);
+  const middleware = server.slice(start, end);
+  assert.ok(middleware.includes('isAdminTelegramUser(req.telegramUser.id)'));
+  assert.ok(middleware.includes('process.env.ADMIN_API_TOKEN'));
+  assert.ok(middleware.includes('timingSafeEqual'));
+  assert.ok(middleware.includes('supplied.length !== configured.length'));
+});
