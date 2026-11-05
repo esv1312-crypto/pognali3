@@ -1070,7 +1070,7 @@ app.post('/api/direct/:id/respond', async (req, res) => {
   try {
     await client.query('BEGIN');
     const pending = await client.query(
-      "SELECT user_low,user_high FROM direct_conversations WHERE id=$1 AND (user_low=$2 OR user_high=$2) AND requested_by<>$2 AND status='pending' FOR UPDATE",
+      "SELECT user_low,user_high FROM direct_conversations WHERE id=$1 AND (user_low=$2 OR user_high=$2) AND requested_by<>$2 AND status='pending'",
       [req.params.id, req.telegramUser.id]
     );
     if (!pending.rowCount) {
@@ -1079,8 +1079,17 @@ app.post('/api/direct/:id/respond', async (req, res) => {
     }
     const other = String(pending.rows[0].user_low) === String(req.telegramUser.id)
       ? pending.rows[0].user_high : pending.rows[0].user_low;
-    // Share the same pair lock as block/unblock and direct-message writes.
+    // Acquire the pair lock before locking the conversation row, matching
+    // the lock order used by request creation and block/unblock.
     await lockMessagingPair(client, req.telegramUser.id, other);
+    const lockedPending = await client.query(
+      "SELECT id FROM direct_conversations WHERE id=$1 AND (user_low=$2 OR user_high=$2) AND requested_by<>$2 AND status='pending' FOR UPDATE",
+      [req.params.id, req.telegramUser.id]
+    );
+    if (!lockedPending.rowCount) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ error: 'Pending request not found' });
+    }
     const blocked = await client.query(
       "SELECT 1 FROM user_blocks WHERE (blocker_id=$1 AND blocked_id=$2) OR (blocker_id=$2 AND blocked_id=$1) LIMIT 1",
       [req.telegramUser.id, other]
