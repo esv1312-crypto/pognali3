@@ -137,6 +137,22 @@ t('event chat is limited to participants and validates message length', async ()
   assert.ok(messages.json.messages.some(message => message.body === 'Привет всем'));
 });
 
+t('users can block, list and unblock accounts and blocked users cannot request direct messages', async () => {
+  assert.equal((await call(ANNA, `/users/${ANNA.id}/block`, { method: 'POST', body: {} })).status, 400);
+  const blocked = await call(ANNA, `/users/${BORIS.id}/block`, { method: 'POST', body: {} });
+  assert.equal(blocked.status, 200, blocked.text);
+  assert.equal(blocked.json.blocked, true);
+  const list = await call(ANNA, '/users/blocked');
+  assert.equal(list.status, 200, list.text);
+  assert.ok(list.json.users.some(user => String(user.id) === String(BORIS.id)));
+  assert.equal((await call(ANNA, '/direct/requests', { method: 'POST', body: { user_id: BORIS.id } })).status, 403);
+  const unblocked = await call(ANNA, `/users/${BORIS.id}/block`, { method: 'DELETE' });
+  assert.equal(unblocked.status, 200, unblocked.text);
+  assert.equal(unblocked.json.blocked, false);
+  assert.equal((await call(ANNA, '/users/blocked')).json.users.some(user => String(user.id) === String(BORIS.id)), false);
+  assert.equal((await call(ANNA, `/users/${BORIS.id}/block`, { method: 'DELETE' })).json.unblocked, false);
+});
+
 t('reporting and moderation require valid reasons, admin login and admin token', async () => {
   const event = await makeEvent(ANNA, { title: 'Проверка жалоб' });
   assert.equal((await call(BORIS, `/events/${event.id}/reports`, { method: 'POST', body: { reason: 'неизвестная причина' } })).status, 400);
