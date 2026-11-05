@@ -600,16 +600,6 @@ body{background:var(--pg-bg)!important}
 </head>
 <body>
 
-<div id="pognaliLaunchSplash" role="status" aria-live="polite" aria-label="Загружаем Погнали">
-  <div class="splash-inner">
-    <div class="splash-mark"><span class="splash-rocket">🚀</span><span class="splash-spark one">✦</span><span class="splash-spark two">✧</span></div>
-    <div class="splash-name">Погнали!</div>
-    <div class="splash-tagline">Жизнь начинается здесь</div>
-    <div class="splash-loading"><span>Собираем твою компанию</span><span class="splash-dots" aria-hidden="true"><i></i><i></i><i></i></span></div>
-  </div>
-  <div class="splash-foot">ТВОЯ ЖИЗНЬ. ТВОИ ЛЮДИ. ТВОИ СОБЫТИЯ.</div>
-</div>
-
 <div class="app">
 <header class="top"><button class="logo-btn" type="button" onclick="go('events')" aria-label="Погнали — открыть события"><span class="logo-emoji">🚀</span><span>Погнали</span></button><div class="life-tagline">Жизнь начинается здесь <b>→</b></div><div class="spacer"></div><button class="pill lang-btn" onclick="openLanguage()" aria-label="Выбрать язык">🌐 <span id="langLabel">RU</span> ▾</button></header>
 <div id="previewBanner" class="preview-banner hidden">🧪 ДЕМО-режим: события тестовые, данные не общие. Открой приложение через Telegram после настройки сервера.</div>
@@ -1875,22 +1865,7 @@ async function refreshApiData(){if(!API_MODE)return;const takePre=(k,p)=>{const 
 let pognaliStartupDataReady=!API_MODE;
 let pognaliStartupMapReady=!!window.maplibregl;
 let pognaliStartupSplashHidden=false;
-function checkPognaliStartupReady(){
-  if(pognaliStartupSplashHidden||!pognaliStartupDataReady||!pognaliStartupMapReady)return;
-  pognaliStartupSplashHidden=true;
-  const splash=document.getElementById('pognaliLaunchSplash');
-  if(!splash)return;
-  splash.classList.add('is-hiding');
-  setTimeout(()=>splash.remove(),380);
-}
-function markPognaliStartupReady(part){
-  if(part==='data')pognaliStartupDataReady=true;
-  if(part==='map')pognaliStartupMapReady=true;
-  checkPognaliStartupReady();
-}
-window.addEventListener('pognali-maplibre-ready',()=>{markPognaliStartupReady('map')},{once:true});
-window.addEventListener('pognali-maplibre-failed',()=>{markPognaliStartupReady('map')},{once:true});
-setTimeout(()=>{markPognaliStartupReady('data');markPognaliStartupReady('map')},15000);
+// Стартовая заставка отключена: приложение открывается сразу, без блокирующего экрана.
 
 function initTelegramMiniApp(){
   const tg=window.Telegram?.WebApp;
