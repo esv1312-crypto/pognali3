@@ -484,3 +484,51 @@ t('physical event deletion removes polymorphic read cursors for group and organi
     await db.end();
   }
 });
+
+
+t('age limits never hide meetings and organizer approval is scoped to one participant and event', async () => {
+  const birth = await call(BORIS, '/me', { method: 'PATCH', body: { birth_date: '2009-01-01' } });
+  assert.equal(birth.status, 200, birth.text);
+
+  const categories = ['Спорт', 'Прогулки', 'Путешествия', 'Вечеринки'];
+  const events = [];
+  for (const category of categories) {
+    events.push(await makeEvent(ANNA, {
+      title: 'Открытая встреча · ' + category,
+      category,
+      age_range: '18+'
+    }));
+  }
+
+  const listing = await call(VERA, '/events?city=Симферополь');
+  assert.equal(listing.status, 200, listing.text);
+  for (const event of events) {
+    assert.ok(listing.json.events.some(item => String(item.id) === String(event.id)),
+      'age-restricted events must remain visible in every category');
+  }
+
+  const target = events[1];
+  const denied = await join(BORIS, target.id);
+  assert.equal(denied.status, 403, denied.text);
+  assert.equal(denied.json.code, 'AGE_RESTRICTION');
+
+  const contact = await call(BORIS, `/events/${target.id}/contact`, { method: 'POST', body: {} });
+  assert.equal(contact.status, 201, contact.text);
+  const conversationId = contact.json.conversation.id;
+  assert.equal((await call(BORIS, `/event-contacts/${conversationId}/messages`, {
+    method: 'POST', body: { body: 'Можно ли мне присоединиться?' }
+  })).status, 201);
+
+  const forbiddenApproval = await call(VERA, `/event-contacts/${conversationId}/age-approval`, { method: 'POST', body: {} });
+  assert.equal(forbiddenApproval.status, 403, 'only this event organizer can approve');
+
+  const approval = await call(ANNA, `/event-contacts/${conversationId}/age-approval`, { method: 'POST', body: {} });
+  assert.equal(approval.status, 200, approval.text);
+  assert.equal(approval.json.approved, true);
+  assert.equal((await join(BORIS, target.id)).status, 200,
+    'the approved participant can join despite the age range');
+
+  const otherEventDenied = await join(BORIS, events[2].id);
+  assert.equal(otherEventDenied.status, 403,
+    'approval for one meeting must not grant access to another meeting');
+});
