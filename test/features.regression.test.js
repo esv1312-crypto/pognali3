@@ -29,6 +29,15 @@ test('profile explains that date of birth is private', () => {
   assert.doesNotMatch(page, /дата рождения из Telegram сохраняются в профиле «Погнали» и видны другим участникам/);
 });
 
+test('event contact chat exposes a join action after an organizer approves an age exception', () => {
+  assert.ok(page.includes('data.conversation?.age_approved'));
+  assert.ok(page.includes('Исключение разрешено — присоединиться'));
+  assert.ok(server.includes('AS age_approved'));
+  assert.ok(server.includes('Организатор разрешил тебе присоединиться к событию'));
+  assert.ok(page.includes('ageExceptionJoinButton'));
+  assert.ok(page.includes('result.conversation?.age_approved'));
+});
+
 test('repeat calendar only enables dates after the source event and within three years', () => {
   assert.ok(page.includes("let repeatCalendarMonth=null,repeatSelectedDates=[],repeatBaseTime='19:00',repeatBaseDate=''"));
   assert.ok(page.includes('const past=date<=today||date<=repeatBaseDate||date>maxDate'));

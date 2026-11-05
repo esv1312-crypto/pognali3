@@ -1141,7 +1141,7 @@ app.post('/api/events/:id/contact',async(req,res)=>{const e=await pool.query("SE
 app.post('/api/event-contacts/:id/age-approval', async (req,res) => {
   const organizer=String(req.telegramUser.id);
   const conversation=await pool.query(
-    `SELECT c.id,c.event_id,c.participant_id,c.organizer_id,e.age_range,e.status
+    `SELECT c.id,c.event_id,c.participant_id,c.organizer_id,e.age_range,e.status,e.title
      FROM event_contact_conversations c JOIN events e ON e.id=c.event_id
      WHERE c.id=$1 AND c.organizer_id=$2 AND e.status='published'`,
     [req.params.id,organizer]
@@ -1155,13 +1155,17 @@ app.post('/api/event-contacts/:id/age-approval', async (req,res) => {
      DO UPDATE SET approved_by=EXCLUDED.approved_by,approved_at=NOW()`,
     [row.event_id,row.participant_id,organizer]
   );
+  notifyUser(row.participant_id, 'Организатор разрешил тебе присоединиться к событию «' + row.title + '». Открой переписку и нажми «Присоединиться».', 'age-approval:' + row.event_id + ':' + row.participant_id, 30000);
   res.json({approved:true,event_id:String(row.event_id),user_id:String(row.participant_id)});
 });
 app.get('/api/event-contacts/:id/messages', async (req, res) => {
   const afterId = parseAfterMessageId(req, res);
   if (afterId === undefined) return;
   const conversation = await pool.query(
-    `SELECT c.id,c.event_id,c.participant_id,c.organizer_id FROM event_contact_conversations c JOIN events e ON e.id=c.event_id WHERE c.id=$1 AND e.status <> 'cancelled' AND (c.participant_id=$2 OR c.organizer_id=$2)`,
+    `SELECT c.id,c.event_id,c.participant_id,c.organizer_id,
+              EXISTS(SELECT 1 FROM event_age_approvals a WHERE a.event_id=c.event_id AND a.user_id=c.participant_id) AS age_approved
+       FROM event_contact_conversations c JOIN events e ON e.id=c.event_id
+       WHERE c.id=$1 AND e.status <> 'cancelled' AND (c.participant_id=$2 OR c.organizer_id=$2)`,
     [req.params.id, req.telegramUser.id]
   );
   if (!conversation.rowCount) return res.status(404).json({ error: 'Conversation not found' });

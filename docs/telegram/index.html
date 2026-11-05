@@ -1711,9 +1711,12 @@ async function openEventContactChat(id, conversationId) {
     const ageRequestHint=!isOrganizer && event?.ageRange && event.ageRange!=='Любой возраст'
       ? '<div class="notice" style="margin:8px 0">Если возрастное условие тебе не подходит, объясни организатору в сообщении, почему хочешь присоединиться. Организатор может разрешить исключение.</div>'
       : '';
+    const ageJoinAction=!isOrganizer && data.conversation?.age_approved
+      ? '<button id="ageExceptionJoinButton" class="primary full" style="margin:8px 0" onclick="joinEvent('+Number(id)+')">✓ Исключение разрешено — присоединиться</button>'
+      : '';
     openModal('<button class="close" onclick="openEvent(' + Number(id) + ')">✕</button><h2>' +
       (isOrganizer ? 'Участник · ' : 'Организатор · ') + esc(title) +
-      '</h2><div class="meta">Переписка только по этому событию</div>'+ageRequestHint+ageApprovalAction+'<div class="chat"><div class="messages" id="contactMessages">' +
+      '</h2><div class="meta">Переписка только по этому событию</div>'+ageRequestHint+ageApprovalAction+ageJoinAction+'<div class="chat"><div class="messages" id="contactMessages">' +
       messages.map(message => '<div class="msg ' + (String(message.sender_id) === currentTelegramId ? 'me' : '') + '"><b>' + esc(message.sender_name || 'Участник') + '</b><br>' + esc(message.body) + '</div>').join('') +
       '</div><form class="composer" onsubmit="sendEventContactMessage(event,' + Number(id) + ',' + Number(conversationId) + ')"><input id="contactInput" maxlength="2000" required placeholder="Вопрос по событию..."><button class="primary">➤</button></form></div>');
     const box = document.getElementById('contactMessages');
@@ -1781,9 +1784,14 @@ async function refreshActiveChat(state) {
     const result = await apiRequest(route.path + '?after_id=' + encodeURIComponent(state.lastMessageId || '0'));
     if (activeChatPollState !== state) return;
     const messages = result.messages || [];
+    const myId = String(window.Telegram?.WebApp?.initDataUnsafe?.user?.id || '');
+    if (state.type === 'event_contact' && result.conversation?.age_approved &&
+        String(result.conversation.participant_id) === myId && !document.getElementById('ageExceptionJoinButton')) {
+      document.getElementById('sheet')?.querySelector('h2')?.insertAdjacentHTML('afterend',
+        '<button id="ageExceptionJoinButton" class="primary full" style="margin:8px 0" onclick="joinEvent(' + Number(result.conversation.event_id) + ')">✓ Исключение разрешено — присоединиться</button>');
+    }
     if (!messages.length) return;
     const stayAtBottom = box.scrollHeight - box.scrollTop - box.clientHeight < 80;
-    const myId = String(window.Telegram?.WebApp?.initDataUnsafe?.user?.id || '');
     box.insertAdjacentHTML('beforeend', messages.map(message =>
       '<div class="msg ' + (String(message.sender_id) === myId ? 'me' : '') + '"><b>' +
       esc(message.sender_name || 'Участник') + '</b><br>' + esc(message.body) + '</div>'
