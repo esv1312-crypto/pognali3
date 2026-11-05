@@ -253,9 +253,10 @@ let notificationLastRecoveryAt = 0;
 async function notifyUser(chatId, messageText, key, intervalMs = 60000) {
   if (!pool || !chatId || !messageText) return false;
   const dedupeKey = key ? String(key) : null;
-  const client = await pool.connect();
+  let client;
   let queued = false;
   try {
+    client = await pool.connect();
     await client.query('BEGIN');
     if (dedupeKey) {
       await client.query("SELECT pg_advisory_xact_lock(hashtextextended($1,0))", ['telegram-notify:' + dedupeKey]);
@@ -281,11 +282,11 @@ async function notifyUser(chatId, messageText, key, intervalMs = 60000) {
     queued = result.rowCount > 0;
     await client.query('COMMIT');
   } catch (error) {
-    await client.query('ROLLBACK').catch(() => {});
+    if (client) await client.query('ROLLBACK').catch(() => {});
     console.error('Could not enqueue Telegram notification:', error.message);
     return false;
   } finally {
-    client.release();
+    client?.release();
   }
   if (queued) void processTelegramNotification();
   return queued;
@@ -1116,7 +1117,7 @@ app.post('/api/events/:id/reports', async (req, res) => {
   const details = typeof req.body?.details === 'string' ? req.body.details.trim().slice(0, 1000) : '';
   const allowedReasons = new Set(['spam', 'fake', 'inappropriate', 'unsafe', 'other']);
   if (!allowedReasons.has(reason)) return res.status(400).json({ error: 'Choose a valid report reason' });
-  const event = await pool.query('SELECT id, creator_id, status FROM events WHERE id = $1', [req.params.id]);
+  const event = await pool.query('SELECT id, creator_id, status, title, city FROM events WHERE id = $1', [req.params.id]);
   if (!event.rowCount || event.rows[0].status !== 'published') return res.status(404).json({ error: 'Event not found' });
   if (String(event.rows[0].creator_id) === String(req.telegramUser.id)) return res.status(400).json({ error: 'You cannot report your own event' });
   // One report per user/event. A repeat request must not silently reopen a resolved
@@ -1136,10 +1137,9 @@ app.post('/api/events/:id/reports', async (req, res) => {
   const reportId = result.rows[0].id;
   const adminChatId = process.env.ADMIN_TELEGRAM_CHAT_ID;
   if (adminChatId) {
-    const eventInfo = await pool.query('SELECT title, city FROM events WHERE id=$1', [req.params.id]);
     const reporter = req.telegramUser.username ? '@' + req.telegramUser.username : [req.telegramUser.first_name, req.telegramUser.last_name].filter(Boolean).join(' ') || String(req.telegramUser.id);
     const reasonLabels = { spam: 'Спам или реклама', fake: 'Обман или фальшивое событие', inappropriate: 'Неприемлемый контент', unsafe: 'Опасное событие', other: 'Другое' };
-    const note = '🚨 Новая жалоба на событие\n' + 'Жалоба №' + reportId + '\n' + 'Событие: ' + (eventInfo.rows[0]?.title || ('#' + req.params.id)) + '\n' + 'Город: ' + (eventInfo.rows[0]?.city || 'не указан') + '\n' + 'Причина: ' + reasonLabels[reason] + '\n' + 'От: ' + reporter + '\n' + (details ? 'Подробности: ' + details.slice(0, 700) + '\n' : '') + 'Статус: open';
+    const note = '🚨 Новая жалоба на событие\n' + 'Жалоба №' + reportId + '\n' + 'Событие: ' + (event.rows[0]?.title || ('#' + req.params.id)) + '\n' + 'Город: ' + (event.rows[0]?.city || 'не указан') + '\n' + 'Причина: ' + reasonLabels[reason] + '\n' + 'От: ' + reporter + '\n' + (details ? 'Подробности: ' + details.slice(0, 700) + '\n' : '') + 'Статус: open';
     void notifyUser(adminChatId, note, 'event-report:' + reportId, 0).then(queued => { if (!queued) console.warn('Admin report notification was not queued; check ADMIN_TELEGRAM_CHAT_ID and notification outbox health.'); });
   } else {
     console.warn('Report saved without Telegram notification: ADMIN_TELEGRAM_CHAT_ID is not configured.');

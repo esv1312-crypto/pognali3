@@ -173,3 +173,21 @@ test('organizer removal archives events with moderator audit history', () => {
   assert.ok(route.includes('FROM event_moderation_actions WHERE event_id=$1'));
   assert.ok(route.includes('const archived = existingModerationHistory.rowCount > 0'));
 });
+
+
+test('notification enqueue handles pool connection failures without an unhandled rejection', () => {
+  const start = server.indexOf('async function notifyUser(');
+  const end = server.indexOf('async function processTelegramNotification()', start);
+  const helper = server.slice(start, end);
+  assert.ok(helper.includes('let client;'));
+  assert.ok(helper.indexOf('try {') < helper.indexOf('client = await pool.connect()'));
+  assert.ok(helper.includes('client?.release()'));
+});
+
+test('report event metadata is loaded before persisting a report', () => {
+  const start = server.indexOf("app.post('/api/events/:id/reports'");
+  const end = server.indexOf("app.post('/api/events/:id/prepare-share'", start);
+  const route = server.slice(start, end);
+  assert.ok(route.indexOf('SELECT id, creator_id, status, title, city FROM events') < route.indexOf('INSERT INTO event_reports'));
+  assert.ok(!route.includes("SELECT title, city FROM events WHERE id=$1"));
+});
