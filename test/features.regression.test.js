@@ -207,3 +207,14 @@ test('admin moderation environment variables are documented in the example file'
   assert.ok(example.includes('ADMIN_API_TOKEN='));
   assert.ok(example.includes('ADMIN_TELEGRAM_CHAT_ID='));
 });
+
+
+test('notification worker backs off while idle but drains queued jobs promptly', () => {
+  const start = server.indexOf('async function processTelegramNotification()');
+  const end = server.indexOf('async function startNotificationWorker()', start);
+  const worker = server.slice(start, end);
+  assert.ok(worker.includes('let processed = false;'));
+  assert.ok(worker.includes('if (processed)'));
+  assert.ok(worker.includes('setTimeout(() => { void processTelegramNotification(); }, 100)'));
+  assert.ok(server.includes('notificationWorkerTimer = setInterval(() => { void processTelegramNotification(); }, 2000)'));
+});

@@ -295,6 +295,7 @@ async function processTelegramNotification() {
   if (!pool || notificationWorkerRunning) return;
   notificationWorkerRunning = true;
   let job = null;
+  let processed = false;
   try {
     if (Date.now() - notificationLastRecoveryAt > 30000) {
       await pool.query("UPDATE telegram_notification_outbox SET status='pending',available_at=NOW(),locked_at=NULL WHERE status='sending' AND locked_at < NOW() - INTERVAL '2 minutes'");
@@ -323,6 +324,7 @@ async function processTelegramNotification() {
         [selected.rows[0].id]
       );
       job = claimed.rows[0];
+      processed = true;
       await client.query('COMMIT');
     } catch (error) {
       await client.query('ROLLBACK').catch(() => {});
@@ -374,6 +376,10 @@ async function processTelegramNotification() {
     }
   } finally {
     notificationWorkerRunning = false;
+    if (processed) {
+      const continuation = setTimeout(() => { void processTelegramNotification(); }, 100);
+      continuation.unref?.();
+    }
   }
 }
 async function startNotificationWorker() {
@@ -382,7 +388,7 @@ async function startNotificationWorker() {
     "UPDATE telegram_notification_outbox SET status='pending',available_at=NOW(),locked_at=NULL WHERE status='sending' AND locked_at < NOW() - INTERVAL '2 minutes'"
   );
   if (!notificationWorkerTimer) {
-    notificationWorkerTimer = setInterval(() => { void processTelegramNotification(); }, 100);
+    notificationWorkerTimer = setInterval(() => { void processTelegramNotification(); }, 2000);
     notificationWorkerTimer.unref?.();
   }
   void processTelegramNotification();
