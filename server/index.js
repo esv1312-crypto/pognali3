@@ -663,20 +663,30 @@ app.post('/api/events', async (req, res) => {
   const ageRange = normalizeEventAgeRange(b.age_range);
   if (ageRange === null) return res.status(400).json({ error: 'Invalid age_range' });
   const liveNote = typeof b.live_note === 'string' ? b.live_note.trim().slice(0,240) : '';
-  const result = await pool.query(
-    `INSERT INTO events (creator_id,title,description,category,city,address,latitude,longitude,starts_at,ends_at,capacity,emoji,age_range,live_note)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14) RETURNING *`,
-    [req.telegramUser.id, title, typeof b.description === 'string' ? b.description.trim().slice(0,3000) : '',
-      typeof b.category === 'string' ? b.category.slice(0,40) : 'other', city, typeof b.address === 'string' ? b.address.trim().slice(0,250) : '',
-      lat, lon, startsAt.toISOString(), endsAt ? endsAt.toISOString() : null, capacity,
-      typeof b.emoji === 'string' ? b.emoji.trim().slice(0, 32) : '', ageRange, liveNote]
-  );
-  await pool.query(
-    `INSERT INTO event_participants (event_id,user_id,status) VALUES ($1,$2,'joined')
-     ON CONFLICT (event_id,user_id) DO UPDATE SET status='joined', joined_at=NOW()`,
-    [result.rows[0].id, req.telegramUser.id]
-  );
-  res.status(201).json({ event: { ...result.rows[0], participants_count: 1, joined_by_me: true } });
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const result = await client.query(
+      `INSERT INTO events (creator_id,title,description,category,city,address,latitude,longitude,starts_at,ends_at,capacity,emoji,age_range,live_note)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14) RETURNING *`,
+      [req.telegramUser.id, title, typeof b.description === 'string' ? b.description.trim().slice(0,3000) : '',
+        typeof b.category === 'string' ? b.category.slice(0,40) : 'other', city, typeof b.address === 'string' ? b.address.trim().slice(0,250) : '',
+        lat, lon, startsAt.toISOString(), endsAt ? endsAt.toISOString() : null, capacity,
+        typeof b.emoji === 'string' ? b.emoji.trim().slice(0, 32) : '', ageRange, liveNote]
+    );
+    await client.query(
+      `INSERT INTO event_participants (event_id,user_id,status) VALUES ($1,$2,'joined')
+       ON CONFLICT (event_id,user_id) DO UPDATE SET status='joined', joined_at=NOW()`,
+      [result.rows[0].id, req.telegramUser.id]
+    );
+    await client.query('COMMIT');
+    res.status(201).json({ event: { ...result.rows[0], participants_count: 1, joined_by_me: true } });
+  } catch (error) {
+    await client.query('ROLLBACK').catch(() => {});
+    throw error;
+  } finally {
+    client.release();
+  }
 });
 
 app.patch('/api/events/:id', async (req, res) => {
