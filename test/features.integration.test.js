@@ -166,10 +166,31 @@ t('event chat is limited to participants and validates message length', async ()
 });
 
 t('users can block, list and unblock accounts and blocked users cannot request direct messages', async () => {
+  const directRequest = await call(ANNA, '/direct/requests', { method: 'POST', body: { user_id: BORIS.id } });
+  assert.equal(directRequest.status, 201, directRequest.text);
+  const directId = directRequest.json.conversation.id;
+  assert.equal((await call(BORIS, `/direct/${directId}/respond`, { method: 'POST', body: { decision: 'accept' } })).status, 200);
+  assert.equal((await call(ANNA, `/direct/${directId}/messages`, { method: 'POST', body: { body: 'Личное сообщение до блокировки' } })).status, 201);
+
+  const event = await makeEvent(ANNA, { title: 'Личная переписка для проверки блокировки' });
+  assert.equal((await join(BORIS, event.id)).status, 201);
+  const eventContact = await call(ANNA, `/events/${event.id}/participants/${BORIS.id}/contact`, { method: 'POST', body: {} });
+  assert.equal(eventContact.status, 201, eventContact.text);
+  assert.equal((await call(ANNA, `/event-contacts/${eventContact.json.conversation.id}/messages`, { method: 'POST', body: { body: 'Сообщение организатора до блокировки' } })).status, 201);
+
+  assert.equal((await call(ANNA, '/messages')).json.direct.some(item => String(item.id) === String(directId)), true);
+  assert.equal((await call(ANNA, '/messages')).json.eventContacts.some(item => String(item.id) === String(eventContact.json.conversation.id)), true);
+
   assert.equal((await call(ANNA, `/users/${ANNA.id}/block`, { method: 'POST', body: {} })).status, 400);
   const blocked = await call(ANNA, `/users/${BORIS.id}/block`, { method: 'POST', body: {} });
   assert.equal(blocked.status, 200, blocked.text);
   assert.equal(blocked.json.blocked, true);
+  const inboxWhileBlocked = await call(ANNA, '/messages');
+  assert.equal(inboxWhileBlocked.status, 200, inboxWhileBlocked.text);
+  assert.equal(inboxWhileBlocked.json.direct.some(item => String(item.id) === String(directId)), false,
+    'blocked direct conversations must be hidden from the inbox');
+  assert.equal(inboxWhileBlocked.json.eventContacts.some(item => String(item.id) === String(eventContact.json.conversation.id)), false,
+    'blocked event-contact conversations must be hidden from the inbox');
   const list = await call(ANNA, '/users/blocked');
   assert.equal(list.status, 200, list.text);
   assert.ok(list.json.users.some(user => String(user.id) === String(BORIS.id)));
@@ -177,6 +198,11 @@ t('users can block, list and unblock accounts and blocked users cannot request d
   const unblocked = await call(ANNA, `/users/${BORIS.id}/block`, { method: 'DELETE' });
   assert.equal(unblocked.status, 200, unblocked.text);
   assert.equal(unblocked.json.blocked, false);
+  const inboxAfterUnblock = await call(ANNA, '/messages');
+  assert.equal(inboxAfterUnblock.json.direct.some(item => String(item.id) === String(directId)), true,
+    'unblocking restores the direct conversation in the inbox');
+  assert.equal(inboxAfterUnblock.json.eventContacts.some(item => String(item.id) === String(eventContact.json.conversation.id)), true,
+    'unblocking restores the event-contact conversation in the inbox');
   assert.equal((await call(ANNA, '/users/blocked')).json.users.some(user => String(user.id) === String(BORIS.id)), false);
   assert.equal((await call(ANNA, `/users/${BORIS.id}/block`, { method: 'DELETE' })).json.unblocked, false);
 });
