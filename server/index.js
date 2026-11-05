@@ -629,10 +629,17 @@ app.delete('/api/events/:id', async (req, res) => {
 app.post('/api/events/:id/finish', async (req, res) => {
   const result = await pool.query(
     `UPDATE events SET status='completed', updated_at=NOW()
-     WHERE id=$1 AND creator_id=$2 AND status='published' RETURNING id`,
+     WHERE id=$1 AND creator_id=$2 AND status='published' AND starts_at <= NOW() RETURNING id`,
     [req.params.id, req.telegramUser.id]
   );
-  if (!result.rowCount) return res.status(404).json({ error: 'Event not found or you are not its organizer' });
+  if (!result.rowCount) {
+    const owned = await pool.query(
+      `SELECT 1 FROM events WHERE id=$1 AND creator_id=$2 AND status='published'`,
+      [req.params.id, req.telegramUser.id]
+    );
+    if (!owned.rowCount) return res.status(404).json({ error: 'Event not found or you are not its organizer' });
+    return res.status(409).json({ error: 'Завершить событие можно только после начала встречи' });
+  }
   res.json({ finished: true, eventId: String(req.params.id) });
 });
 
