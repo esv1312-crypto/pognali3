@@ -160,6 +160,7 @@ t('reporting and moderation require valid reasons, admin login and admin token',
   const report = await call(VERA, `/events/${event.id}/reports`, { method: 'POST', body: { reason: 'fake', details: 'Похоже на фейк' } });
   assert.equal(report.status, 201, report.text);
   assert.equal((await call(ADMIN, '/admin/reports')).status, 403);
+  assert.equal((await call(ANNA, '/admin/reports', { headers: { 'x-admin-token': 'admintoken' } })).status, 403);
   const list = await call(ADMIN, '/admin/reports', { headers: { 'x-admin-token': 'admintoken' } });
   assert.equal(list.status, 200, list.text);
   const row = list.json.reports.find(item => item.event_id === event.id);
@@ -179,7 +180,12 @@ t('reporting and moderation require valid reasons, admin login and admin token',
   const unchanged = await call(ADMIN, `/admin/moderation/reports/${row.id}`, { method: 'PATCH', body: { status: 'reviewing' } });
   assert.equal(unchanged.json.changed, false);
   assert.equal((await call(ADMIN, `/admin/moderation/reports/${row.id}/actions`)).json.actions.length, 1);
-  assert.equal((await call(ADMIN, `/admin/reports/${row.id}`, { method: 'PATCH', body: { status: 'resolved' }, headers: { 'x-admin-token': 'admintoken' } })).status, 200);
+  const legacyChange = await call(ADMIN, `/admin/reports/${row.id}`, { method: 'PATCH', body: { status: 'resolved' }, headers: { 'x-admin-token': 'admintoken' } });
+  assert.equal(legacyChange.status, 200, legacyChange.text);
+  assert.equal(legacyChange.json.changed, true);
+  const fullHistory = await call(ADMIN, `/admin/moderation/reports/${row.id}/actions`);
+  assert.equal(fullHistory.json.actions.length, 2);
+  assert.deepEqual([fullHistory.json.actions[0].previous_status, fullHistory.json.actions[0].new_status], ['reviewing', 'resolved']);
 });
 
 t('Telegram webhook validates its secret and formats /id without a literal backslash-n', async () => {
