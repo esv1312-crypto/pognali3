@@ -5,6 +5,30 @@ const path = require('node:path');
 
 const server = fs.readFileSync(path.join(__dirname, '..', 'server', 'index.js'), 'utf8');
 const page = fs.readFileSync(path.join(__dirname, '..', 'docs', 'telegram', 'index.html'), 'utf8');
+test('age range bounds parse preset and custom numeric ranges correctly', () => {
+  const start = server.indexOf('function eventAgeBounds(value)');
+  const end = server.indexOf('function ageOnDate(', start);
+  const helper = server.slice(start, end);
+  assert.match(helper, /range\.match\(\/\^\(\\d\{1,2\}\)\[–-\]\(\\d\{1,2\}\)\$\/\)/);
+  assert.doesNotMatch(helper, /\\\\d\{1,2\}/);
+  assert.ok(helper.includes("if (range === '18–30')") === false);
+  assert.ok(server.includes("if (range === '18+') return { min: 18, max: null }"));
+});
+
+test('participant lists never expose another user\'s date of birth', () => {
+  const start = server.indexOf("app.get('/api/events/:id'");
+  const end = server.indexOf("app.post('/api/events'", start);
+  const route = server.slice(start, end);
+  assert.ok(route.includes('NULL::date AS birth_date'));
+  assert.ok(route.includes('NULL::smallint AS birth_year'));
+  assert.doesNotMatch(route, /viewer\.can_view_private_profile THEN u\.birth_/);
+});
+
+test('profile explains that date of birth is private', () => {
+  assert.ok(page.includes('Дата рождения хранится в профиле «Погнали» и не показывается другим участникам.'));
+  assert.doesNotMatch(page, /дата рождения из Telegram сохраняются в профиле «Погнали» и видны другим участникам/);
+});
+
 test('repeat calendar only enables dates after the source event and within three years', () => {
   assert.ok(page.includes("let repeatCalendarMonth=null,repeatSelectedDates=[],repeatBaseTime='19:00',repeatBaseDate=''"));
   assert.ok(page.includes('const past=date<=today||date<=repeatBaseDate||date>maxDate'));
