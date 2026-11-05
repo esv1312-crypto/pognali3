@@ -359,7 +359,7 @@ t('moderator event cancellations are transactional and leave an admin-only audit
 
   const history = await api(A, `/admin/moderation/events/${ev.id}/actions`);
   assert.equal(history.status, 200);
-  assert.equal(history.json.actions.length, 1);
+  assert.equal(history.json.actions.length, 2);
   assert.equal(history.json.actions[0].action, 'cancelled_by_moderator');
   assert.equal(String(history.json.actions[0].actor_id), String(A.id));
 
@@ -481,7 +481,7 @@ t('new events notify admins and Telegram callback buttons keep or block them', a
   } });
   assert.equal(keep.status, 200);
   assert.equal((await ctx.db.query('SELECT status FROM events WHERE id=$1', [ev.id])).rows[0].status, 'published');
-  const keepHistory = await ctx.db.query('SELECT action,previous_status,new_status,actor_id FROM event_moderation_actions WHERE event_id=$1', [ev.id]);
+  const keepHistory = await ctx.db.query('SELECT action,previous_status,new_status,actor_id FROM event_moderation_actions WHERE event_id=$1 ORDER BY created_at DESC,id DESC', [ev.id]);
   assert.equal(keepHistory.rows[0].action, 'kept_published_by_moderator');
   assert.equal(keepHistory.rows[0].new_status, 'published');
   assert.equal(String(keepHistory.rows[0].actor_id), String(A.id));
@@ -493,7 +493,7 @@ t('new events notify admins and Telegram callback buttons keep or block them', a
   } });
   assert.equal(block.status, 200);
   assert.equal((await ctx.db.query('SELECT status FROM events WHERE id=$1', [blockedEvent.id])).rows[0].status, 'cancelled');
-  const blockHistory = await ctx.db.query('SELECT action,new_status FROM event_moderation_actions WHERE event_id=$1', [blockedEvent.id]);
+  const blockHistory = await ctx.db.query('SELECT action,new_status FROM event_moderation_actions WHERE event_id=$1 ORDER BY created_at DESC,id DESC', [blockedEvent.id]);
   assert.equal(blockHistory.rows[0].action, 'cancelled_by_moderator');
   assert.equal(blockHistory.rows[0].new_status, 'cancelled');
 
