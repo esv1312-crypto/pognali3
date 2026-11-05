@@ -450,10 +450,26 @@ app.get('/api/events/:id', async (req, res) => {
   );
   if (!result.rowCount) return res.status(404).json({ error: 'Event not found' });
   const people = await pool.query(
-    `SELECT u.id, u.username, u.first_name, u.last_name, u.display_name, u.photo_url, u.city, u.bio, u.birth_date, u.birth_day, u.birth_month, u.birth_year
+    `WITH viewer AS (
+       SELECT (
+         e.creator_id=$2 OR EXISTS (
+           SELECT 1 FROM event_participants mine
+           WHERE mine.event_id=e.id AND mine.user_id=$2 AND mine.status='joined'
+         )
+       ) AS can_view_private_profile
+       FROM events e WHERE e.id=$1
+     )
+     SELECT u.id, u.username, u.first_name, u.last_name, u.display_name,
+       CASE WHEN viewer.can_view_private_profile THEN u.photo_url ELSE NULL END AS photo_url,
+       u.city, u.bio,
+       CASE WHEN viewer.can_view_private_profile THEN u.birth_date ELSE NULL END AS birth_date,
+       CASE WHEN viewer.can_view_private_profile THEN u.birth_day ELSE NULL END AS birth_day,
+       CASE WHEN viewer.can_view_private_profile THEN u.birth_month ELSE NULL END AS birth_month,
+       CASE WHEN viewer.can_view_private_profile THEN u.birth_year ELSE NULL END AS birth_year
      FROM event_participants ep JOIN users u ON u.id=ep.user_id
+     JOIN viewer ON TRUE
      WHERE ep.event_id=$1 AND ep.status='joined' ORDER BY ep.joined_at`,
-    [req.params.id]
+    [req.params.id, req.telegramUser.id]
   );
   res.json({ event: result.rows[0], participants: people.rows });
 });

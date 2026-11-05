@@ -167,6 +167,36 @@ t('joining is idempotent, capacity is enforced, and organizer cannot leave', asy
   assert.equal((await call(ANNA, `/events/${event.id}/messages`)).status, 200);
 });
 
+t('event participant photos and birthdays are visible only to event members', async () => {
+  const event = await makeEvent(ANNA, { title: 'Проверка приватности профиля участников' });
+  assert.equal((await join(BORIS, event.id)).status, 200);
+  assert.equal((await call(BORIS, '/me', { method: 'PATCH', body: { birth_date: '1990-04-01' } })).status, 200);
+
+  const { Client } = require('pg');
+  const db = new Client({ connectionString: process.env.DATABASE_URL });
+  await db.connect();
+  try {
+    await db.query("UPDATE users SET photo_url=$1 WHERE id=$2", ['https://example.com/private-avatar.jpg', BORIS.id]);
+  } finally { await db.end(); }
+
+  const outsider = await call(VERA, `/events/${event.id}`);
+  assert.equal(outsider.status, 200, outsider.text);
+  const outsiderBoris = outsider.json.participants.find(person => String(person.id) === String(BORIS.id));
+  assert.ok(outsiderBoris, 'public event details still include the participant entry');
+  assert.equal(outsiderBoris.photo_url, null, 'non-members must not receive the participant photo URL');
+  assert.equal(outsiderBoris.birth_date, null, 'non-members must not receive the full birthday');
+  assert.equal(outsiderBoris.birth_day, null);
+  assert.equal(outsiderBoris.birth_month, null);
+  assert.equal(outsiderBoris.birth_year, null);
+
+  const member = await call(ANNA, `/events/${event.id}`);
+  const memberBoris = member.json.participants.find(person => String(person.id) === String(BORIS.id));
+  assert.equal(memberBoris.photo_url, 'https://example.com/private-avatar.jpg');
+  assert.equal(String(memberBoris.birth_date).slice(0, 10), '1990-04-01');
+  assert.equal(memberBoris.birth_day, 1);
+  assert.equal(memberBoris.birth_month, 4);
+});
+
 t('event chat is limited to participants and validates message length', async () => {
   const event = await makeEvent(ANNA);
   await join(BORIS, event.id);
