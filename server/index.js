@@ -505,6 +505,17 @@ app.get('/media/avatars/:key', async (req, res) => {
   res.send(avatar.photo_data);
 });
 
+function normalizeEventAgeRange(value) {
+  const range = typeof value === 'string' ? value.trim() : 'Любой возраст';
+  const presets = new Set(['Любой возраст', '18+', '18–30', '25–40', '40+']);
+  if (presets.has(range)) return range;
+  const match = range.match(/^(\d{1,2})[–-](\d{1,2})$/);
+  if (!match) return null;
+  const min = Number(match[1]), max = Number(match[2]);
+  if (min < 1 || max > 100 || min > max) return null;
+  return min + '–' + max;
+}
+
 function parseAfterMessageId(req, res) {
   if (req.query.after_id === undefined) return null;
   const raw = req.query.after_id;
@@ -630,13 +641,16 @@ app.post('/api/events', async (req, res) => {
   }
   const endsAt = b.ends_at ? new Date(b.ends_at) : null;
   if (endsAt && (!Number.isFinite(endsAt.getTime()) || endsAt < startsAt)) return res.status(400).json({ error: 'Invalid ends_at' });
+  const ageRange = normalizeEventAgeRange(b.age_range);
+  if (ageRange === null) return res.status(400).json({ error: 'Invalid age_range' });
+  const liveNote = typeof b.live_note === 'string' ? b.live_note.trim().slice(0,240) : '';
   const result = await pool.query(
-    `INSERT INTO events (creator_id,title,description,category,city,address,latitude,longitude,starts_at,ends_at,capacity,emoji)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12) RETURNING *`,
+    `INSERT INTO events (creator_id,title,description,category,city,address,latitude,longitude,starts_at,ends_at,capacity,emoji,age_range,live_note)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14) RETURNING *`,
     [req.telegramUser.id, title, typeof b.description === 'string' ? b.description.trim().slice(0,3000) : '',
       typeof b.category === 'string' ? b.category.slice(0,40) : 'other', city, typeof b.address === 'string' ? b.address.trim().slice(0,250) : '',
       lat, lon, startsAt.toISOString(), endsAt ? endsAt.toISOString() : null, capacity,
-      typeof b.emoji === 'string' ? b.emoji.trim().slice(0, 32) : '']
+      typeof b.emoji === 'string' ? b.emoji.trim().slice(0, 32) : '', ageRange, liveNote]
   );
   await pool.query(
     `INSERT INTO event_participants (event_id,user_id,status) VALUES ($1,$2,'joined')
@@ -659,6 +673,10 @@ app.patch('/api/events/:id', async (req, res) => {
   const lat = b.latitude == null || b.latitude === '' ? null : Number(b.latitude);
   const lon = b.longitude == null || b.longitude === '' ? null : Number(b.longitude);
   const endsAt = b.ends_at ? new Date(b.ends_at) : null;
+  const ageRange = b.age_range === undefined ? null : normalizeEventAgeRange(b.age_range);
+  const liveNote = b.live_note === undefined ? null : (typeof b.live_note === 'string' ? b.live_note.trim().slice(0,240) : null);
+  if (ageRange === null && b.age_range !== undefined) return res.status(400).json({ error: 'Invalid age_range' });
+  if (liveNote === null && b.live_note !== undefined) return res.status(400).json({ error: 'Invalid live_note' });
   if (title.length < 3 || title.length > 120 || !city || city.length > 120 || !Number.isFinite(startsAt.getTime())) {
     return res.status(400).json({ error: 'Title (3–120 chars), city and valid starts_at are required' });
   }
@@ -692,13 +710,14 @@ app.patch('/api/events/:id', async (req, res) => {
     }
     const result = await client.query(
       `UPDATE events SET title=$3, description=$4, category=$5, city=$6, address=$7,
-         latitude=$8, longitude=$9, starts_at=$10, ends_at=$11, capacity=$12, emoji=$13, updated_at=NOW()
+         latitude=$8, longitude=$9, starts_at=$10, ends_at=$11, capacity=$12, emoji=$13,
+         age_range=COALESCE($14,age_range), live_note=COALESCE($15,live_note), updated_at=NOW()
        WHERE id=$1 AND creator_id=$2 AND status='published' RETURNING *`,
       [req.params.id, req.telegramUser.id, title, typeof b.description === 'string' ? b.description.trim().slice(0,3000) : '',
         typeof b.category === 'string' ? b.category.slice(0,40) : 'other', city,
         typeof b.address === 'string' ? b.address.trim().slice(0,250) : '', lat, lon,
         startsAt.toISOString(), endsAt ? endsAt.toISOString() : null, capacity,
-        typeof b.emoji === 'string' ? b.emoji.trim().slice(0, 32) : '']
+        typeof b.emoji === 'string' ? b.emoji.trim().slice(0, 32) : '', ageRange, liveNote]
     );
     await client.query('COMMIT');
     res.json({ event: result.rows[0] });
@@ -708,6 +727,17 @@ app.patch('/api/events/:id', async (req, res) => {
   } finally {
     client.release();
   }
+});
+
+app.patch('/api/events/:id/live-note', async (req, res) => {
+  if (typeof req.body?.live_note !== 'string') return res.status(400).json({ error: 'live_note must be a string' });
+  const liveNote = req.body.live_note.trim().slice(0,240);
+  const result = await pool.query(
+    "UPDATE events SET live_note=$3,updated_at=NOW() WHERE id=$1 AND creator_id=$2 AND status='published' RETURNING live_note",
+    [req.params.id, req.telegramUser.id, liveNote]
+  );
+  if (!result.rowCount) return res.status(404).json({ error: 'Event not found or you are not its organizer' });
+  res.json({ live_note: result.rows[0].live_note });
 });
 
 app.delete('/api/events/:id', async (req, res) => {
@@ -1333,9 +1363,9 @@ app.post('/api/events/:id/repeat', async (req, res) => {
       const next = dates[index];
       const nextEnd = duration === null ? null : new Date(next.getTime() + duration);
       const inserted = await client.query(
-        `INSERT INTO events(creator_id,title,description,category,emoji,city,address,latitude,longitude,starts_at,ends_at,capacity,status,series_id,series_index)
-         VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,'published',$13,$14) RETURNING id,starts_at`,
-        [event.creator_id,event.title,event.description,event.category,event.emoji,event.city,event.address,event.latitude,event.longitude,next.toISOString(),nextEnd?.toISOString()||null,event.capacity,seriesId,index+2]
+        `INSERT INTO events(creator_id,title,description,category,emoji,city,address,latitude,longitude,starts_at,ends_at,capacity,age_range,live_note,status,series_id,series_index)
+         VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,'published',$15,$16) RETURNING id,starts_at`,
+        [event.creator_id,event.title,event.description,event.category,event.emoji,event.city,event.address,event.latitude,event.longitude,next.toISOString(),nextEnd?.toISOString()||null,event.capacity,event.age_range,event.live_note,seriesId,index+2]
       );
       await client.query("INSERT INTO event_participants(event_id,user_id,status) VALUES($1,$2,'joined')", [inserted.rows[0].id, req.telegramUser.id]);
       created.push({ id: String(inserted.rows[0].id), starts_at: inserted.rows[0].starts_at });

@@ -49,6 +49,8 @@ CREATE TABLE IF NOT EXISTS events (
   CHECK (ends_at IS NULL OR ends_at >= starts_at)
 );
 ALTER TABLE events ADD COLUMN IF NOT EXISTS emoji TEXT NOT NULL DEFAULT '';
+ALTER TABLE events ADD COLUMN IF NOT EXISTS age_range TEXT NOT NULL DEFAULT 'Любой возраст';
+ALTER TABLE events ADD COLUMN IF NOT EXISTS live_note TEXT NOT NULL DEFAULT '';
 
 -- Saved events and recurring meetups. Additive migration: existing events and participants remain untouched.
 CREATE TABLE IF NOT EXISTS event_favorites (
