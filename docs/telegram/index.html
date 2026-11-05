@@ -1650,18 +1650,17 @@ async function refreshActiveChat(state) {
   if (!route || !box) return stopChatPolling();
   state.loading = true;
   try {
-    const result = await apiRequest(route.path);
+    const result = await apiRequest(route.path + '?after_id=' + encodeURIComponent(state.lastMessageId || '0'));
     if (activeChatPollState !== state) return;
     const messages = result.messages || [];
-    const latestId = String(messages[messages.length - 1]?.id || '');
-    if (!latestId || latestId === state.lastMessageId) return;
+    if (!messages.length) return;
     const stayAtBottom = box.scrollHeight - box.scrollTop - box.clientHeight < 80;
     const myId = String(window.Telegram?.WebApp?.initDataUnsafe?.user?.id || '');
-    box.innerHTML = messages.map(message =>
+    box.insertAdjacentHTML('beforeend', messages.map(message =>
       '<div class="msg ' + (String(message.sender_id) === myId ? 'me' : '') + '"><b>' +
       esc(message.sender_name || 'Участник') + '</b><br>' + esc(message.body) + '</div>'
-    ).join('');
-    state.lastMessageId = latestId;
+    ).join(''));
+    state.lastMessageId = String(messages[messages.length - 1]?.id || state.lastMessageId);
     if (stayAtBottom) box.scrollTop = box.scrollHeight;
     await markMessagesRead(state.type, state.id);
   } catch (error) {

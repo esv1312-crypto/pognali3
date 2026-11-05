@@ -63,3 +63,13 @@ test('event end time from the API is used by the client event-state logic', () =
   assert.ok(page.includes('endAt:x.ends_at||null'));
   assert.ok(page.includes('const explicitEnd=e.endAt||e.end_at||e.endDateTime||e.end_datetime'));
 });
+
+test('incremental chat polling validates numeric cursors and appends only new messages', () => {
+  assert.ok(server.includes('function parseAfterMessageId(req, res)'));
+  assert.match(server, /!\/\^\\d\{1,19\}\$\/\.test\(raw\)/);
+  assert.doesNotMatch(server, /!\/\^\\\\d\{1,19\}\$\/\.test\(raw\)/);
+  assert.ok((server.match(/m\\.id>\\$2/g) || []).length >= 3);
+  assert.ok(page.includes("route.path + '?after_id=' + encodeURIComponent(state.lastMessageId || '0')"));
+  assert.ok(page.includes("box.insertAdjacentHTML('beforeend'"));
+  assert.ok(!page.includes('box.innerHTML = messages.map(message =>'));
+});
