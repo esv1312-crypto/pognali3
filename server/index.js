@@ -39,6 +39,10 @@ const authenticatedApiRateLimit = rateLimit({ windowMs: 15 * 60 * 1000, limit: 6
 const webhookRateLimit = rateLimit({ windowMs: 60 * 1000, limit: 60, standardHeaders: 'draft-8', legacyHeaders: false });
 const ADMIN_TELEGRAM_IDS = new Set(String(process.env.ADMIN_TELEGRAM_IDS || '172790098').split(',').map(id => id.trim()).filter(id => /^\d+$/.test(id)));
 function isAdminTelegramUser(id) { return ADMIN_TELEGRAM_IDS.has(String(id)); }
+function getAdminNotificationChatIds() {
+  const configured = String(process.env.ADMIN_TELEGRAM_CHAT_ID || '').split(',').map(id => id.trim()).filter(Boolean);
+  return [...new Set(configured.length ? configured : [...ADMIN_TELEGRAM_IDS])];
+}
 
 const databaseSslMode = String(process.env.DATABASE_SSL || (String(process.env.DATABASE_URL || '').includes('localhost') ? 'disable' : 'verify-full')).toLowerCase();
 if (!['disable', 'require', 'verify-full'].includes(databaseSslMode)) throw new Error('DATABASE_SSL must be one of: disable, require, verify-full');
@@ -90,6 +94,74 @@ app.post('/telegram/webhook', webhookRateLimit, async (req, res) => {
   const miniAppUrl = process.env.MINI_APP_URL;
   if (!token || !miniAppUrl || !miniAppUrl.startsWith('https://')) {
     return res.status(503).json({ error: 'Bot token or HTTPS Mini App URL is not configured' });
+  }
+  const callbackQuery = req.body?.callback_query;
+  if (callbackQuery) {
+    const callbackData = String(callbackQuery.data || '');
+    const match = callbackData.match(/^eventmod:(keep|block):(\d{1,15})$/);
+    const callbackId = callbackQuery.id;
+    const actorId = callbackQuery.from?.id;
+    const answer = async (message, alert = false) => {
+      await fetch('https://api.telegram.org/bot' + token + '/answerCallbackQuery', {
+        method: 'POST', headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ callback_query_id: callbackId, text: message, show_alert: alert })
+      }).catch(error => console.warn('Telegram callback answer failed:', error.message));
+    };
+    if (!match || !isAdminTelegramUser(actorId)) {
+      await answer('Нет прав администратора', true);
+      return res.json({ ok: true });
+    }
+    const eventId = match[2];
+    const action = match[1];
+    const client = await pool.connect();
+    let resultMessage = '';
+    try {
+      await client.query('BEGIN');
+      await client.query(
+        'INSERT INTO users(id,first_name,last_name,username) VALUES($1,$2,$3,$4) ON CONFLICT(id) DO NOTHING',
+        [actorId, String(callbackQuery.from?.first_name || ''), String(callbackQuery.from?.last_name || ''), callbackQuery.from?.username || null]
+      );
+      const current = await client.query('SELECT id,title,status FROM events WHERE id=$1 FOR UPDATE', [eventId]);
+      if (!current.rowCount || current.rows[0].status !== 'published') {
+        await client.query('ROLLBACK');
+        await answer('Событие уже изменено или недоступно', true);
+        return res.json({ ok: true });
+      }
+      if (action === 'block') {
+        await client.query("UPDATE events SET status='cancelled',updated_at=NOW() WHERE id=$1", [eventId]);
+        await client.query(
+          "INSERT INTO event_moderation_actions(event_id,actor_id,action,previous_status,new_status) VALUES($1,$2,'cancelled_by_moderator','published','cancelled')",
+          [eventId, actorId]
+        );
+        resultMessage = 'Событие заблокировано';
+      } else {
+        await client.query(
+          "INSERT INTO event_moderation_actions(event_id,actor_id,action,previous_status,new_status) VALUES($1,$2,'kept_published_by_moderator','published','published')",
+          [eventId, actorId]
+        );
+        resultMessage = 'Событие оставлено опубликованным';
+      }
+      await client.query('COMMIT');
+    } catch (error) {
+      await client.query('ROLLBACK').catch(() => {});
+      throw error;
+    } finally {
+      client.release();
+    }
+    await answer(resultMessage);
+    const message = callbackQuery.message;
+    if (message?.chat?.id && message?.message_id) {
+      const originalText = String(message.text || '');
+      await fetch('https://api.telegram.org/bot' + token + '/editMessageText', {
+        method: 'POST', headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          chat_id: message.chat.id, message_id: message.message_id,
+          text: originalText + '\n\n' + (action === 'block' ? '⛔ ' : '✅ ') + resultMessage,
+          reply_markup: { inline_keyboard: [] }
+        })
+      }).catch(error => console.warn('Telegram moderation message update failed:', error.message));
+    }
+    return res.json({ ok: true });
   }
   const inlineQuery = req.body?.inline_query;
   if (inlineQuery) {
@@ -305,7 +377,7 @@ async function processTelegramNotification() {
     try {
       await client.query('BEGIN');
       const selected = await client.query(
-        `SELECT id, chat_id, message_text, dedupe_key, attempts
+        `SELECT id, chat_id, message_text, dedupe_key, attempts, reply_markup
          FROM telegram_notification_outbox
          WHERE status='pending' AND available_at <= NOW()
          ORDER BY id
@@ -320,7 +392,7 @@ async function processTelegramNotification() {
         `UPDATE telegram_notification_outbox
          SET status='sending', attempts=attempts+1, locked_at=NOW()
          WHERE id=$1
-         RETURNING id, chat_id, message_text, dedupe_key, attempts`,
+         RETURNING id, chat_id, message_text, dedupe_key, attempts, reply_markup`,
         [selected.rows[0].id]
       );
       job = claimed.rows[0];
@@ -333,7 +405,7 @@ async function processTelegramNotification() {
       client.release();
     }
     if (!job) return;
-    const delivered = await sendTelegramMessage(job.chat_id, job.message_text);
+    const delivered = await sendTelegramMessage(job.chat_id, job.message_text, job.reply_markup);
     const finish = await pool.connect();
     try {
       await finish.query('BEGIN');
@@ -679,6 +751,43 @@ app.post('/api/events', async (req, res) => {
        ON CONFLICT (event_id,user_id) DO UPDATE SET status='joined', joined_at=NOW()`,
       [result.rows[0].id, req.telegramUser.id]
     );
+    const adminTargets = getAdminNotificationChatIds();
+    if (adminTargets.length) {
+      const creatorName = [req.telegramUser.first_name, req.telegramUser.last_name].filter(Boolean).join(' ')
+        || (req.telegramUser.username ? '@' + req.telegramUser.username : String(req.telegramUser.id));
+      const when = startsAt.toLocaleString('ru-RU', { dateStyle: 'medium', timeStyle: 'short', timeZone: 'Europe/Moscow' });
+      const place = [addressInput, city].filter(Boolean).join(', ');
+      const botUsername = String(process.env.TELEGRAM_BOT_USERNAME || 'Pognali_pognali_bot').replace(/^@/, '').trim();
+      const eventUrl = 'https://t.me/' + botUsername + '?startapp=' + encodeURIComponent('event_' + result.rows[0].id);
+      const replyMarkup = {
+        inline_keyboard: [
+          [
+            { text: '✓ Оставить опубликованным', callback_data: 'eventmod:keep:' + result.rows[0].id },
+            { text: '✕ Заблокировать', callback_data: 'eventmod:block:' + result.rows[0].id }
+          ],
+          [{ text: 'Открыть событие', url: eventUrl }]
+        ]
+      };
+      const note = [
+        '🆕 Создано новое событие',
+        'Статус: опубликовано',
+        'Название: ' + title,
+        'Создатель: ' + creatorName + (req.telegramUser.username ? ' (@' + req.telegramUser.username + ')' : ''),
+        'Telegram ID: ' + req.telegramUser.id,
+        'Когда: ' + when,
+        'Где: ' + place,
+        typeof b.description === 'string' && b.description.trim() ? 'Описание: ' + b.description.trim().slice(0, 700) : ''
+      ].filter(Boolean).join('\n');
+      for (const adminChatId of adminTargets) {
+        await client.query(
+          `INSERT INTO telegram_notification_outbox (chat_id,message_text,dedupe_key,reply_markup)
+           VALUES ($1,$2,$3,$4::jsonb) ON CONFLICT DO NOTHING`,
+          [adminChatId, note, 'new-event:' + result.rows[0].id + ':' + adminChatId, JSON.stringify(replyMarkup)]
+        );
+      }
+    } else {
+      console.warn('New event saved without admin notification: configure ADMIN_TELEGRAM_CHAT_ID or ADMIN_TELEGRAM_IDS.');
+    }
     await client.query('COMMIT');
     res.status(201).json({ event: { ...result.rows[0], participants_count: 1, joined_by_me: true } });
   } catch (error) {
@@ -1873,7 +1982,7 @@ async function configureTelegramWebhook() {
     const response = await fetch('https://api.telegram.org/bot' + token + '/setWebhook', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ url: webhookUrl, secret_token: secret, allowed_updates: ['message', 'inline_query'], drop_pending_updates: false })
+      body: JSON.stringify({ url: webhookUrl, secret_token: secret, allowed_updates: ['message', 'inline_query', 'callback_query'], drop_pending_updates: false })
     });
     const result = await response.json();
     if (!response.ok || !result.ok) {

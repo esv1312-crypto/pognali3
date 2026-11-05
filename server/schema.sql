@@ -193,6 +193,7 @@ CREATE TABLE IF NOT EXISTS telegram_notification_outbox (
   id BIGSERIAL PRIMARY KEY,
   chat_id TEXT NOT NULL,
   message_text TEXT NOT NULL,
+  reply_markup JSONB,
   dedupe_key TEXT,
   status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending','sending','failed')),
   attempts SMALLINT NOT NULL DEFAULT 0 CHECK (attempts >= 0),
@@ -201,6 +202,7 @@ CREATE TABLE IF NOT EXISTS telegram_notification_outbox (
   last_error TEXT,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+ALTER TABLE telegram_notification_outbox ADD COLUMN IF NOT EXISTS reply_markup JSONB;
 CREATE INDEX IF NOT EXISTS telegram_notification_outbox_ready_idx
   ON telegram_notification_outbox(status, available_at, id) WHERE status='pending';
 CREATE UNIQUE INDEX IF NOT EXISTS telegram_notification_outbox_active_dedupe_idx
@@ -218,11 +220,15 @@ CREATE TABLE IF NOT EXISTS event_moderation_actions (
  id BIGSERIAL PRIMARY KEY,
  event_id BIGINT NOT NULL REFERENCES events(id) ON DELETE CASCADE,
  actor_id BIGINT NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
- action TEXT NOT NULL CHECK (action IN ('cancelled_by_moderator')),
+ action TEXT NOT NULL CHECK (action IN ('cancelled_by_moderator','kept_published_by_moderator')),
  previous_status TEXT NOT NULL CHECK (previous_status IN ('published')),
- new_status TEXT NOT NULL CHECK (new_status IN ('cancelled')),
+ new_status TEXT NOT NULL CHECK (new_status IN ('published','cancelled')),
  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+ALTER TABLE event_moderation_actions DROP CONSTRAINT IF EXISTS event_moderation_actions_action_check;
+ALTER TABLE event_moderation_actions ADD CONSTRAINT event_moderation_actions_action_check CHECK (action IN ('cancelled_by_moderator','kept_published_by_moderator'));
+ALTER TABLE event_moderation_actions DROP CONSTRAINT IF EXISTS event_moderation_actions_new_status_check;
+ALTER TABLE event_moderation_actions ADD CONSTRAINT event_moderation_actions_new_status_check CHECK (new_status IN ('published','cancelled'));
 CREATE INDEX IF NOT EXISTS event_moderation_actions_event_created_idx
  ON event_moderation_actions(event_id, created_at DESC);
 CREATE INDEX IF NOT EXISTS event_moderation_actions_actor_created_idx

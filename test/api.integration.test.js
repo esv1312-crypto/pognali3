@@ -450,3 +450,56 @@ t('event updates reject dates outside the supported range', async () => {
   });
   assert.equal(tooOld.status, 400);
 });
+
+
+t('new events notify admins and Telegram callback buttons keep or block them', async () => {
+  ctx.telegram.length = 0;
+  const ev = await create(B, { title: 'Новое событие для админ-уведомления' });
+  await sleep(2400);
+  const notification = ctx.telegram.find(call =>
+    call.method === 'sendMessage' &&
+    String(call.body?.chat_id) === '999' &&
+    String(call.body?.text || '').includes('Создано новое событие') &&
+    String(call.body?.text || '').includes('Новое событие для админ-уведомления')
+  );
+  assert.ok(notification);
+  assert.equal(notification.body.reply_markup.inline_keyboard[0][0].callback_data, 'eventmod:keep:' + ev.id);
+  assert.equal(notification.body.reply_markup.inline_keyboard[0][1].callback_data, 'eventmod:block:' + ev.id);
+
+  const webhook = async update => {
+    const response = await fetch(ctx.base + '/telegram/webhook', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', 'x-telegram-bot-api-secret-token': 's' },
+      body: JSON.stringify(update)
+    });
+    return { status: response.status, json: await response.json() };
+  };
+  const keep = await webhook({ callback_query: {
+    id: 'callback-keep-' + ev.id, data: 'eventmod:keep:' + ev.id,
+    from: A, message: { message_id: 10, chat: { id: 999 }, text: notification.body.text }
+  } });
+  assert.equal(keep.status, 200);
+  assert.equal((await ctx.db.query('SELECT status FROM events WHERE id=$1', [ev.id])).rows[0].status, 'published');
+  const keepHistory = await ctx.db.query('SELECT action,previous_status,new_status,actor_id FROM event_moderation_actions WHERE event_id=$1', [ev.id]);
+  assert.equal(keepHistory.rows[0].action, 'kept_published_by_moderator');
+  assert.equal(keepHistory.rows[0].new_status, 'published');
+  assert.equal(String(keepHistory.rows[0].actor_id), String(A.id));
+
+  const blockedEvent = await create(B, { title: 'Событие для блокировки администратором' });
+  const block = await webhook({ callback_query: {
+    id: 'callback-block-' + blockedEvent.id, data: 'eventmod:block:' + blockedEvent.id,
+    from: A, message: { message_id: 11, chat: { id: 999 }, text: 'Новое событие' }
+  } });
+  assert.equal(block.status, 200);
+  assert.equal((await ctx.db.query('SELECT status FROM events WHERE id=$1', [blockedEvent.id])).rows[0].status, 'cancelled');
+  const blockHistory = await ctx.db.query('SELECT action,new_status FROM event_moderation_actions WHERE event_id=$1', [blockedEvent.id]);
+  assert.equal(blockHistory.rows[0].action, 'cancelled_by_moderator');
+  assert.equal(blockHistory.rows[0].new_status, 'cancelled');
+
+  const denied = await webhook({ callback_query: {
+    id: 'callback-denied-' + blockedEvent.id, data: 'eventmod:block:' + blockedEvent.id,
+    from: B, message: { message_id: 12, chat: { id: 999 }, text: 'Новое событие' }
+  } });
+  assert.equal(denied.status, 200);
+  assert.equal((await ctx.db.query('SELECT status FROM events WHERE id=$1', [blockedEvent.id])).rows[0].status, 'cancelled');
+});
