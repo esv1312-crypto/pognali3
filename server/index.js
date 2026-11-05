@@ -770,7 +770,7 @@ app.post('/api/events', async (req, res) => {
       };
       const note = [
         '🆕 Создано новое событие',
-        'Статус: опубликовано (автоматически)',
+        'Статус: опубликовано',
         'Название: ' + title,
         'Создатель: ' + creatorName + (req.telegramUser.username ? ' (@' + req.telegramUser.username + ')' : ''),
         'Telegram ID: ' + req.telegramUser.id,
