@@ -182,7 +182,6 @@ CREATE TABLE IF NOT EXISTS telegram_notification_outbox (
   chat_id TEXT NOT NULL,
   message_text TEXT NOT NULL,
   dedupe_key TEXT,
-  cooldown_ms INTEGER NOT NULL DEFAULT 60000 CHECK (cooldown_ms >= 0),
   status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending','sending','failed')),
   attempts SMALLINT NOT NULL DEFAULT 0 CHECK (attempts >= 0),
   available_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
