@@ -167,6 +167,38 @@ t('joining is idempotent, capacity is enforced, and organizer cannot leave', asy
   assert.equal((await call(ANNA, `/events/${event.id}/messages`)).status, 200);
 });
 
+t('repeated events require dates after the source event and within the three-year planning window', async () => {
+  const baseStart = new Date(Date.now() + 3 * 864e5);
+  const event = await makeEvent(ANNA, { title: 'Повторяемая встреча', starts_at: baseStart.toISOString() });
+
+  const sameDate = await call(ANNA, `/events/${event.id}/repeat`, {
+    method: 'POST', body: { dates: [baseStart.toISOString()] }
+  });
+  assert.equal(sameDate.status, 400, sameDate.text);
+
+  const beforeSource = await call(ANNA, `/events/${event.id}/repeat`, {
+    method: 'POST', body: { dates: [new Date(Date.now() + 864e5).toISOString()] }
+  });
+  assert.equal(beforeSource.status, 400, beforeSource.text);
+
+  const tooFar = await call(ANNA, `/events/${event.id}/repeat`, {
+    method: 'POST', body: { dates: [new Date(Date.now() + 4 * 365 * 864e5).toISOString()] }
+  });
+  assert.equal(tooFar.status, 400, tooFar.text);
+
+  const validDate = new Date(baseStart.getTime() + 5 * 864e5);
+  const repeated = await call(ANNA, `/events/${event.id}/repeat`, {
+    method: 'POST', body: { dates: [validDate.toISOString()] }
+  });
+  assert.equal(repeated.status, 201, repeated.text);
+  assert.equal(repeated.json.created_count, 2);
+  assert.equal(repeated.json.events.length, 2);
+  assert.equal(String(repeated.json.events[0].id), String(event.id));
+  const detail = await call(ANNA, `/events/${repeated.json.events[1].id}`);
+  assert.equal(detail.status, 200, detail.text);
+  assert.equal(String(detail.json.event.series_id), String(repeated.json.series_id));
+});
+
 t('event participant photos and birthdays are visible only to event members', async () => {
   const event = await makeEvent(ANNA, { title: 'Проверка приватности профиля участников' });
   assert.equal((await join(BORIS, event.id)).status, 200);
