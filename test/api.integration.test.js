@@ -39,8 +39,9 @@ async function api(user, p, { method = 'GET', body, raw, headers = {} } = {}) {
   try { json = await res.json(); } catch { /* no body */ }
   return { status: res.status, json, headers: res.headers };
 }
+let eventSequence = 0;
 const newEvent = (over = {}) => ({
-  title: 'Футбол во дворе', category: 'Спорт', city: 'Симферополь', address: 'Парк', latitude: 44.95, longitude: 34.1,
+  title: 'Футбол во дворе ' + (++eventSequence), category: 'Спорт', city: 'Симферополь', address: 'Парк', latitude: 44.95, longitude: 34.1,
   starts_at: new Date(Date.now() + 864e5).toISOString(), capacity: 10, description: 'Описание', ...over
 });
 const create = async (user, over) => (await api(user, '/events', { method: 'POST', body: newEvent(over) })).json.event;
@@ -358,7 +359,7 @@ t('moderator event cancellations are transactional and leave an admin-only audit
 
   const history = await api(A, `/admin/moderation/events/${ev.id}/actions`);
   assert.equal(history.status, 200);
-  assert.equal(history.json.actions.length, 1);
+  assert.equal(history.json.actions.length, 2);
   assert.equal(history.json.actions[0].action, 'cancelled_by_moderator');
   assert.equal(String(history.json.actions[0].actor_id), String(A.id));
 
@@ -376,7 +377,7 @@ t('moderator event cancellations are transactional and leave an admin-only audit
   const repeated = await api(A, `/events/${ev.id}`, { method: 'DELETE' });
   assert.equal(repeated.status, 404);
   const unchangedHistory = await api(A, `/admin/moderation/events/${ev.id}/actions`);
-  assert.equal(unchangedHistory.json.actions.length, 1);
+  assert.equal(unchangedHistory.json.actions.length, 2);
 });
 
 t('legacy admin routes require both Telegram allowlist and the separate admin token', async () => {
@@ -459,7 +460,7 @@ t('new events notify admins and Telegram callback buttons keep or block them', a
   const notification = ctx.telegram.find(call =>
     call.method === 'sendMessage' &&
     String(call.body?.chat_id) === '999' &&
-    String(call.body?.text || '').includes('Создано новое событие') &&
+    String(call.body?.text || '').includes('Новое событие — результат автоматической модерации') &&
     String(call.body?.text || '').includes('Новое событие для админ-уведомления')
   );
   assert.ok(notification);
@@ -480,7 +481,7 @@ t('new events notify admins and Telegram callback buttons keep or block them', a
   } });
   assert.equal(keep.status, 200);
   assert.equal((await ctx.db.query('SELECT status FROM events WHERE id=$1', [ev.id])).rows[0].status, 'published');
-  const keepHistory = await ctx.db.query('SELECT action,previous_status,new_status,actor_id FROM event_moderation_actions WHERE event_id=$1', [ev.id]);
+  const keepHistory = await ctx.db.query('SELECT action,previous_status,new_status,actor_id FROM event_moderation_actions WHERE event_id=$1 ORDER BY created_at DESC,id DESC', [ev.id]);
   assert.equal(keepHistory.rows[0].action, 'kept_published_by_moderator');
   assert.equal(keepHistory.rows[0].new_status, 'published');
   assert.equal(String(keepHistory.rows[0].actor_id), String(A.id));
@@ -492,7 +493,7 @@ t('new events notify admins and Telegram callback buttons keep or block them', a
   } });
   assert.equal(block.status, 200);
   assert.equal((await ctx.db.query('SELECT status FROM events WHERE id=$1', [blockedEvent.id])).rows[0].status, 'cancelled');
-  const blockHistory = await ctx.db.query('SELECT action,new_status FROM event_moderation_actions WHERE event_id=$1', [blockedEvent.id]);
+  const blockHistory = await ctx.db.query('SELECT action,new_status FROM event_moderation_actions WHERE event_id=$1 ORDER BY created_at DESC,id DESC', [blockedEvent.id]);
   assert.equal(blockHistory.rows[0].action, 'cancelled_by_moderator');
   assert.equal(blockHistory.rows[0].new_status, 'cancelled');
 
