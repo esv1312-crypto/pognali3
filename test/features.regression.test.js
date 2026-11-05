@@ -40,7 +40,7 @@ test('event contact chat exposes a join action after an organizer approves an ag
 
 test('repeat-event feature is removed from the user interface and API', () => {
   assert.doesNotMatch(page, /openRepeatEvent|submitRepeatEvent|repeatCalendarMonth|Повторять встречу/);
-  assert.doesNotMatch(server, /app\\.post\\('\\/api\\/events\\/:id\\/repeat'/);
+  assert.doesNotMatch(server, /\/api\/events\/:id\/repeat/);
 });
 
 
