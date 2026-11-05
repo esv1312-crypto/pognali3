@@ -38,10 +38,9 @@ test('event contact chat exposes a join action after an organizer approves an ag
   assert.ok(page.includes('result.conversation?.age_approved'));
 });
 
-test('repeat calendar only enables dates after the source event and within three years', () => {
-  assert.ok(page.includes("let repeatCalendarMonth=null,repeatSelectedDates=[],repeatBaseTime='19:00',repeatBaseDate=''"));
-  assert.ok(page.includes('const past=date<=today||date<=repeatBaseDate||date>maxDate'));
-  assert.ok(page.includes('repeatBaseDate=event.date||localDateKey(eventStart(event))'));
+test('repeat-event feature is removed from the user interface and API', () => {
+  assert.doesNotMatch(page, /openRepeatEvent|submitRepeatEvent|repeatCalendarMonth|Повторять встречу/);
+  assert.doesNotMatch(server, /app\\.post\\('\\/api\\/events\\/:id\\/repeat'/);
 });
 
 
