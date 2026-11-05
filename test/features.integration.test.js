@@ -139,6 +139,8 @@ t('event lifecycle enforces organizer permissions and completed-event rules', as
   assert.equal(deletion.json.archived, true);
   assert.equal((await call(ANNA, `/events/${reportedEvent.id}`)).status, 404);
   assert.equal((await call(ANNA, `/events/${reportedEvent.id}/messages`)).status, 403);
+  assert.equal((await call(BORIS, '/events/joined-ids')).json.ids.includes(String(reportedEvent.id)), false,
+    'cancelled events must not remain in a user\'s joined event IDs');
   assert.equal((await call(ANNA, `/events/${reportedEvent.id}/messages`, { method: 'POST', body: { body: 'После отмены' } })).status, 403);
   assert.equal((await call(ANNA, `/event-contacts/${contact.json.conversation.id}/messages`)).status, 404);
   assert.equal((await call(ANNA, `/event-contacts/${contact.json.conversation.id}/messages`, { method: 'POST', body: { body: 'После отмены' } })).status, 404);
