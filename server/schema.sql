@@ -174,3 +174,29 @@ CREATE TABLE IF NOT EXISTS message_reads (
   last_read_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   PRIMARY KEY (user_id, conversation_type, conversation_id)
 );
+
+
+-- Durable Telegram notification outbox. Pending jobs survive application restarts.
+CREATE TABLE IF NOT EXISTS telegram_notification_outbox (
+  id BIGSERIAL PRIMARY KEY,
+  chat_id TEXT NOT NULL,
+  message_text TEXT NOT NULL,
+  dedupe_key TEXT,
+  cooldown_ms INTEGER NOT NULL DEFAULT 60000 CHECK (cooldown_ms >= 0),
+  status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending','sending','failed')),
+  attempts SMALLINT NOT NULL DEFAULT 0 CHECK (attempts >= 0),
+  available_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  locked_at TIMESTAMPTZ,
+  last_error TEXT,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS telegram_notification_outbox_ready_idx
+  ON telegram_notification_outbox(status, available_at, id) WHERE status='pending';
+CREATE UNIQUE INDEX IF NOT EXISTS telegram_notification_outbox_active_dedupe_idx
+  ON telegram_notification_outbox(dedupe_key)
+  WHERE dedupe_key IS NOT NULL AND status IN ('pending','sending');
+
+CREATE TABLE IF NOT EXISTS telegram_notification_dedup (
+  dedupe_key TEXT PRIMARY KEY,
+  last_sent_at TIMESTAMPTZ NOT NULL
+);
