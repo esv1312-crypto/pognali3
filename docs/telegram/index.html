@@ -1598,13 +1598,13 @@ async function openAdminReports(status=adminReportStatus){
     const result=await apiRequest('/admin/moderation/reports?status='+encodeURIComponent(status));
     const labels={all:'Все',open:'Новые',reviewing:'В работе',resolved:'Решённые',dismissed:'Отклонённые'};
     const reasons={spam:'Спам или реклама',fake:'Обман или фальшивое событие',inappropriate:'Неприемлемый контент',unsafe:'Опасное событие',other:'Другое'};
-    const tabs=Object.keys(labels).map(key=>'<button class="'+(key===status?'primary':'secondary')+'" onclick="openAdminReports(\\''+key+'\\')">'+labels[key]+'</button>').join('');
+    const tabs=Object.keys(labels).map(key=>'<button class="'+(key===status?'primary':'secondary')+'" onclick="openAdminReports(\''+key+'\')">'+labels[key]+'</button>').join('');
     const reports=result.reports||[];
     const cards=reports.map(report=>{
       const actions=[];
-      if(report.status!=='reviewing')actions.push('<button class="secondary" onclick="updateAdminReport('+Number(report.id)+',\\'reviewing\\')">В работу</button>');
-      if(report.status!=='resolved')actions.push('<button class="secondary" onclick="updateAdminReport('+Number(report.id)+',\\'resolved\\')">Решить</button>');
-      if(report.status!=='dismissed')actions.push('<button class="secondary" onclick="updateAdminReport('+Number(report.id)+',\\'dismissed\\')">Отклонить</button>');
+      if(report.status!=='reviewing')actions.push('<button class="secondary" onclick="updateAdminReport('+Number(report.id)+',\'reviewing\')">В работу</button>');
+      if(report.status!=='resolved')actions.push('<button class="secondary" onclick="updateAdminReport('+Number(report.id)+',\'resolved\')">Решить</button>');
+      if(report.status!=='dismissed')actions.push('<button class="secondary" onclick="updateAdminReport('+Number(report.id)+',\'dismissed\')">Отклонить</button>');
       return '<div class="card" style="margin-top:12px"><b>'+esc(report.event_title||'Событие')+'</b><div class="meta">'+esc(report.event_city||'')+' · '+esc(new Date(report.event_starts_at).toLocaleString('ru-RU'))+'</div><p><b>Причина:</b> '+esc(reasons[report.reason]||report.reason)+'</p>'+(report.details?'<p>'+esc(report.details)+'</p>':'')+'<div class="meta">Жалоба от: '+esc(report.reporter_name||'Участник')+' · '+esc(new Date(report.created_at).toLocaleString('ru-RU'))+'<br>Статус: '+esc(labels[report.status]||report.status)+'</div><div class="actions"><button class="secondary" onclick="openEvent('+Number(report.event_id)+')">Открыть событие</button>'+actions.join('')+'</div></div>';
     }).join('');
     const sheet=document.getElementById('sheet');
