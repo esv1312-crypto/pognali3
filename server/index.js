@@ -265,6 +265,7 @@ async function notifyUser(chatId, messageText, key, intervalMs = 60000) {
        RETURNING id`,
       [String(chatId), String(messageText), key ? String(key) : null, Math.max(0, Number(intervalMs) || 0)]
     );
+    if (result.rowCount) void processTelegramNotification();
     return result.rowCount > 0;
   } catch (error) {
     console.error('Could not enqueue Telegram notification:', error.message);
@@ -288,8 +289,8 @@ async function processTelegramNotification() {
          FROM telegram_notification_outbox
          WHERE status='pending' AND available_at <= NOW()
          ORDER BY id
-         FOR UPDATE SKIP LOCKED
-         LIMIT 1`
+         LIMIT 1
+         FOR UPDATE SKIP LOCKED`
       );
       if (!selected.rowCount) {
         await client.query('COMMIT');
