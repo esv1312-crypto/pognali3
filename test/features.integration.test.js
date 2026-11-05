@@ -164,6 +164,11 @@ t('reporting and moderation require valid reasons, admin login and admin token',
   assert.equal(list.status, 200, list.text);
   const row = list.json.reports.find(item => item.event_id === event.id);
   assert.ok(row);
+  assert.equal((await call(ANNA, '/admin/moderation/reports?status=all')).status, 403);
+  const miniList = await call(ADMIN, '/admin/moderation/reports?status=all');
+  assert.equal(miniList.status, 200, miniList.text);
+  assert.ok(miniList.json.reports.some(item => item.event_id === event.id));
+  assert.equal((await call(ADMIN, `/admin/moderation/reports/${row.id}`, { method: 'PATCH', body: { status: 'reviewing' } })).status, 200);
   assert.equal((await call(ADMIN, `/admin/reports/${row.id}`, { method: 'PATCH', body: { status: 'resolved' }, headers: { 'x-admin-token': 'admintoken' } })).status, 200);
 });
 
