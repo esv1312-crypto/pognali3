@@ -544,9 +544,30 @@ app.delete('/api/events/:id', async (req, res) => {
     res.json({ deleted: true, moderated: true, eventId: String(req.params.id) });
     return;
   }
-  const result = await pool.query('DELETE FROM events WHERE id=$1 AND creator_id=$2 RETURNING id', [req.params.id, req.telegramUser.id]);
-  if (!result.rowCount) return res.status(404).json({ error: 'Event not found or you are not its organizer' });
-  res.json({ deleted: true, moderated: false, eventId: String(req.params.id) });
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const event = await client.query('SELECT id FROM events WHERE id=$1 AND creator_id=$2 FOR UPDATE', [req.params.id, req.telegramUser.id]);
+    if (!event.rowCount) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ error: 'Event not found or you are not its organizer' });
+    }
+    const existingReports = await client.query('SELECT 1 FROM event_reports WHERE event_id=$1 LIMIT 1', [req.params.id]);
+    const archived = existingReports.rowCount > 0;
+    if (archived) {
+      // Keep reported events and their moderation/audit history instead of cascading it away.
+      await client.query("UPDATE events SET status='cancelled', updated_at=NOW() WHERE id=$1", [req.params.id]);
+    } else {
+      await client.query('DELETE FROM events WHERE id=$1 AND creator_id=$2', [req.params.id, req.telegramUser.id]);
+    }
+    await client.query('COMMIT');
+    res.json({ deleted: true, moderated: false, archived, eventId: String(req.params.id) });
+  } catch (error) {
+    await client.query('ROLLBACK').catch(() => {});
+    throw error;
+  } finally {
+    client.release();
+  }
 });
 
 app.post('/api/events/:id/finish', async (req, res) => {
