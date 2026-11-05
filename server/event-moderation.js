@@ -8,15 +8,15 @@ const BLOCK_PATTERNS = [
 ];
 
 const REVIEW_PATTERNS = [
-  { pattern: /(?:https?:\\/\\/|www\\.|t\\.me\\/|telegram\\.me\\/)/iu, reason: 'В описании есть внешняя ссылка' },
+  { pattern: /(?:https?:\/\/|www\.|t\.me\/|telegram\.me\/)/iu, reason: 'В описании есть внешняя ссылка' },
   { pattern: /(?:реклам\w*|продам|куплю|продаж\w*|скидк\w*|промокод\w*|прайс\w*|закаж\w*|подписывай\w*|партнёрск\w* ссылк\w*)/iu, reason: 'Возможная реклама или коммерческое предложение' },
   { pattern: /(?:казино|букмекер\w*|ставк\w*|криптовалют\w*|инвестиц\w*|заработ\w*|доход от вложен\w*|реферал\w*)/iu, reason: 'Финансовое или азартное предложение требует проверки' },
-  { pattern: /(?:\\+?\\d[\\d ()-]{7,}\\d)/u, reason: 'В тексте указан телефонный номер' },
-  { pattern: /(?:18\\+|только для взрослых|алкогол\\w*|вейп\\w*|табак\\w*)/iu, reason: 'Возрастное или регулируемое предложение требует проверки' }
+  { pattern: /(?:\+?\d[\d ()-]{7,}\d)/u, reason: 'В тексте указан телефонный номер' },
+  { pattern: /(?:18\+|только для взрослых|алкогол\w*|вейп\w*|табак\w*)/iu, reason: 'Возрастное или регулируемое предложение требует проверки' }
 ];
 
 function normalize(value) {
-  return String(value || '').normalize('NFKC').toLocaleLowerCase('ru-RU').replace(/ё/g, 'е').replace(/[^\\p{L}\\p{N}]+/gu, ' ').trim().replace(/\\s+/g, ' ');
+  return String(value || '').normalize('NFKC').toLocaleLowerCase('ru-RU').replace(/ё/g, 'е').replace(/[^\p{L}\p{N}]+/gu, ' ').trim().replace(/\s+/g, ' ');
 }
 
 function classifyEventText(event) {
@@ -70,12 +70,12 @@ async function evaluateEventModeration(db, event) {
   const city = normalize(event.city);
 
   const duplicate = await db.query(
-    `SELECT id FROM events
+    \`SELECT id FROM events
      WHERE status IN ('published','pending_review')
        AND LOWER(REGEXP_REPLACE(title, '[^[:alnum:]]+', ' ', 'g')) = $1
        AND LOWER(city) = $2
        AND starts_at BETWEEN $3::timestamptz - INTERVAL '24 hours' AND $3::timestamptz + INTERVAL '24 hours'
-     LIMIT 1`,
+     LIMIT 1\`,
     [title, city, event.starts_at]
   );
   if (duplicate.rowCount) {
@@ -93,10 +93,10 @@ async function evaluateEventModeration(db, event) {
   }
 
   const reportHistory = await db.query(
-    `SELECT COUNT(DISTINCT r.id)::int AS count
+    \`SELECT COUNT(DISTINCT r.id)::int AS count
      FROM event_reports r JOIN events e ON e.id=r.event_id
      WHERE e.creator_id=$1 AND r.created_at > NOW() - INTERVAL '30 days'
-       AND r.status IN ('open','reviewing','resolved')`,
+       AND r.status IN ('open','reviewing','resolved')\`,
     [event.creator_id]
   );
   if (Number(reportHistory.rows[0]?.count || 0) >= 2) {
