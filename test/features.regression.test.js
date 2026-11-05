@@ -199,3 +199,11 @@ test('admin event details expose moderation history through the protected audit 
   assert.ok(page.includes('openAdminEventHistory(${e.id})'));
   assert.ok(page.includes('История модерации события'));
 });
+
+
+test('admin moderation environment variables are documented in the example file', () => {
+  const example = fs.readFileSync(path.join(__dirname, '..', '.env.example'), 'utf8');
+  assert.ok(example.includes('ADMIN_TELEGRAM_IDS='));
+  assert.ok(example.includes('ADMIN_API_TOKEN='));
+  assert.ok(example.includes('ADMIN_TELEGRAM_CHAT_ID='));
+});
