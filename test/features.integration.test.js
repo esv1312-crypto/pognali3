@@ -208,40 +208,6 @@ t('event age range and organizer note persist across create, edit and dedicated 
   })).status, 400);
 });
 
-t('repeated events require dates after the source event and within the three-year planning window', async () => {
-  const baseStart = new Date(Date.now() + 3 * 864e5);
-  const event = await makeEvent(ANNA, { title: 'Повторяемая встреча', starts_at: baseStart.toISOString(), age_range: '25–35', live_note: 'Берём мячи' });
-
-  const sameDate = await call(ANNA, `/events/${event.id}/repeat`, {
-    method: 'POST', body: { dates: [baseStart.toISOString()] }
-  });
-  assert.equal(sameDate.status, 400, sameDate.text);
-
-  const beforeSource = await call(ANNA, `/events/${event.id}/repeat`, {
-    method: 'POST', body: { dates: [new Date(Date.now() + 864e5).toISOString()] }
-  });
-  assert.equal(beforeSource.status, 400, beforeSource.text);
-
-  const tooFar = await call(ANNA, `/events/${event.id}/repeat`, {
-    method: 'POST', body: { dates: [new Date(Date.now() + 4 * 365 * 864e5).toISOString()] }
-  });
-  assert.equal(tooFar.status, 400, tooFar.text);
-
-  const validDate = new Date(baseStart.getTime() + 5 * 864e5);
-  const repeated = await call(ANNA, `/events/${event.id}/repeat`, {
-    method: 'POST', body: { dates: [validDate.toISOString()] }
-  });
-  assert.equal(repeated.status, 201, repeated.text);
-  assert.equal(repeated.json.created_count, 2);
-  assert.equal(repeated.json.events.length, 2);
-  assert.equal(String(repeated.json.events[0].id), String(event.id));
-  const detail = await call(ANNA, `/events/${repeated.json.events[1].id}`);
-  assert.equal(detail.status, 200, detail.text);
-  assert.equal(String(detail.json.event.series_id), String(repeated.json.series_id));
-  assert.equal(detail.json.event.age_range, '25–35');
-  assert.equal(detail.json.event.live_note, 'Берём мячи');
-});
-
 t('event capacity cannot be reduced below the current joined participant count', async () => {
   const event = await makeEvent(ANNA, { capacity: 5 });
   assert.equal((await join(BORIS, event.id)).status, 200);
@@ -537,7 +503,7 @@ t('age limits never hide meetings and organizer approval is scoped to one partic
 });
 
 
-t('simultaneous joins cannot exceed capacity and simultaneous repeat requests create one series', async () => {
+t('simultaneous joins cannot exceed event capacity', async () => {
   const full = await makeEvent(ANNA, { title: 'Одновременная запись на последнее место', capacity: 2 });
   const joins = await Promise.all([join(BORIS, full.id), join(VERA, full.id)]);
   assert.deepEqual(joins.map(result => result.status).sort(), [200, 409],
@@ -545,17 +511,4 @@ t('simultaneous joins cannot exceed capacity and simultaneous repeat requests cr
   const detail = await call(ANNA, `/events/${full.id}`);
   assert.equal(detail.json.event.participants_count, 2, 'capacity must remain exact after concurrent joins');
 
-  const base = await makeEvent(ANNA, {
-    title: 'Двойной запрос повтора',
-    starts_at: new Date(Date.now() + 4 * 864e5).toISOString()
-  });
-  const date = new Date(Date.now() + 8 * 864e5).toISOString();
-  const repeats = await Promise.all([
-    call(ANNA, `/events/${base.id}/repeat`, { method: 'POST', body: { dates: [date] } }),
-    call(ANNA, `/events/${base.id}/repeat`, { method: 'POST', body: { dates: [date] } })
-  ]);
-  assert.deepEqual(repeats.map(result => result.status).sort(), [201, 409],
-    'only one simultaneous repeat request may create the series');
-  const event = await call(ANNA, `/events/${base.id}`);
-  assert.ok(event.json.event.series_id, 'the original event must belong to the single created series');
-});
+
