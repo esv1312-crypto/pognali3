@@ -27,7 +27,7 @@ function findForbiddenContact(value) {
   const text = String(value || '').normalize('NFKC');
   const url = /(?:https?:\/\/|www\.)\S+|(?:^|\s)(?:t\.me|telegram\.me|wa\.me|vk\.com|instagram\.com|facebook\.com|youtube\.com|discord\.gg)\/?\S*|(?:^|\s)(?:[a-z0-9-]+\.)+[a-z]{2,}(?:\/\S*)?/iu;
   if (url.test(text)) return 'link';
-  if (/(?:^|\s)@[a-z0-9_]{4,}/iu.test(text)) return 'handle';
+  if (/[\w.+-]+@[\w.-]+\.[a-z]{2,}/iu.test(text) || /(?<![\p{L}\p{N}])@[a-z0-9_]{4,}/iu.test(text)) return 'handle';
   const candidates = text.match(/(?:\+|(?<!\w)(?:7|8)[\s().-]*)?(?:\d[\s().-]*){9,14}\d/gu) || [];
   if (candidates.some(candidate => {
     const digits = candidate.replace(/\D/g, '');
