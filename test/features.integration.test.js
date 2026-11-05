@@ -199,6 +199,26 @@ t('repeated events require dates after the source event and within the three-yea
   assert.equal(String(detail.json.event.series_id), String(repeated.json.series_id));
 });
 
+t('event capacity cannot be reduced below the current joined participant count', async () => {
+  const event = await makeEvent(ANNA, { capacity: 5 });
+  assert.equal((await join(BORIS, event.id)).status, 200);
+
+  const tooSmall = await call(ANNA, `/events/${event.id}`, {
+    method: 'PATCH', body: eventBody({ title: 'Лимит меньше участников', capacity: 1 })
+  });
+  assert.equal(tooSmall.status, 409, tooSmall.text);
+  assert.match(tooSmall.json.error, /лимит меньше текущего количества участников/i);
+
+  const unchanged = await call(ANNA, `/events/${event.id}`);
+  assert.equal(unchanged.json.event.capacity, 5, 'failed capacity update must not change the event');
+
+  const exact = await call(ANNA, `/events/${event.id}`, {
+    method: 'PATCH', body: eventBody({ title: 'Лимит равен участникам', capacity: 2 })
+  });
+  assert.equal(exact.status, 200, exact.text);
+  assert.equal(exact.json.event.capacity, 2);
+});
+
 t('event participant photos and birthdays are visible only to event members', async () => {
   const event = await makeEvent(ANNA, { title: 'Проверка приватности профиля участников' });
   assert.equal((await join(BORIS, event.id)).status, 200);
