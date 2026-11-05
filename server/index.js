@@ -752,8 +752,18 @@ app.post('/api/direct/:id/respond', async (req, res) => {
   const decision = req.body && req.body.decision;
   const status = decision === 'accept' ? 'accepted' : decision === 'reject' ? 'rejected' : '';
   if (!status) return res.status(400).json({ error: 'decision must be accept or reject' });
+  const pending = await pool.query(
+    "SELECT user_low,user_high FROM direct_conversations WHERE id=$1 AND (user_low=$2 OR user_high=$2) AND requested_by<>$2 AND status='pending'",
+    [req.params.id, req.telegramUser.id]
+  );
+  if (!pending.rowCount) return res.status(404).json({ error: 'Pending request not found' });
+  const other = String(pending.rows[0].user_low) === String(req.telegramUser.id)
+    ? pending.rows[0].user_high : pending.rows[0].user_low;
+  if (await hasMessagingBlock(req.telegramUser.id, other)) {
+    return res.status(403).json({ error: 'Messaging is unavailable between these users' });
+  }
   const result = await pool.query(
-    "UPDATE direct_conversations SET status=$2,updated_at=NOW() WHERE id=$1 AND (user_low=$3 OR user_high=$3) AND requested_by<>$3 AND status='pending' RETURNING id,status,requested_by",
+    "UPDATE direct_conversations SET status=$2,updated_at=NOW() WHERE id=$1 AND (user_low=$3 OR user_high=$3) AND requested_by<>$3 AND status='pending' AND NOT EXISTS (SELECT 1 FROM user_blocks ub WHERE (ub.blocker_id=$3 AND ub.blocked_id=CASE WHEN user_low=$3 THEN user_high ELSE user_low END) OR (ub.blocker_id=CASE WHEN user_low=$3 THEN user_high ELSE user_low END AND ub.blocked_id=$3)) RETURNING id,status,requested_by",
     [req.params.id, status, req.telegramUser.id]
   );
   if (!result.rowCount) return res.status(404).json({ error: 'Pending request not found' });
