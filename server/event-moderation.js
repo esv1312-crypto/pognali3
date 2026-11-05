@@ -25,7 +25,7 @@ function normalize(value) {
 // Physical addresses and venue names are separate fields and remain allowed.
 function findForbiddenContact(value) {
   const text = String(value || '').normalize('NFKC');
-  const url = /(?:https?:\/\/|www\.)\S+|(?:^|\s)(?:t\.me|telegram\.me|wa\.me|vk\.com|instagram\.com|facebook\.com|youtube\.com|discord\.gg)\/?\S*/iu;
+  const url = /(?:https?:\/\/|www\.)\S+|(?:^|\s)(?:t\.me|telegram\.me|wa\.me|vk\.com|instagram\.com|facebook\.com|youtube\.com|discord\.gg)\/?\S*|(?:^|\s)(?:[a-z0-9-]+\.)+[a-z]{2,}(?:\/\S*)?/iu;
   if (url.test(text)) return 'link';
   if (/(?:^|\s)@[a-z0-9_]{4,}/iu.test(text)) return 'handle';
   const candidates = text.match(/(?:\+|(?<!\w)(?:7|8)[\s().-]*)?(?:\d[\s().-]*){9,14}\d/gu) || [];
