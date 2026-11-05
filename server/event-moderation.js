@@ -53,8 +53,8 @@ function classifyEventText(event) {
   }
 
   return {
-    status: score >= 3 ? 'pending_review' : 'published',
-    decision: score >= 3 ? 'auto_sent_to_review' : 'auto_published',
+    status: score >= 2 ? 'pending_review' : 'published',
+    decision: score >= 2 ? 'auto_sent_to_review' : 'auto_published',
     score,
     reasons: [...new Set(reasons)]
   };
