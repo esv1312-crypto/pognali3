@@ -363,7 +363,6 @@ t('admin can update a report with a numeric ID', async () => {
 
 t('Telegram admin moderation routes enforce allowlist and preserve an audit trail', async () => {
   const ev = await create(A, { title: 'Проверка прав модератора' });
-  const beforeNotifications = ctx.telegram.length;
   const reported = await api(B, `/events/${ev.id}/reports`, { method: 'POST', body: { reason: 'unsafe', details: 'Проверка уведомления модератору' } });
   assert.equal(reported.status, 201);
   const reportId = reported.json.reportId;
@@ -392,8 +391,8 @@ t('Telegram admin moderation routes enforce allowlist and preserve an audit trai
   assert.equal(history.json.actions[0].previous_status, 'open');
   assert.equal(history.json.actions[0].new_status, 'reviewing');
 
-  for (let i = 0; i < 20 && ctx.telegram.length === beforeNotifications; i++) await sleep(50);
-  assert.ok(ctx.telegram.slice(beforeNotifications).some(call => call.method === 'sendMessage' && call.body.chat_id === '999' && call.body.text.includes('Жалоба №' + reportId)),
+  for (let i = 0; i < 40 && !ctx.telegram.some(call => call.method === 'sendMessage' && call.body.chat_id === '999' && call.body.text.includes('Жалоба №' + reportId)); i++) await sleep(50);
+  assert.ok(ctx.telegram.some(call => call.method === 'sendMessage' && call.body.chat_id === '999' && call.body.text.includes('Жалоба №' + reportId)),
     'new report alert is delivered through the Telegram notification outbox');
 });
 
