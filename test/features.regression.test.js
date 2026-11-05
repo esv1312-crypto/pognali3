@@ -115,6 +115,8 @@ test('Telegram notifications use a durable PostgreSQL outbox with retry and pers
   assert.ok(server.includes('telegram_notification_outbox'));
   assert.ok(server.includes('telegram_notification_dedup'));
   assert.ok(server.includes('FOR UPDATE SKIP LOCKED'));
+  assert.ok(server.includes("'telegram-notify:' + dedupeKey"));
+  assert.ok(server.includes("'telegram-notify:' + job.dedupe_key"));
   assert.ok(server.includes("SET status='pending',available_at=NOW(),locked_at=NULL WHERE status='sending' AND locked_at < NOW() - INTERVAL '2 minutes'"));
   assert.ok(server.includes("CASE WHEN attempts >= 8 THEN 'failed' ELSE 'pending' END"));
   assert.ok(server.includes('ON CONFLICT(dedupe_key) DO UPDATE SET last_sent_at=EXCLUDED.last_sent_at'));
