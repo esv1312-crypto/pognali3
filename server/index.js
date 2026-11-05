@@ -1186,12 +1186,43 @@ app.get('/api/admin/moderation/reports',requireTelegramAdmin,async(req,res)=>{
   );
   res.json({reports:result.rows});
 });
+app.get('/api/admin/moderation/reports/:id/actions',requireTelegramAdmin,async(req,res)=>{
+  const id=String(req.params.id||'');
+  if(!/^[1-9]\d{0,18}$/.test(id))return res.status(400).json({error:'Invalid report ID'});
+  const result=await pool.query(
+    `SELECT a.id,a.previous_status,a.new_status,a.created_at,a.actor_id,
+            COALESCE(u.display_name,u.first_name,u.username,a.actor_id::text) AS actor_name
+     FROM event_report_actions a
+     LEFT JOIN users u ON u.id=a.actor_id
+     WHERE a.report_id=$1
+     ORDER BY a.created_at DESC,a.id DESC
+     LIMIT 100`,
+    [id]
+  );
+  res.json({actions:result.rows});
+});
 app.patch('/api/admin/moderation/reports/:id',requireTelegramAdmin,async(req,res)=>{
   const id=String(req.params.id||''),status=String(req.body?.status||'');
   if(!/^[1-9]\d{0,18}$/.test(id)||!['open','reviewing','resolved','dismissed'].includes(status))return res.status(400).json({error:'A valid report ID and status are required'});
-  const result=await pool.query('UPDATE event_reports SET status=$2 WHERE id=$1 RETURNING id,event_id,status',[id,status]);
-  if(!result.rowCount)return res.status(404).json({error:'Report not found'});
-  res.json({report:result.rows[0]});
+  const client=await pool.connect();
+  try{
+    await client.query('BEGIN');
+    const current=await client.query('SELECT id,event_id,status FROM event_reports WHERE id=$1 FOR UPDATE',[id]);
+    if(!current.rowCount){await client.query('ROLLBACK');return res.status(404).json({error:'Report not found'});}
+    const previousStatus=current.rows[0].status;
+    const updated=await client.query('UPDATE event_reports SET status=$2 WHERE id=$1 RETURNING id,event_id,status',[id,status]);
+    if(previousStatus!==status){
+      await client.query(
+        'INSERT INTO event_report_actions(report_id,actor_id,previous_status,new_status) VALUES($1,$2,$3,$4)',
+        [id,req.telegramUser.id,previousStatus,status]
+      );
+    }
+    await client.query('COMMIT');
+    res.json({report:updated.rows[0],changed:previousStatus!==status});
+  }catch(error){
+    await client.query('ROLLBACK').catch(()=>{});
+    throw error;
+  }finally{client.release();}
 });
 
 app.use((err, _req, res, _next) => {
