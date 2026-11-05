@@ -191,3 +191,11 @@ test('report event metadata is loaded before persisting a report', () => {
   assert.ok(route.indexOf('SELECT id, creator_id, status, title, city FROM events') < route.indexOf('INSERT INTO event_reports'));
   assert.ok(!route.includes("SELECT title, city FROM events WHERE id=$1"));
 });
+
+
+test('admin event details expose moderation history through the protected audit endpoint', () => {
+  assert.ok(page.includes('async function openAdminEventHistory(id)'));
+  assert.ok(page.includes("'/admin/moderation/events/'+encodeURIComponent(id)+'/actions'"));
+  assert.ok(page.includes('openAdminEventHistory(${e.id})'));
+  assert.ok(page.includes('История модерации события'));
+});
