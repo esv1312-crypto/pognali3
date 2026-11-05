@@ -249,18 +249,35 @@ function requireDatabase(_req, res, next) {
 
 const notifyQueue = [];
 const notifyLastSent = new Map();
+const notifyPending = new Set();
 let notifyTimer = null;
+let notifySending = false;
 function notifyUser(chatId, text, key, intervalMs = 60000) {
   const now = Date.now();
-  if (key && now - (notifyLastSent.get(key) || 0) < intervalMs) return;
-  if (key) { if (notifyLastSent.size > 50000) notifyLastSent.clear(); notifyLastSent.set(key, now); } // bounded: no unbounded growth
-  if (notifyQueue.length >= 5000) notifyQueue.shift();
-  notifyQueue.push([chatId, text]);
+  const dedupeKey = key ? String(key) : null;
+  if (dedupeKey && (notifyPending.has(dedupeKey) || now - (notifyLastSent.get(dedupeKey) || 0) < intervalMs)) return;
+  if (notifyQueue.length >= 5000) {
+    const dropped = notifyQueue.shift();
+    if (dropped?.[2]) notifyPending.delete(dropped[2]);
+  }
+  if (dedupeKey) notifyPending.add(dedupeKey);
+  notifyQueue.push([chatId, text, dedupeKey, intervalMs]);
   if (!notifyTimer) {
-    notifyTimer = setInterval(() => {
+    notifyTimer = setInterval(async () => {
+      if (notifySending) return;
       const job = notifyQueue.shift();
       if (!job) { clearInterval(notifyTimer); notifyTimer = null; return; }
-      void sendTelegramMessage(job[0], job[1]);
+      notifySending = true;
+      try {
+        const delivered = await sendTelegramMessage(job[0], job[1]);
+        if (delivered && job[2]) {
+          if (notifyLastSent.size > 50000) notifyLastSent.clear();
+          notifyLastSent.set(job[2], Date.now());
+        }
+      } finally {
+        if (job[2]) notifyPending.delete(job[2]);
+        notifySending = false;
+      }
     }, 50);
   }
 }
