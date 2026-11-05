@@ -152,7 +152,7 @@ app.post('/telegram/webhook', webhookRateLimit, async (req, res) => {
         method: 'POST', headers: { 'content-type': 'application/json' },
         body: JSON.stringify({
           chat_id: message.chat.id, message_id: message.message_id,
-          text: originalText + '\\n\\n' + (action === 'block' ? '⛔ ' : '✅ ') + resultMessage,
+          text: originalText + '\n\n' + (action === 'block' ? '⛔ ' : '✅ ') + resultMessage,
           reply_markup: { inline_keyboard: [] }
         })
       }).catch(error => console.warn('Telegram moderation message update failed:', error.message));
@@ -773,7 +773,7 @@ app.post('/api/events', async (req, res) => {
         'Когда: ' + when,
         'Где: ' + place,
         typeof b.description === 'string' && b.description.trim() ? 'Описание: ' + b.description.trim().slice(0, 700) : ''
-      ].filter(Boolean).join('\\n');
+      ].filter(Boolean).join('\n');
       for (const adminChatId of adminTargets) {
         await client.query(
           `INSERT INTO telegram_notification_outbox (chat_id,message_text,dedupe_key,reply_markup)
