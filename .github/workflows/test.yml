@@ -5,6 +5,7 @@ on:
     branches:
       - feature/telegram-mini-app
       - feature/event-duration-profile-stats
+      - preview/confirmed-attendance-moderation
   pull_request:
     branches:
       - feature/telegram-mini-app
