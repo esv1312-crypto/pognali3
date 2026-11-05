@@ -1065,22 +1065,46 @@ app.post('/api/direct/:id/respond', async (req, res) => {
   const decision = req.body && req.body.decision;
   const status = decision === 'accept' ? 'accepted' : decision === 'reject' ? 'rejected' : '';
   if (!status) return res.status(400).json({ error: 'decision must be accept or reject' });
-  const pending = await pool.query(
-    "SELECT user_low,user_high FROM direct_conversations WHERE id=$1 AND (user_low=$2 OR user_high=$2) AND requested_by<>$2 AND status='pending'",
-    [req.params.id, req.telegramUser.id]
-  );
-  if (!pending.rowCount) return res.status(404).json({ error: 'Pending request not found' });
-  const other = String(pending.rows[0].user_low) === String(req.telegramUser.id)
-    ? pending.rows[0].user_high : pending.rows[0].user_low;
-  if (await hasMessagingBlock(req.telegramUser.id, other)) {
-    return res.status(403).json({ error: 'Messaging is unavailable between these users' });
+  const client = await pool.connect();
+  let conversation;
+  try {
+    await client.query('BEGIN');
+    const pending = await client.query(
+      "SELECT user_low,user_high FROM direct_conversations WHERE id=$1 AND (user_low=$2 OR user_high=$2) AND requested_by<>$2 AND status='pending' FOR UPDATE",
+      [req.params.id, req.telegramUser.id]
+    );
+    if (!pending.rowCount) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ error: 'Pending request not found' });
+    }
+    const other = String(pending.rows[0].user_low) === String(req.telegramUser.id)
+      ? pending.rows[0].user_high : pending.rows[0].user_low;
+    // Share the same pair lock as block/unblock and direct-message writes.
+    await lockMessagingPair(client, req.telegramUser.id, other);
+    const blocked = await client.query(
+      "SELECT 1 FROM user_blocks WHERE (blocker_id=$1 AND blocked_id=$2) OR (blocker_id=$2 AND blocked_id=$1) LIMIT 1",
+      [req.telegramUser.id, other]
+    );
+    if (blocked.rowCount) {
+      await client.query('ROLLBACK');
+      return res.status(403).json({ error: 'Messaging is unavailable between these users' });
+    }
+    const result = await client.query(
+      "UPDATE direct_conversations SET status=$2,updated_at=NOW() WHERE id=$1 AND (user_low=$3 OR user_high=$3) AND requested_by<>$3 AND status='pending' RETURNING id,status,requested_by",
+      [req.params.id, status, req.telegramUser.id]
+    );
+    if (!result.rowCount) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ error: 'Pending request not found' });
+    }
+    conversation = result.rows[0];
+    await client.query('COMMIT');
+  } catch (error) {
+    await client.query('ROLLBACK').catch(() => {});
+    throw error;
+  } finally {
+    client.release();
   }
-  const result = await pool.query(
-    "UPDATE direct_conversations SET status=$2,updated_at=NOW() WHERE id=$1 AND (user_low=$3 OR user_high=$3) AND requested_by<>$3 AND status='pending' AND NOT EXISTS (SELECT 1 FROM user_blocks ub WHERE (ub.blocker_id=$3 AND ub.blocked_id=CASE WHEN user_low=$3 THEN user_high ELSE user_low END) OR (ub.blocker_id=CASE WHEN user_low=$3 THEN user_high ELSE user_low END AND ub.blocked_id=$3)) RETURNING id,status,requested_by",
-    [req.params.id, status, req.telegramUser.id]
-  );
-  if (!result.rowCount) return res.status(404).json({ error: 'Pending request not found' });
-  const conversation = result.rows[0];
   res.json({ conversation: { id: conversation.id, status: conversation.status } });
   const notice = status === 'accepted'
     ? '✓ Твой запрос на личную переписку в «Погнали» принят. Теперь можно общаться.'
