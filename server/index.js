@@ -1136,6 +1136,21 @@ app.get('/api/users/search', async (req, res) => {
   );
   res.json({ users: result.rows });
 });
+app.get('/api/users/:id/profile', async (req, res) => {
+  const result = await pool.query(
+    `SELECT u.id, COALESCE(u.display_name,u.first_name) AS display_name, u.city, u.bio, u.photo_url,
+       CASE WHEN u.birth_date IS NULL THEN NULL ELSE date_part('year', age(CURRENT_DATE, u.birth_date))::int END AS age,
+       (SELECT COUNT(*)::int FROM events e WHERE e.creator_id=u.id AND e.status='completed') AS organized_count,
+       (SELECT COUNT(DISTINCT ep.event_id)::int
+          FROM event_participants ep JOIN events e ON e.id=ep.event_id
+         WHERE ep.user_id=u.id AND ep.status='joined' AND e.status='completed' AND e.creator_id<>u.id) AS attended_count
+     FROM users u WHERE u.id=$1`,
+    [req.params.id]
+  );
+  if (!result.rowCount) return res.status(404).json({ error: 'Пользователь не найден' });
+  res.json({ profile: result.rows[0] });
+});
+
 app.get('/api/messages/unread-count', async (req, res) => {
   const uid = req.telegramUser.id;
   const result = await pool.query(
