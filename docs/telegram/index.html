@@ -1360,9 +1360,31 @@ async function adminRemoveEvent(id){if(!db.profile?.isAdmin)return showToast('Н
 function renderMine(){let own=db.events.filter(e=>e.owner===2&&isVisibleEvent(e)),joined=db.events.filter(e=>e.people.includes(2)&&e.owner!==2&&isVisibleEvent(e)),history=db.events.filter(e=>(e.owner===2||e.people.includes(2))&&!isVisibleEvent(e));document.getElementById('content').innerHTML=`<div class="mine-wrap"><div class="mine-head"><div><h2>Мои события</h2><div class="mine-sub">То, что ты создал и куда уже собираешься</div></div><span class="tag mine-total">${own.length+joined.length} активных</span></div>${API_MODE?`<div class="mine-actions"><button class="secondary" type="button" onclick="openFavorites()">☆ Избранное</button></div>`:""}<div class="mine-section"><div class="mine-section-title"><h3>✦ Я создал</h3><span>${own.length}</span></div>${own.map(e=>eventCardMine(e,true)).join('')||'<div class="empty"><b>Пока ничего не создал.</b><br>Придумай первое событие — пусть люди присоединятся.</div>'}</div><div class="mine-section"><div class="mine-section-title"><h3>🙋 Я иду</h3><span>${joined.length}</span></div>${joined.map(e=>eventCardMine(e,false)).join('')||'<div class="empty"><b>Пока никуда не записался.</b><br>Загляни на карту и найди, чем хочется заняться.</div>'}</div>${history.length?`<div class="mine-section"><div class="mine-section-title"><h3>🕘 Прошедшие</h3><span>${history.length}</span></div>${history.map(e=>eventCardMine(e,e.owner===2)).join('')}</div>`:''}</div>`}
 function eventCardMine(e,own){let icon=eventIcon(e.cat,e.title,e.emoji);let started=eventState(e)==='STARTED';let status=started?'🟢 Событие идёт':(own?'Ты организатор':(e.people.length>=e.limit?'Мест нет':'Ты участвуешь'));let peoplePreview=e.people.slice(0,4).map((p,i)=>`<span>${i===0?'🙂':i===1?'😎':i===2?'🙌':'🤝'}</span>`).join('');return `<div class="mine-card"><div class="mine-card-top"><div class="mine-icon">${icon}</div><div class="mine-title"><h4>${esc(e.title)}</h4><span class="mine-status ${started?'live':(own?'owner':'')}">${status}</span></div></div><div class="mine-meta"><div>🕒 ${fmt(e)}</div><div>📍 ${esc(displayPlace(e))}</div><div>👥 ${e.people.length}/${e.limit} участников</div>${e.ageRange&&e.ageRange!=='Любой возраст'?`<div>👤 ${esc(e.ageRange)}</div>`:''}</div>${e.desc?`<div class="social-note">${esc(e.desc)}</div>`:''}<button type="button" class="mine-people mine-people-btn" onclick="openParticipants(${e.id})" aria-label="Открыть участников"><div class="people-stack">${peoplePreview}</div><span>${e.people.length} ${e.people.length===1?'человек':'человека'} в событии</span><span class="people-arrow">›</span></button><div class="mine-actions">${own?`<button class="secondary" onclick="editEvent(${e.id})">Редактировать</button>`:''}<button class="secondary" onclick="openEvent(${e.id})">Открыть</button>${isEventMember(e)?`<button class="primary" onclick="openChat(${e.id})">Чат</button>`:''}${own&&started?`<button class="danger" onclick="finishEvent(${e.id})">Завершить</button>`:''}</div></div>`}
 function editEvent(id){closeModal();currentTab='create';document.querySelectorAll('.nav').forEach(x=>x.classList.toggle('active',x.dataset.tab==='create'));renderCreate(id)}
-function openParticipants(id){
-  const e=db.events.find(x=>x.id===id);
+async function openParticipants(id){
+  let e=db.events.find(x=>Number(x.id)===Number(id));
   if(!e)return;
+  if(API_MODE){
+    try{
+      const detail=await apiRequest('/events/'+encodeURIComponent(id));
+      const raw=detail.event;
+      if(!raw)throw new Error('Событие не найдено или больше недоступно');
+      Object.assign(e,mapApiEvent(raw));
+      e.owner=localUserId(raw.creator_id);
+      e.people=(detail.participants||[]).map(p=>{
+        const pid=localUserId(p.id);
+        db.users[pid]={telegramId:String(p.id),name:p.display_name||[p.first_name,p.last_name].filter(Boolean).join(' ')||'Участник',city:p.city||'',bio:p.bio||'',photo:p.photo_url||'',birth:p.birth_date?String(p.birth_date).slice(0,10):'',birthDayMonth:p.birth_day&&p.birth_month?String(p.birth_day).padStart(2,'0')+'.'+String(p.birth_month).padStart(2,'0'):''};
+        return pid;
+      });
+      if(!e.people.includes(e.owner))e.people.unshift(e.owner);
+      if(raw.joined_by_me&&!e.people.includes(2))e.people.push(2);
+      if(e.owner!==2)db.users[e.owner]={...(db.users[e.owner]||{}),telegramId:String(raw.creator_id),name:raw.creator_first_name||raw.creator_username||'Организатор'};
+      e.limit=Number(raw.capacity)||1000;
+      save();
+    }catch(error){
+      showToast(error.message||'Не удалось загрузить участников','error');
+      return;
+    }
+  }
   openModal(`<button class="close" onclick="closeModal()">✕</button><h2>Участники</h2><div class="meta" style="margin-bottom:10px">${esc(e.title)} · ${e.people.length}/${e.limit}</div><div class="participant-list">${e.people.map(participantRow).join('')||'<div class="empty">Пока никто не присоединился.</div>'}</div>`);
 }
 async function openChat(id) {
