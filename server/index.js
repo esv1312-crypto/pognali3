@@ -719,6 +719,7 @@ app.get('/api/events/:id', async (req, res) => {
      SELECT u.id, u.username, u.first_name, u.last_name, u.display_name,
        CASE WHEN viewer.can_view_private_profile THEN u.photo_url ELSE NULL END AS photo_url,
        u.city, u.bio,
+       CASE WHEN u.birth_date IS NULL THEN NULL ELSE date_part('year', age(CURRENT_DATE, u.birth_date))::int END AS age,
        NULL::date AS birth_date,
        NULL::smallint AS birth_day,
        NULL::smallint AS birth_month,
