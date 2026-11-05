@@ -183,9 +183,34 @@ t('joining is idempotent, capacity is enforced, and organizer cannot leave', asy
   assert.equal((await call(ANNA, `/events/${event.id}/messages`)).status, 200);
 });
 
+t('event age range and organizer note persist across create, edit and dedicated update', async () => {
+  const event = await makeEvent(ANNA, { age_range: '25–35', live_note: 'Берём воду' });
+  assert.equal(event.age_range, '25–35');
+  assert.equal(event.live_note, 'Берём воду');
+
+  const edited = await call(ANNA, `/events/${event.id}`, {
+    method: 'PATCH', body: eventBody({ title: 'Обновлённая встреча', age_range: '18+', live_note: 'Начинаем вовремя' })
+  });
+  assert.equal(edited.status, 200, edited.text);
+  assert.equal(edited.json.event.age_range, '18+');
+  assert.equal(edited.json.event.live_note, 'Начинаем вовремя');
+
+  const note = await call(ANNA, `/events/${event.id}/live-note`, {
+    method: 'PATCH', body: { live_note: 'Мы уже на месте' }
+  });
+  assert.equal(note.status, 200, note.text);
+  assert.equal(note.json.live_note, 'Мы уже на месте');
+  assert.equal((await call(BORIS, `/events/${event.id}/live-note`, {
+    method: 'PATCH', body: { live_note: 'Чужая заметка' }
+  })).status, 404);
+  assert.equal((await call(ANNA, '/events', {
+    method: 'POST', body: eventBody({ age_range: '0–101' })
+  })).status, 400);
+});
+
 t('repeated events require dates after the source event and within the three-year planning window', async () => {
   const baseStart = new Date(Date.now() + 3 * 864e5);
-  const event = await makeEvent(ANNA, { title: 'Повторяемая встреча', starts_at: baseStart.toISOString() });
+  const event = await makeEvent(ANNA, { title: 'Повторяемая встреча', starts_at: baseStart.toISOString(), age_range: '25–35', live_note: 'Берём мячи' });
 
   const sameDate = await call(ANNA, `/events/${event.id}/repeat`, {
     method: 'POST', body: { dates: [baseStart.toISOString()] }
@@ -213,6 +238,8 @@ t('repeated events require dates after the source event and within the three-yea
   const detail = await call(ANNA, `/events/${repeated.json.events[1].id}`);
   assert.equal(detail.status, 200, detail.text);
   assert.equal(String(detail.json.event.series_id), String(repeated.json.series_id));
+  assert.equal(detail.json.event.age_range, '25–35');
+  assert.equal(detail.json.event.live_note, 'Берём мячи');
 });
 
 t('event capacity cannot be reduced below the current joined participant count', async () => {
