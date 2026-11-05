@@ -10,7 +10,7 @@ const { rateLimit } = require('express-rate-limit');
 const sharp = require('sharp');
 const { verifyTelegramInitData } = require('./telegram-auth');
 const { syncTelegramProfile } = require('./telegram-profile');
-const { evaluateEventModeration } = require('./event-moderation');
+const { evaluateEventModeration, validateEventContactText } = require('./event-moderation');
 
 const app = express();
 // Ids in URLs are numeric: answer 404 for anything else instead of letting PostgreSQL fail with a 500.
@@ -108,6 +108,77 @@ app.post('/telegram/webhook', webhookRateLimit, async (req, res) => {
         body: JSON.stringify({ callback_query_id: callbackId, text: message, show_alert: alert })
       }).catch(error => console.warn('Telegram callback answer failed:', error.message));
     };
+    const attendanceMatch = callbackData.match(/^att:([op]):([yn]):(\d{1,15})$/);
+    if (attendanceMatch) {
+      const [, role, choice, eventId] = attendanceMatch;
+      const attended = choice === 'y';
+      const client = await pool.connect();
+      let responseText = '';
+      try {
+        await client.query('BEGIN');
+        const current = await client.query(
+          'SELECT id,creator_id,title,status,attendance_confirmation_requested_at FROM events WHERE id=$1 FOR UPDATE',
+          [eventId]
+        );
+        const event = current.rows[0];
+        if (!event || event.status !== 'completed' || !event.attendance_confirmation_requested_at) {
+          await client.query('ROLLBACK');
+          await answer('Подтверждение сейчас недоступно', true);
+          return res.json({ ok: true });
+        }
+        if (role === 'o') {
+          if (String(event.creator_id) !== String(actorId)) {
+            await client.query('ROLLBACK');
+            await answer('Подтвердить проведение может только организатор', true);
+            return res.json({ ok: true });
+          }
+          await client.query(
+            'UPDATE events SET organizer_confirmation=$2,organizer_confirmation_at=NOW(),updated_at=NOW() WHERE id=$1',
+            [eventId, attended]
+          );
+          responseText = attended ? 'Организатор подтвердил: встреча состоялась.' : 'Организатор отметил: встреча не состоялась.';
+        } else {
+          if (String(event.creator_id) === String(actorId)) {
+            await client.query('ROLLBACK');
+            await answer('Организатору нужно ответить на своё сообщение', true);
+            return res.json({ ok: true });
+          }
+          const member = await client.query(
+            "SELECT 1 FROM event_participants WHERE event_id=$1 AND user_id=$2 AND status='joined'",
+            [eventId, actorId]
+          );
+          if (!member.rowCount) {
+            await client.query('ROLLBACK');
+            await answer('Подтвердить посещение могут только записавшиеся участники', true);
+            return res.json({ ok: true });
+          }
+          await client.query(
+            "INSERT INTO event_attendance_confirmations(event_id,user_id,attended,confirmed_at) VALUES($1,$2,$3,NOW()) ON CONFLICT(event_id,user_id) DO UPDATE SET attended=EXCLUDED.attended,confirmed_at=NOW()",
+            [eventId, actorId, attended]
+          );
+          responseText = attended ? 'Посещение подтверждено. Спасибо!' : 'Ответ сохранён: ты не посещал(а) эту встречу.';
+        }
+        await client.query('COMMIT');
+      } catch (error) {
+        await client.query('ROLLBACK').catch(() => {});
+        throw error;
+      } finally {
+        client.release();
+      }
+      await answer(responseText);
+      const message = callbackQuery.message;
+      if (message?.chat?.id && message?.message_id) {
+        await fetch('https://api.telegram.org/bot' + token + '/editMessageText', {
+          method: 'POST', headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({
+            chat_id: message.chat.id, message_id: message.message_id,
+            text: String(message.text || '') + '\n\n' + (attended ? '✅ ' : 'ℹ️ ') + responseText,
+            reply_markup: { inline_keyboard: [] }
+          })
+        }).catch(error => console.warn('Telegram attendance message update failed:', error.message));
+      }
+      return res.json({ ok: true });
+    }
     if (!match || !isAdminTelegramUser(actorId)) {
       await answer('Нет прав администратора', true);
       return res.json({ ok: true });
@@ -587,6 +658,12 @@ app.get('/media/avatars/:key', async (req, res) => {
   res.send(avatar.photo_data);
 });
 
+function normalizeEventTimeZone(value) {
+  const zone = typeof value === 'string' && value.trim() ? value.trim().slice(0, 64) : 'Europe/Moscow';
+  try { new Intl.DateTimeFormat('en-US', { timeZone: zone }).format(new Date()); return zone; }
+  catch { return null; }
+}
+
 function normalizeEventAgeRange(value) {
   const range = typeof value === 'string' ? value.trim() : 'Любой возраст';
   const presets = new Set(['Любой возраст', '18+', '18–30', '25–40', '40+']);
@@ -719,6 +796,7 @@ app.get('/api/events/:id', async (req, res) => {
      SELECT u.id, u.username, u.first_name, u.last_name, u.display_name,
        CASE WHEN viewer.can_view_private_profile THEN u.photo_url ELSE NULL END AS photo_url,
        u.city, u.bio,
+       CASE WHEN u.birth_date IS NULL THEN NULL ELSE date_part('year', age(CURRENT_DATE, u.birth_date))::int END AS age,
        NULL::date AS birth_date,
        NULL::smallint AS birth_day,
        NULL::smallint AS birth_month,
@@ -755,11 +833,15 @@ app.post('/api/events', async (req, res) => {
     return res.status(400).json({ error: 'Invalid map coordinates' });
   }
   const endsAt = b.ends_at ? new Date(b.ends_at) : null;
-  if (endsAt && (!Number.isFinite(endsAt.getTime()) || endsAt < startsAt)) return res.status(400).json({ error: 'Invalid ends_at' });
+  if (endsAt && (!Number.isFinite(endsAt.getTime()) || endsAt <= startsAt)) return res.status(400).json({ error: 'Укажи корректное время окончания позже времени начала' });
+  const timeZone = normalizeEventTimeZone(b.time_zone);
+  if (!timeZone) return res.status(400).json({ error: 'Укажи корректный часовой пояс события' });
   const ageRange = normalizeEventAgeRange(b.age_range);
   if (ageRange === null) return res.status(400).json({ error: 'Invalid age_range' });
   const liveNote = typeof b.live_note === 'string' ? b.live_note.trim().slice(0,240) : '';
   const description = typeof b.description === 'string' ? b.description.trim().slice(0,3000) : '';
+  const contactViolation = validateEventContactText({ title, description });
+  if (contactViolation) return res.status(400).json({ code: contactViolation.code, field: contactViolation.field, error: 'В названии и описании нельзя указывать ссылки, контакты и номера телефонов. Удали их и попробуй снова.' });
   const category = typeof b.category === 'string' ? b.category.slice(0,40) : 'other';
   const client = await pool.connect();
   try {
@@ -771,10 +853,10 @@ app.post('/api/events', async (req, res) => {
     };
     const moderation = await evaluateEventModeration(client, draft);
     const result = await client.query(
-      `INSERT INTO events (creator_id,title,description,category,city,address,latitude,longitude,starts_at,ends_at,capacity,emoji,age_range,live_note,status,moderation_decision,moderation_reason,moderated_at)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,NOW()) RETURNING *`,
+      `INSERT INTO events (creator_id,title,description,category,city,address,latitude,longitude,starts_at,ends_at,time_zone,capacity,emoji,age_range,live_note,status,moderation_decision,moderation_reason,moderated_at)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,NOW()) RETURNING *`,
       [req.telegramUser.id, title, description, category, city, draft.address,
-        lat, lon, startsAt.toISOString(), endsAt ? endsAt.toISOString() : null, capacity,
+        lat, lon, startsAt.toISOString(), endsAt ? endsAt.toISOString() : null, timeZone, capacity,
         typeof b.emoji === 'string' ? b.emoji.trim().slice(0, 32) : '', ageRange, liveNote,
         moderation.status, moderation.decision, moderation.reasons.join('; ').slice(0,1000)]
     );
@@ -794,7 +876,7 @@ app.post('/api/events', async (req, res) => {
     if (adminTargets.length) {
       const creatorName = [req.telegramUser.first_name, req.telegramUser.last_name].filter(Boolean).join(' ')
         || (req.telegramUser.username ? '@' + req.telegramUser.username : String(req.telegramUser.id));
-      const when = startsAt.toLocaleString('ru-RU', { dateStyle: 'medium', timeStyle: 'short', timeZone: 'Europe/Moscow' });
+      const when = startsAt.toLocaleString('ru-RU', { dateStyle: 'medium', timeStyle: 'short', timeZone });
       const place = [draft.address, city].filter(Boolean).join(', ');
       const botUsername = String(process.env.TELEGRAM_BOT_USERNAME || 'Pognali_pognali_bot').replace(/^@/, '').trim();
       const eventUrl = 'https://t.me/' + botUsername + '?startapp=' + encodeURIComponent('event_' + created.id);
@@ -859,8 +941,14 @@ app.patch('/api/events/:id', async (req, res) => {
   const lat = b.latitude == null || b.latitude === '' ? null : Number(b.latitude);
   const lon = b.longitude == null || b.longitude === '' ? null : Number(b.longitude);
   const endsAt = b.ends_at ? new Date(b.ends_at) : null;
+  if (endsAt && (!Number.isFinite(endsAt.getTime()) || endsAt <= startsAt)) return res.status(400).json({ error: 'Укажи корректное время окончания позже времени начала' });
+  const timeZone = b.time_zone === undefined ? null : normalizeEventTimeZone(b.time_zone);
+  if (timeZone === null && b.time_zone !== undefined) return res.status(400).json({ error: 'Укажи корректный часовой пояс события' });
   const ageRange = b.age_range === undefined ? null : normalizeEventAgeRange(b.age_range);
   const liveNote = b.live_note === undefined ? null : (typeof b.live_note === 'string' ? b.live_note.trim().slice(0,240) : null);
+  const description = typeof b.description === 'string' ? b.description.trim().slice(0,3000) : '';
+  const contactViolation = validateEventContactText({ title, description });
+  if (contactViolation) return res.status(400).json({ code: contactViolation.code, field: contactViolation.field, error: 'В названии и описании нельзя указывать ссылки, контакты и номера телефонов. Удали их и попробуй снова.' });
   if (ageRange === null && b.age_range !== undefined) return res.status(400).json({ error: 'Invalid age_range' });
   if (liveNote === null && b.live_note !== undefined) return res.status(400).json({ error: 'Invalid live_note' });
   if (title.length < 3 || title.length > 120 || !city || city.length > 120 || !Number.isFinite(startsAt.getTime())) {
@@ -896,13 +984,13 @@ app.patch('/api/events/:id', async (req, res) => {
     }
     const result = await client.query(
       `UPDATE events SET title=$3, description=$4, category=$5, city=$6, address=$7,
-         latitude=$8, longitude=$9, starts_at=$10, ends_at=$11, capacity=$12, emoji=$13,
-         age_range=COALESCE($14,age_range), live_note=COALESCE($15,live_note), updated_at=NOW()
+         latitude=$8, longitude=$9, starts_at=$10, ends_at=$11, time_zone=COALESCE($12,time_zone), capacity=$13, emoji=$14,
+         age_range=COALESCE($15,age_range), live_note=COALESCE($16,live_note), updated_at=NOW()
        WHERE id=$1 AND creator_id=$2 AND status='published' RETURNING *`,
-      [req.params.id, req.telegramUser.id, title, typeof b.description === 'string' ? b.description.trim().slice(0,3000) : '',
+      [req.params.id, req.telegramUser.id, title, description,
         typeof b.category === 'string' ? b.category.slice(0,40) : 'other', city,
         typeof b.address === 'string' ? b.address.trim().slice(0,250) : '', lat, lon,
-        startsAt.toISOString(), endsAt ? endsAt.toISOString() : null, capacity,
+        startsAt.toISOString(), endsAt ? endsAt.toISOString() : null, timeZone, capacity,
         typeof b.emoji === 'string' ? b.emoji.trim().slice(0, 32) : '', ageRange, liveNote]
     );
     await client.query('COMMIT');
@@ -1000,7 +1088,7 @@ app.delete('/api/events/:id', async (req, res) => {
 
 app.post('/api/events/:id/finish', async (req, res) => {
   const result = await pool.query(
-    `UPDATE events SET status='completed', updated_at=NOW()
+    `UPDATE events SET ends_at=NOW(), updated_at=NOW()
      WHERE id=$1 AND creator_id=$2 AND status='published' AND starts_at <= NOW() RETURNING id`,
     [req.params.id, req.telegramUser.id]
   );
@@ -1135,6 +1223,23 @@ app.get('/api/users/search', async (req, res) => {
   );
   res.json({ users: result.rows });
 });
+app.get('/api/users/:id/profile', async (req, res) => {
+  const result = await pool.query(
+    `SELECT u.id, COALESCE(u.display_name,u.first_name) AS display_name, u.city, u.bio, u.photo_url,
+       CASE WHEN u.birth_date IS NULL THEN NULL ELSE date_part('year', age(CURRENT_DATE, u.birth_date))::int END AS age,
+       (SELECT COUNT(*)::int FROM events e
+         WHERE e.creator_id=u.id AND e.status='completed' AND e.organizer_confirmation IS TRUE
+           AND EXISTS (SELECT 1 FROM event_attendance_confirmations ac WHERE ac.event_id=e.id AND ac.attended IS TRUE)) AS organized_count,
+       (SELECT COUNT(DISTINCT ac.event_id)::int
+          FROM event_attendance_confirmations ac JOIN events e ON e.id=ac.event_id
+         WHERE ac.user_id=u.id AND ac.attended IS TRUE AND e.status='completed' AND e.creator_id<>u.id) AS attended_count
+     FROM users u WHERE u.id=$1`,
+    [req.params.id]
+  );
+  if (!result.rowCount) return res.status(404).json({ error: 'Пользователь не найден' });
+  res.json({ profile: result.rows[0] });
+});
+
 app.get('/api/messages/unread-count', async (req, res) => {
   const uid = req.telegramUser.id;
   const result = await pool.query(
@@ -2100,11 +2205,74 @@ async function configureTelegramWebhook() {
   }
 }
 
+async function startEventCompletionWorker() {
+  if (!pool) return;
+  const completeExpiredEvents = async () => {
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+      const result = await client.query(
+        `WITH due AS (
+           SELECT id FROM events
+           WHERE status='published' AND attendance_confirmation_requested_at IS NULL AND (
+             (ends_at IS NOT NULL AND ends_at <= NOW()) OR
+             (ends_at IS NULL AND starts_at <= NOW() - INTERVAL '3 hours')
+           )
+           ORDER BY COALESCE(ends_at, starts_at + INTERVAL '3 hours')
+           LIMIT 100 FOR UPDATE SKIP LOCKED
+         )
+         UPDATE events e SET status='completed', attendance_confirmation_requested_at=NOW(), updated_at=NOW()
+         FROM due WHERE e.id=due.id
+         RETURNING e.id,e.creator_id,e.title`,
+      );
+      for (const event of result.rows) {
+        const organizerKeyboard = { inline_keyboard: [[
+          { text: 'Да, встреча состоялась', callback_data: 'att:o:y:' + event.id },
+          { text: 'Нет, не состоялась', callback_data: 'att:o:n:' + event.id }
+        ]] };
+        await client.query(
+          `INSERT INTO telegram_notification_outbox(chat_id,message_text,dedupe_key,reply_markup)
+           VALUES($1,$2,$3,$4::jsonb) ON CONFLICT DO NOTHING`,
+          [String(event.creator_id), 'Встреча «' + event.title + '» закончилась. Подтверди, пожалуйста, состоялась ли она.',
+            'attendance-request:organizer:' + event.id, JSON.stringify(organizerKeyboard)]
+        );
+        const participants = await client.query(
+          `SELECT user_id FROM event_participants WHERE event_id=$1 AND status='joined' AND user_id<>$2`,
+          [event.id, event.creator_id]
+        );
+        for (const participant of participants.rows) {
+          const participantKeyboard = { inline_keyboard: [[
+            { text: 'Да, я был(а)', callback_data: 'att:p:y:' + event.id },
+            { text: 'Нет, не был(а)', callback_data: 'att:p:n:' + event.id }
+          ]] };
+          await client.query(
+            `INSERT INTO telegram_notification_outbox(chat_id,message_text,dedupe_key,reply_markup)
+             VALUES($1,$2,$3,$4::jsonb) ON CONFLICT DO NOTHING`,
+            [String(participant.user_id), 'Ты участвовал(а) во встрече «' + event.title + '»? Подтверди посещение.',
+              'attendance-request:participant:' + event.id + ':' + participant.user_id, JSON.stringify(participantKeyboard)]
+          );
+        }
+      }
+      await client.query('COMMIT');
+      if (result.rowCount) eventsCache.clear();
+    } catch (error) {
+      await client.query('ROLLBACK').catch(() => {});
+      console.error('Automatic event completion failed:', error.message);
+    } finally {
+      client.release();
+    }
+  };
+  await completeExpiredEvents();
+  const timer = setInterval(completeExpiredEvents, 30 * 1000);
+  timer.unref?.();
+}
+
 async function start() {
   if (pool) {
     const schema = await fs.readFile(path.join(__dirname, 'schema.sql'), 'utf8');
     await pool.query(schema);
     await startNotificationWorker();
+    await startEventCompletionWorker();
   }
   const port = Number(process.env.PORT || 3000);
   const server = app.listen(port, '0.0.0.0', () => {

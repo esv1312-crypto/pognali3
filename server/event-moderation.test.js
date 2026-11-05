@@ -1,6 +1,6 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { classifyEventText, normalize } = require('./event-moderation');
+const { classifyEventText, normalize, validateEventContactText } = require('./event-moderation');
 
 const safe = {
   title: 'Футбол во дворе',
@@ -10,7 +10,7 @@ const safe = {
   capacity: 12
 };
 
-test('normalizes Russian text consistently for duplicate detection', () => {
+test('normalizes Russian text consistently', () => {
   assert.equal(normalize('  Ёлки — ПАЛКИ! '), 'елки палки');
 });
 
@@ -21,30 +21,45 @@ test('automatically publishes an ordinary real-life event', () => {
   assert.deepEqual(result.reasons, []);
 });
 
-test('sends external links and advertising to manual review', () => {
-  const link = classifyEventText({ ...safe, description: 'Играем в футбол. Подробности https://example.com' });
-  assert.equal(link.status, 'pending_review');
-  assert.ok(link.reasons.some(reason => reason.includes('ссылк')));
-
-  const ad = classifyEventText({ ...safe, description: 'Реклама, скидки и промокоды для всех участников' });
-  assert.equal(ad.status, 'pending_review');
-  assert.ok(ad.reasons.some(reason => reason.includes('реклама')));
+test('does not send vague, short or location-free events to manual review', () => {
+  const result = classifyEventText({ ...safe, title: 'Встреча', description: '', category: 'Другое', city: 'Не указан', capacity: 1000 });
+  assert.equal(result.status, 'published');
+  assert.equal(result.decision, 'auto_published');
 });
 
-test('sends vague events without enough details to manual review', () => {
-  const result = classifyEventText({ ...safe, title: 'Встреча', description: '', category: 'Другое' });
-  assert.equal(result.status, 'pending_review');
-  assert.ok(result.reasons.some(reason => reason.includes('подробностей')));
+test('does not penalize commercial format, duplicates or high publishing frequency', () => {
+  const result = classifyEventText({ ...safe, description: 'Платная тренировка, запись на месте. Есть свободные места.' });
+  assert.equal(result.status, 'published');
 });
 
-test('blocks clear offers of prohibited or dangerous activity', () => {
+test('blocks explicit offers to sell prohibited drugs', () => {
   const result = classifyEventText({ ...safe, description: 'Продам наркотики, доставка сегодня' });
   assert.equal(result.status, 'cancelled');
   assert.equal(result.decision, 'auto_blocked');
-  assert.ok(result.reasons.length > 0);
 });
 
-test('does not block ordinary sport events mentioning contact or training', () => {
-  const result = classifyEventText({ ...safe, title: 'Тренировка по боксу', description: 'Отрабатываем технику и спарринги в зале' });
-  assert.equal(result.status, 'published');
+test('does not block ordinary events mentioning a shooting range or video games', () => {
+  for (const title of ['Пойдём в тир', 'Играем в стрелялки']) {
+    const result = classifyEventText({ ...safe, title, description: 'Встречаемся и проводим время вместе' });
+    assert.equal(result.status, 'published');
+  }
+});
+
+test('routes ambiguous direct threats to manual review', () => {
+  const result = classifyEventText({ ...safe, description: 'Собираюсь напасть после встречи' });
+  assert.equal(result.status, 'pending_review');
+});
+
+test('rejects external links, social handles and phone numbers as editable text errors', () => {
+  assert.deepEqual(validateEventContactText({ title: 'Футбол', description: 'Подробности https://example.com' }), {
+    field: 'description', kind: 'link', code: 'CONTACT_DETAILS_NOT_ALLOWED'
+  });
+  assert.equal(validateEventContactText({ title: 'Встреча @some_user', description: '' })?.kind, 'handle');
+  assert.equal(validateEventContactText({ title: 'Встреча', description: 'Напиши me@example.com' })?.kind, 'handle');
+  assert.equal(validateEventContactText({ title: 'Встреча', description: 'Подробности example.org' })?.kind, 'link');
+  assert.equal(validateEventContactText({ title: 'Встреча', description: 'Звони +7 999 123-45-67' })?.kind, 'phone');
+});
+
+test('allows physical venue names and ordinary addresses', () => {
+  assert.equal(validateEventContactText({ title: 'Кофе в центре', description: 'Встречаемся на улице Ленина, дом 10' }), null);
 });
