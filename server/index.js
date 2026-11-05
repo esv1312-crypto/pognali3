@@ -108,6 +108,77 @@ app.post('/telegram/webhook', webhookRateLimit, async (req, res) => {
         body: JSON.stringify({ callback_query_id: callbackId, text: message, show_alert: alert })
       }).catch(error => console.warn('Telegram callback answer failed:', error.message));
     };
+    const attendanceMatch = callbackData.match(/^att:([op]):([yn]):(\d{1,15})$/);
+    if (attendanceMatch) {
+      const [, role, choice, eventId] = attendanceMatch;
+      const attended = choice === 'y';
+      const client = await pool.connect();
+      let responseText = '';
+      try {
+        await client.query('BEGIN');
+        const current = await client.query(
+          'SELECT id,creator_id,title,status,attendance_confirmation_requested_at FROM events WHERE id=$1 FOR UPDATE',
+          [eventId]
+        );
+        const event = current.rows[0];
+        if (!event || event.status !== 'completed' || !event.attendance_confirmation_requested_at) {
+          await client.query('ROLLBACK');
+          await answer('Подтверждение сейчас недоступно', true);
+          return res.json({ ok: true });
+        }
+        if (role === 'o') {
+          if (String(event.creator_id) !== String(actorId)) {
+            await client.query('ROLLBACK');
+            await answer('Подтвердить проведение может только организатор', true);
+            return res.json({ ok: true });
+          }
+          await client.query(
+            'UPDATE events SET organizer_confirmation=$2,organizer_confirmation_at=NOW(),updated_at=NOW() WHERE id=$1',
+            [eventId, attended]
+          );
+          responseText = attended ? 'Организатор подтвердил: встреча состоялась.' : 'Организатор отметил: встреча не состоялась.';
+        } else {
+          if (String(event.creator_id) === String(actorId)) {
+            await client.query('ROLLBACK');
+            await answer('Организатору нужно ответить на своё сообщение', true);
+            return res.json({ ok: true });
+          }
+          const member = await client.query(
+            "SELECT 1 FROM event_participants WHERE event_id=$1 AND user_id=$2 AND status='joined'",
+            [eventId, actorId]
+          );
+          if (!member.rowCount) {
+            await client.query('ROLLBACK');
+            await answer('Подтвердить посещение могут только записавшиеся участники', true);
+            return res.json({ ok: true });
+          }
+          await client.query(
+            "INSERT INTO event_attendance_confirmations(event_id,user_id,attended,confirmed_at) VALUES($1,$2,$3,NOW()) ON CONFLICT(event_id,user_id) DO UPDATE SET attended=EXCLUDED.attended,confirmed_at=NOW()",
+            [eventId, actorId, attended]
+          );
+          responseText = attended ? 'Посещение подтверждено. Спасибо!' : 'Ответ сохранён: ты не посещал(а) эту встречу.';
+        }
+        await client.query('COMMIT');
+      } catch (error) {
+        await client.query('ROLLBACK').catch(() => {});
+        throw error;
+      } finally {
+        client.release();
+      }
+      await answer(responseText);
+      const message = callbackQuery.message;
+      if (message?.chat?.id && message?.message_id) {
+        await fetch('https://api.telegram.org/bot' + token + '/editMessageText', {
+          method: 'POST', headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({
+            chat_id: message.chat.id, message_id: message.message_id,
+            text: String(message.text || '') + '\n\n' + (attended ? '✅ ' : 'ℹ️ ') + responseText,
+            reply_markup: { inline_keyboard: [] }
+          })
+        }).catch(error => console.warn('Telegram attendance message update failed:', error.message));
+      }
+      return res.json({ ok: true });
+    }
     if (!match || !isAdminTelegramUser(actorId)) {
       await answer('Нет прав администратора', true);
       return res.json({ ok: true });
