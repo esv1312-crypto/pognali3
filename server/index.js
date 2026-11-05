@@ -352,10 +352,10 @@ async function processTelegramNotification() {
 async function startNotificationWorker() {
   if (!pool) return;
   await pool.query(
-    "UPDATE telegram_notification_outbox SET status='pending',available_at=NOW(),locked_at=NULL WHERE status='sending'"
+    "UPDATE telegram_notification_outbox SET status='pending',available_at=NOW(),locked_at=NULL WHERE status='sending' AND locked_at < NOW() - INTERVAL '2 minutes'"
   );
   if (!notificationWorkerTimer) {
-    notificationWorkerTimer = setInterval(() => { void processTelegramNotification(); }, 1000);
+    notificationWorkerTimer = setInterval(() => { void processTelegramNotification(); }, 100);
     notificationWorkerTimer.unref?.();
   }
   void processTelegramNotification();
