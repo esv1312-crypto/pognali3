@@ -595,28 +595,7 @@ body{background:var(--pg-bg)!important}
 <style id="pognali-a11y">.bottomnav .nav span{font-size:11px!important;letter-spacing:-.2px}.bottomnav .nav:not(.active):not(.create-nav) span{color:#5f6672!important}.create-hero-kicker,.create-hero-foot{font-size:11px!important;color:#5f6672!important}.calendar-week span{font-size:11px!important;color:#5f6672!important}button[onclick="clearCalendarDate()"]{min-height:36px;padding:0 14px}.maplibregl-ctrl-group button{width:40px!important;height:40px!important}</style>
 <style id="pognali-clusters">.event-cluster.stack{--h:40px;display:flex;align-items:center;height:var(--h);padding:0 7px 0 4px;background:#fff;border:2px solid #17171a;border-radius:99px;box-shadow:0 6px 16px rgba(0,0,0,.28);cursor:pointer;position:relative;font:inherit}.event-cluster.stack.tier2{--h:48px}.event-cluster.stack.tier3{--h:58px;border-width:3px}.cl-faces{display:flex}.cl-face{width:calc(var(--h) - 12px);height:calc(var(--h) - 12px);border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:calc(var(--h) * .42);line-height:1;border:2px solid #fff;margin-left:-8px}.cl-face:first-child{margin-left:0}.cl-face.f0{background:#ffe1d8}.cl-face.f1{background:#d5f6e8}.cl-face.f2{background:#fff0c2}.cl-n{position:absolute;top:-10px;right:-7px;background:#ff6b4a;color:#fff;font:800 12px system-ui,sans-serif;font-style:normal;border-radius:99px;padding:2px 7px;border:2px solid #fff;min-width:24px;text-align:center}</style>
 
-<style id="pognali-launch-splash">
-#pognaliLaunchSplash{position:fixed;inset:0;z-index:10000;display:flex;align-items:center;justify-content:center;padding:calc(24px + env(safe-area-inset-top,0px)) 24px calc(24px + env(safe-area-inset-bottom,0px));background:radial-gradient(ellipse at 12% 12%,#eee7ff 0,transparent 38%),radial-gradient(ellipse at 88% 82%,#ffe5f1 0,transparent 36%),linear-gradient(145deg,#fbfaff,#f5f2ff 58%,#fff8fb);opacity:1;visibility:visible;transition:opacity .32s ease,visibility .32s ease}
-#pognaliLaunchSplash.is-hiding{opacity:0;visibility:hidden;pointer-events:none}
-#pognaliLaunchSplash .splash-inner{width:min(100%,330px);display:flex;flex-direction:column;align-items:center;text-align:center}
-#pognaliLaunchSplash .splash-mark{width:104px;height:104px;display:grid;place-items:center;border-radius:32px;background:linear-gradient(140deg,#6d4aff,#a24cff 58%,#ff5ca8);box-shadow:0 18px 42px #8255e83b;position:relative;margin-bottom:25px;animation:splashFloat 2.3s ease-in-out infinite}
-#pognaliLaunchSplash .splash-rocket{font-size:54px;line-height:1;filter:drop-shadow(0 4px 3px #34205c30);transform:rotate(-12deg)}
-#pognaliLaunchSplash .splash-spark{position:absolute;color:#fff;font-size:18px;animation:splashTwinkle 1.6s ease-in-out infinite}
-#pognaliLaunchSplash .splash-spark.one{top:12px;right:13px}
-#pognaliLaunchSplash .splash-spark.two{bottom:13px;left:13px;font-size:13px;animation-delay:.45s}
-#pognaliLaunchSplash .splash-name{font-size:34px;font-weight:950;letter-spacing:-1.4px;color:#21183e;line-height:1.05}
-#pognaliLaunchSplash .splash-tagline{margin-top:9px;color:#716887;font-size:14px;font-weight:650}
-#pognaliLaunchSplash .splash-loading{display:flex;align-items:center;gap:9px;margin-top:38px;color:#716887;font-size:12px;font-weight:700}
-#pognaliLaunchSplash .splash-dots{display:flex;gap:4px}
-#pognaliLaunchSplash .splash-dots i{width:5px;height:5px;border-radius:50%;background:#8a65f4;animation:splashDot 1s ease-in-out infinite}
-#pognaliLaunchSplash .splash-dots i:nth-child(2){animation-delay:.15s}
-#pognaliLaunchSplash .splash-dots i:nth-child(3){animation-delay:.3s}
-#pognaliLaunchSplash .splash-foot{position:absolute;bottom:calc(22px + env(safe-area-inset-bottom,0px));font-size:10px;letter-spacing:1.6px;font-weight:850;color:#aaa2bc}
-@keyframes splashFloat{0%,100%{transform:translateY(0) rotate(-2deg)}50%{transform:translateY(-7px) rotate(2deg)}}
-@keyframes splashTwinkle{0%,100%{opacity:.55;transform:scale(.8)}50%{opacity:1;transform:scale(1.2)}}
-@keyframes splashDot{0%,80%,100%{opacity:.35;transform:translateY(0)}40%{opacity:1;transform:translateY(-4px)}}
-@media(prefers-reduced-motion:reduce){#pognaliLaunchSplash *,#pognaliLaunchSplash *:before{animation:none!important;transition:none!important}}
-</style>
+
 
 </head>
 <body>
@@ -643,9 +622,7 @@ const KEY='pognali_telegram_demo_01';
 const API_MODE=!!window.Telegram?.WebApp?.initData;
 const TELEGRAM_INIT_DATA=window.Telegram?.WebApp?.initData||'';
 if(!API_MODE){document.getElementById('previewBanner')?.classList.remove('hidden');window.addEventListener('error',e=>{const b=document.getElementById('previewBanner');if(b){b.classList.remove('hidden');b.textContent='⚠ Ошибка интерфейса: '+String(e.message||'unknown').slice(0,180)}});window.addEventListener('unhandledrejection',e=>{const b=document.getElementById('previewBanner');if(b){b.classList.remove('hidden');b.textContent='⚠ Ошибка интерфейса: '+String(e.reason?.message||e.reason||'unknown').slice(0,180)}})}
-const base={profile:{name:'Стас',birth:'1988-04-01',city:'Симферополь',bio:'Люблю спорт, новые места и когда можно просто сказать: «Погнали».',photo:''},events:[
-{id:1,title:'Прогулка по Гагаринскому парку',cat:'Прогулка',date:'2026-09-25',time:'18:30',place:'Гагаринский парк',country:'Россия',city:'Симферополь',lat:44.9463,lng:34.0957,limit:8,desc:'Спокойно пройтись, поболтать и познакомиться с новыми людьми.',people:[2],owner:1,status:'ACTIVE'},
-{id:2,title:'Футбол 5×5',cat:'Спорт',date:'2026-09-26',time:'17:00',place:'Спортивная площадка в Гагаринском парке',country:'Россия',city:'Симферополь',lat:44.9448,lng:34.1015,limit:10,desc:'Нужны игроки на дружеский футбол. Без профессионализма.',people:[2,3,4],owner:2,status:'ACTIVE'},
+const base={profile:{name:'Стас',birth:'1988-04-01',city:'Симферополь',bio:'Люблю спорт, новые места и когда можно простIVE'},
 {id:3,title:'Кофе и знакомство',cat:'Общение',date:'2026-09-27',time:'13:00',place:'Центр Симферополя',country:'Россия',city:'Симферополь',lat:44.9521,lng:34.1024,limit:6,desc:'Кофе, разговоры и новые знакомства. Без обязательств.',people:[2],owner:3,status:'ACTIVE'},
 {id:4,title:'Вечерний забег',cat:'Спорт',date:'2026-09-28',time:'19:00',place:'Набережная Салгира',country:'Россия',city:'Симферополь',lat:44.9569,lng:34.1045,limit:12,desc:'Лёгкий темп, около 5 км. Бежим вместе.',people:[2,5],owner:4,status:'ACTIVE'}],users:{1:{name:'Стас',city:'Симферополь'},2:{name:'Стас',city:'Симферополь'},3:{name:'Маша',city:'Симферополь'},4:{name:'Илья',city:'Симферополь'},5:{name:'Олег',city:'Симферополь'}},chats:{},questions:{}};
 let db=API_MODE?{profile:{name:[window.Telegram?.WebApp?.initDataUnsafe?.user?.first_name,window.Telegram?.WebApp?.initDataUnsafe?.user?.last_name].filter(Boolean).join(' ')||'Участник',birth:'',city:'',bio:'',photo:''},events:[],users:{},chats:{},questions:{}}:(JSON.parse(localStorage.getItem(KEY)||'null')||base);
@@ -1943,24 +1920,7 @@ function initTelegramMiniApp(){
       const u=tg.initDataUnsafe.user;
       const name=[u.first_name,u.last_name].filter(Boolean).join(' ').trim();
       if(name&&db.profile&&(!db.profile.name||db.profile.name==='Стас'))db.profile.name=name;
-      if(u.photo_url&&db.profile&&!db.profile.photo)db.profile.telegramPhoto=u.photo_url;
-    }
-    if(API_MODE){void openSharedEventFromStartParam();refreshApiData().catch(e=>{console.error('Pognali API:',e);showToast(e.message||'Сервер пока не настроен','error')}).finally(()=>{markPognaliStartupReady('data');openSharedEventFromStartParam()})}else{markPognaliStartupReady('data');setTimeout(openSharedEventFromStartParam,0)}
-  }catch(e){console.warn('Telegram Mini App initialization:',e)}
-}
-
-initTelegramMiniApp();
-window.addEventListener('pognali-maplibre-failed', () => {
-  if (currentTab === 'events' && eventView === 'map') {
-    eventView = 'list';
-    renderList();
-    showToast('Карта временно недоступна. Показываем события списком.', 'error');
-  }
-});
-if(API_MODE){
-  updateUnreadBadge();
-  setInterval(()=>{if(document.visibilityState==='visible')void updateUnreadBadge()},15000);
-  setInterval(()=>{if(document.visibilityState==='visible'&&currentTab==='messages'&&!document.getElementById('modal')?.classList.contains('open'))void loadDirectInbox()},30000);
+      if(u.photo_url&&db.profile&&!db.profile.photo)db.profile.telegramPhoto=u.ph// Стартовая заставка отключена: приложение открывается сразу, без блокирующего экрана.ent.getElementById('modal')?.classList.contains('open'))void loadDirectInbox()},30000);
   window.addEventListener('focus',()=>void updateUnreadBadge());
   window.addEventListener('pageshow',()=>void updateUnreadBadge());
   document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')void updateUnreadBadge()});
