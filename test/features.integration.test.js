@@ -128,6 +128,10 @@ t('event lifecycle enforces organizer permissions and completed-event rules', as
   assert.equal((await call(ANNA, `/events/${reportedEvent.id}/messages`, { method: 'POST', body: { body: 'После отмены' } })).status, 403);
   assert.equal((await call(ANNA, `/event-contacts/${contact.json.conversation.id}/messages`)).status, 404);
   assert.equal((await call(ANNA, `/event-contacts/${contact.json.conversation.id}/messages`, { method: 'POST', body: { body: 'После отмены' } })).status, 404);
+  const inboxAfterCancellation = await call(ANNA, '/messages');
+  assert.equal(inboxAfterCancellation.status, 200, inboxAfterCancellation.text);
+  assert.equal(inboxAfterCancellation.json.eventContacts.some(item => String(item.id) === String(contact.json.conversation.id)), false,
+    'cancelled event-contact conversations must not appear in the messages inbox');
   const moderationQueue = await call(ADMIN, '/admin/moderation/reports?status=all');
   assert.ok(moderationQueue.json.reports.some(item => String(item.event_id) === String(reportedEvent.id) && item.event_status === 'cancelled'),
     'deleting a reported event must preserve the report and its audit trail');
