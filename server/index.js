@@ -1090,8 +1090,15 @@ app.post('/api/events/:id/repeat', async (req, res) => {
     const baseTime = new Date(event.starts_at).getTime();
     if (baseTime <= Date.now()) { await client.query('ROLLBACK'); return res.status(400).json({ error: 'Повторять можно только предстоящую встречу' }); }
     if (event.series_id) { await client.query('ROLLBACK'); return res.status(409).json({ error: 'Эта встреча уже входит в серию' }); }
-    if (dates.some(date => date.getTime() <= Date.now())) {
-      await client.query('ROLLBACK'); return res.status(400).json({ error: 'Выбирай только будущие даты' });
+    const now = Date.now();
+    const maxStart = now + 3 * 365 * 24 * 60 * 60 * 1000;
+    if (dates.some(date => date.getTime() <= Math.max(now, baseTime))) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ error: 'Выбирай даты позже исходной встречи' });
+    }
+    if (dates.some(date => date.getTime() > maxStart)) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ error: 'Повторить встречу можно не дальше чем на 3 года вперёд' });
     }
     dates.sort((a,b) => a.getTime()-b.getTime());
     const series = await client.query(
