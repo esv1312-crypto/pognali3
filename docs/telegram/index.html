@@ -1605,7 +1605,7 @@ async function openAdminReports(status=adminReportStatus){
       if(report.status!=='reviewing')actions.push('<button class="secondary" onclick="updateAdminReport('+Number(report.id)+',\'reviewing\')">В работу</button>');
       if(report.status!=='resolved')actions.push('<button class="secondary" onclick="updateAdminReport('+Number(report.id)+',\'resolved\')">Решить</button>');
       if(report.status!=='dismissed')actions.push('<button class="secondary" onclick="updateAdminReport('+Number(report.id)+',\'dismissed\')">Отклонить</button>');
-      return '<div class="card" style="margin-top:12px"><b>'+esc(report.event_title||'Событие')+'</b><div class="meta">'+esc(report.event_city||'')+' · '+esc(new Date(report.event_starts_at).toLocaleString('ru-RU'))+'</div><p><b>Причина:</b> '+esc(reasons[report.reason]||report.reason)+'</p>'+(report.details?'<p>'+esc(report.details)+'</p>':'')+'<div class="meta">Жалоба от: '+esc(report.reporter_name||'Участник')+' · '+esc(new Date(report.created_at).toLocaleString('ru-RU'))+'<br>Статус: '+esc(labels[report.status]||report.status)+'</div><div class="actions"><button class="secondary" onclick="openEvent('+Number(report.event_id)+')">Открыть событие</button>'+actions.join('')+'</div></div>';
+      return '<div class="card" style="margin-top:12px"><b>'+esc(report.event_title||'Событие')+'</b><div class="meta">'+esc(report.event_city||'')+' · '+esc(new Date(report.event_starts_at).toLocaleString('ru-RU'))+'</div><p><b>Причина:</b> '+esc(reasons[report.reason]||report.reason)+'</p>'+(report.details?'<p>'+esc(report.details)+'</p>':'')+'<div class="meta">Жалоба от: '+esc(report.reporter_name||'Участник')+' · '+esc(new Date(report.created_at).toLocaleString('ru-RU'))+'<br>Статус: '+esc(labels[report.status]||report.status)+'</div><div class="actions"><button class="secondary" onclick="openEvent('+Number(report.event_id)+')">Открыть событие</button><button class="secondary" onclick="openModerationHistory('+Number(report.id)+')">История</button>'+actions.join('')+'</div></div>';
     }).join('');
     const sheet=document.getElementById('sheet');
     if(sheet)sheet.innerHTML='<button class="close" onclick="closeModal()">✕</button><h2>Модерация жалоб</h2><div class="actions">'+tabs+'</div>'+(cards||'<div class="empty">В этой категории жалоб нет.</div>');
@@ -1613,6 +1613,18 @@ async function openAdminReports(status=adminReportStatus){
     const sheet=document.getElementById('sheet');
     if(sheet)sheet.innerHTML='<button class="close" onclick="closeModal()">✕</button><h2>Модерация жалоб</h2><div class="empty">'+esc(error.message||'Не удалось загрузить жалобы')+'</div>';
   }
+}
+async function openModerationHistory(reportId){
+  if(!db.profile?.isAdmin)return showToast('Нет прав администратора','error');
+  openModal('<button class="close" onclick="closeModal()">✕</button><h2>История жалобы</h2><div class="empty">Загружаем историю…</div>');
+  try{
+    const result=await apiRequest('/admin/moderation/reports/'+encodeURIComponent(reportId)+'/history');
+    const labels={open:'Новая',reviewing:'В работе',resolved:'Решена',dismissed:'Отклонена'};
+    const history=result.history||[];
+    const rows=history.map(item=>'<div class="message-item"><span style="flex:1"><b>'+esc(labels[item.from_status]||item.from_status)+' → '+esc(labels[item.to_status]||item.to_status)+'</b><small>Администратор Telegram ID: '+esc(item.actor_telegram_id)+'</small></span><small>'+esc(new Date(item.changed_at).toLocaleString('ru-RU'))+'</small></div>').join('');
+    const sheet=document.getElementById('sheet');
+    if(sheet)sheet.innerHTML='<button class="close" onclick="closeModal()">✕</button><h2>История жалобы</h2>'+(rows||'<div class="empty">Изменений статуса ещё не было.</div>');
+  }catch(error){const sheet=document.getElementById('sheet');if(sheet)sheet.innerHTML='<button class="close" onclick="closeModal()">✕</button><h2>История жалобы</h2><div class="empty">'+esc(error.message||'Не удалось загрузить историю')+'</div>'}
 }
 async function updateAdminReport(id,status){
   if(!db.profile?.isAdmin)return showToast('Нет прав администратора','error');
