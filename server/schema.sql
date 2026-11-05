@@ -51,6 +51,11 @@ CREATE TABLE IF NOT EXISTS events (
 ALTER TABLE events ADD COLUMN IF NOT EXISTS emoji TEXT NOT NULL DEFAULT '';
 ALTER TABLE events ADD COLUMN IF NOT EXISTS age_range TEXT NOT NULL DEFAULT 'Любой возраст';
 ALTER TABLE events ADD COLUMN IF NOT EXISTS live_note TEXT NOT NULL DEFAULT '';
+ALTER TABLE events DROP CONSTRAINT IF EXISTS events_status_check;
+ALTER TABLE events ADD CONSTRAINT events_status_check CHECK (status IN ('published','pending_review','cancelled','completed'));
+ALTER TABLE events ADD COLUMN IF NOT EXISTS moderation_decision TEXT NOT NULL DEFAULT 'legacy';
+ALTER TABLE events ADD COLUMN IF NOT EXISTS moderation_reason TEXT NOT NULL DEFAULT '';
+ALTER TABLE events ADD COLUMN IF NOT EXISTS moderated_at TIMESTAMPTZ;
 
 -- Saved events and recurring meetups. Additive migration: existing events and participants remain untouched.
 CREATE TABLE IF NOT EXISTS event_favorites (
@@ -225,10 +230,20 @@ CREATE TABLE IF NOT EXISTS event_moderation_actions (
  new_status TEXT NOT NULL CHECK (new_status IN ('published','cancelled')),
  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+ALTER TABLE event_moderation_actions ALTER COLUMN actor_id DROP NOT NULL;
+ALTER TABLE event_moderation_actions ADD COLUMN IF NOT EXISTS actor_type TEXT NOT NULL DEFAULT 'admin';
+ALTER TABLE event_moderation_actions ADD COLUMN IF NOT EXISTS reason TEXT NOT NULL DEFAULT '';
 ALTER TABLE event_moderation_actions DROP CONSTRAINT IF EXISTS event_moderation_actions_action_check;
-ALTER TABLE event_moderation_actions ADD CONSTRAINT event_moderation_actions_action_check CHECK (action IN ('cancelled_by_moderator','kept_published_by_moderator'));
+ALTER TABLE event_moderation_actions ADD CONSTRAINT event_moderation_actions_action_check CHECK (action IN (
+ 'cancelled_by_moderator','kept_published_by_moderator','auto_published','auto_sent_to_review','auto_blocked',
+ 'approved_by_moderator','rejected_by_moderator','restored_by_moderator'
+));
+ALTER TABLE event_moderation_actions DROP CONSTRAINT IF EXISTS event_moderation_actions_previous_status_check;
+ALTER TABLE event_moderation_actions ADD CONSTRAINT event_moderation_actions_previous_status_check CHECK (previous_status IN ('new','published','pending_review','cancelled'));
 ALTER TABLE event_moderation_actions DROP CONSTRAINT IF EXISTS event_moderation_actions_new_status_check;
-ALTER TABLE event_moderation_actions ADD CONSTRAINT event_moderation_actions_new_status_check CHECK (new_status IN ('published','cancelled'));
+ALTER TABLE event_moderation_actions ADD CONSTRAINT event_moderation_actions_new_status_check CHECK (new_status IN ('published','pending_review','cancelled'));
+ALTER TABLE event_moderation_actions DROP CONSTRAINT IF EXISTS event_moderation_actions_actor_type_check;
+ALTER TABLE event_moderation_actions ADD CONSTRAINT event_moderation_actions_actor_type_check CHECK (actor_type IN ('system','admin'));
 CREATE INDEX IF NOT EXISTS event_moderation_actions_event_created_idx
  ON event_moderation_actions(event_id, created_at DESC);
 CREATE INDEX IF NOT EXISTS event_moderation_actions_actor_created_idx
