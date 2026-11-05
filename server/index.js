@@ -671,14 +671,14 @@ app.get('/api/events', async (req, res) => {
 
 app.get('/api/events/created', async (req, res) => {
   const result = await pool.query(
-    \`SELECT e.*, COALESCE(u.display_name,u.first_name) AS creator_first_name, u.username AS creator_username,
+    `SELECT e.*, COALESCE(u.display_name,u.first_name) AS creator_first_name, u.username AS creator_username,
        (COUNT(ep.user_id) FILTER (WHERE ep.status='joined')
          + CASE WHEN COUNT(ep.user_id) FILTER (WHERE ep.user_id=e.creator_id AND ep.status='joined') > 0 THEN 0 ELSE 1 END)::int AS participants_count,
        (COALESCE(BOOL_OR(ep.user_id=$1 AND ep.status='joined'),FALSE) OR e.creator_id=$1) AS joined_by_me
      FROM events e JOIN users u ON u.id=e.creator_id
      LEFT JOIN event_participants ep ON ep.event_id=e.id
      WHERE e.creator_id=$1
-     GROUP BY e.id,u.id ORDER BY e.created_at DESC LIMIT 100\`,
+     GROUP BY e.id,u.id ORDER BY e.created_at DESC LIMIT 100`,
     [req.telegramUser.id]
   );
   res.json({events:result.rows});
@@ -771,8 +771,8 @@ app.post('/api/events', async (req, res) => {
     };
     const moderation = await evaluateEventModeration(client, draft);
     const result = await client.query(
-      \`INSERT INTO events (creator_id,title,description,category,city,address,latitude,longitude,starts_at,ends_at,capacity,emoji,age_range,live_note,status,moderation_decision,moderation_reason,moderated_at)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,NOW()) RETURNING *\`,
+      `INSERT INTO events (creator_id,title,description,category,city,address,latitude,longitude,starts_at,ends_at,capacity,emoji,age_range,live_note,status,moderation_decision,moderation_reason,moderated_at)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,NOW()) RETURNING *`,
       [req.telegramUser.id, title, description, category, city, draft.address,
         lat, lon, startsAt.toISOString(), endsAt ? endsAt.toISOString() : null, capacity,
         typeof b.emoji === 'string' ? b.emoji.trim().slice(0, 32) : '', ageRange, liveNote,
@@ -781,8 +781,8 @@ app.post('/api/events', async (req, res) => {
     const created = result.rows[0];
     if (created.status === 'published') {
       await client.query(
-        \`INSERT INTO event_participants (event_id,user_id,status) VALUES ($1,$2,'joined')
-         ON CONFLICT (event_id,user_id) DO UPDATE SET status='joined', joined_at=NOW()\`,
+        `INSERT INTO event_participants (event_id,user_id,status) VALUES ($1,$2,'joined')
+         ON CONFLICT (event_id,user_id) DO UPDATE SET status='joined', joined_at=NOW()`,
         [created.id, req.telegramUser.id]
       );
     }
@@ -828,8 +828,8 @@ app.post('/api/events', async (req, res) => {
       ].filter(Boolean).join('\n');
       for (const adminChatId of adminTargets) {
         await client.query(
-          \`INSERT INTO telegram_notification_outbox (chat_id,message_text,dedupe_key,reply_markup)
-           VALUES ($1,$2,$3,$4::jsonb) ON CONFLICT DO NOTHING\`,
+          `INSERT INTO telegram_notification_outbox (chat_id,message_text,dedupe_key,reply_markup)
+           VALUES ($1,$2,$3,$4::jsonb) ON CONFLICT DO NOTHING`,
           [adminChatId, note, 'new-event:' + created.id + ':' + adminChatId, JSON.stringify({ inline_keyboard: keyboard })]
         );
       }
@@ -1761,7 +1761,7 @@ app.get('/api/admin/moderation/events',requireTelegramAdmin,async(req,res)=>{
   if(!['all','published','pending_review','cancelled'].includes(status))return res.status(400).json({error:'Invalid event status'});
   const limit=Math.min(100,Math.max(1,Number.parseInt(req.query.limit,10)||50));
   const result=await pool.query(
-    \`SELECT e.id,e.title,e.description,e.category,e.city,e.address,e.starts_at,e.status,
+    `SELECT e.id,e.title,e.description,e.category,e.city,e.address,e.starts_at,e.status,
             e.moderation_decision,e.moderation_reason,e.created_at,e.creator_id,
             COALESCE(u.display_name,u.first_name,u.username,e.creator_id::text) AS creator_name,
             COUNT(r.id)::int AS reports_count
@@ -1771,7 +1771,7 @@ app.get('/api/admin/moderation/events',requireTelegramAdmin,async(req,res)=>{
      GROUP BY e.id,u.id
      ORDER BY CASE e.status WHEN 'pending_review' THEN 0 WHEN 'cancelled' THEN 1 ELSE 2 END,
               e.created_at DESC
-     LIMIT $2\`,
+     LIMIT $2`,
     [status,limit]
   );
   res.json({events:result.rows});
