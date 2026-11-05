@@ -516,6 +516,25 @@ function normalizeEventAgeRange(value) {
   return min + '–' + max;
 }
 
+function eventAgeBounds(value) {
+  const range = normalizeEventAgeRange(value) || 'Любой возраст';
+  if (range === 'Любой возраст') return null;
+  if (range === '18+') return { min: 18, max: null };
+  if (range === '40+') return { min: 40, max: null };
+  const match = range.match(/^(\\d{1,2})[–-](\\d{1,2})$/);
+  return match ? { min: Number(match[1]), max: Number(match[2]) } : null;
+}
+function ageOnDate(birthDate, eventDate) {
+  if (!birthDate) return null;
+  const birth = new Date(String(birthDate).slice(0, 10) + 'T00:00:00Z');
+  const at = new Date(eventDate);
+  if (!Number.isFinite(birth.getTime()) || !Number.isFinite(at.getTime())) return null;
+  let age = at.getUTCFullYear() - birth.getUTCFullYear();
+  if (at.getUTCMonth() < birth.getUTCMonth() ||
+      (at.getUTCMonth() === birth.getUTCMonth() && at.getUTCDate() < birth.getUTCDate())) age--;
+  return age >= 0 && age <= 120 ? age : null;
+}
+
 function parseAfterMessageId(req, res) {
   if (req.query.after_id === undefined) return null;
   const raw = req.query.after_id;
@@ -1119,6 +1138,25 @@ app.delete('/api/users/:id/block',async(req,res)=>{
 app.get('/api/messages/organized-events',async(req,res)=>{const uid=req.telegramUser.id;const r=await pool.query("SELECT e.id AS event_id,e.title,e.starts_at,ep.user_id AS participant_id,COALESCE(u.display_name,u.first_name,u.username,'Участник') AS participant_name,u.username FROM events e JOIN event_participants ep ON ep.event_id=e.id AND ep.status='joined' JOIN users u ON u.id=ep.user_id WHERE e.creator_id=$1 AND e.status='published' AND ep.user_id<>$1 ORDER BY e.starts_at DESC,COALESCE(u.display_name,u.first_name) LIMIT 300",[uid]);res.json({participants:r.rows})});
 app.post('/api/events/:id/participants/:participantId/contact',async(req,res)=>{const eventId=String(req.params.id||''),participant=String(req.params.participantId||''),organizer=String(req.telegramUser.id);if(!/^[1-9]\d{0,18}$/.test(eventId)||!/^[1-9]\d{0,18}$/.test(participant)||participant===organizer)return res.status(400).json({error:'Некорректный участник или событие'});const e=await pool.query("SELECT id,title FROM events WHERE id=$1 AND creator_id=$2 AND status='published'",[eventId,organizer]);if(!e.rowCount)return res.status(403).json({error:'Только организатор может написать участнику своей встречи'});const member=await pool.query("SELECT 1 FROM event_participants WHERE event_id=$1 AND user_id=$2 AND status='joined'",[eventId,participant]);if(!member.rowCount)return res.status(404).json({error:'Участник больше не записан на эту встречу'});if(await hasMessagingBlock(organizer,participant))return res.status(403).json({error:'Переписка между пользователями недоступна'});const r=await pool.query('INSERT INTO event_contact_conversations(event_id,participant_id,organizer_id) VALUES($1,$2,$3) ON CONFLICT(event_id,participant_id) DO UPDATE SET updated_at=NOW() RETURNING id,event_id,participant_id,organizer_id',[eventId,participant,organizer]);res.status(201).json({conversation:r.rows[0],eventTitle:e.rows[0].title})});
 app.post('/api/events/:id/contact',async(req,res)=>{const e=await pool.query("SELECT id,creator_id,title FROM events WHERE id=$1 AND status='published'",[req.params.id]);if(!e.rowCount)return res.status(404).json({error:'Event not found or no longer available'});const organizer=String(e.rows[0].creator_id),participant=String(req.telegramUser.id);if(organizer===participant)return res.status(400).json({error:'You are the organizer of this event'});if(await hasMessagingBlock(participant,organizer))return res.status(403).json({error:'Messaging is unavailable between these users'});const r=await pool.query('INSERT INTO event_contact_conversations(event_id,participant_id,organizer_id) VALUES($1,$2,$3) ON CONFLICT(event_id,participant_id) DO UPDATE SET updated_at=NOW() RETURNING id,event_id,participant_id,organizer_id',[req.params.id,participant,organizer]);res.status(201).json({conversation:r.rows[0],eventTitle:e.rows[0].title})});
+app.post('/api/event-contacts/:id/age-approval', async (req,res) => {
+  const organizer=String(req.telegramUser.id);
+  const conversation=await pool.query(
+    `SELECT c.id,c.event_id,c.participant_id,c.organizer_id,e.age_range,e.status
+     FROM event_contact_conversations c JOIN events e ON e.id=c.event_id
+     WHERE c.id=$1 AND c.organizer_id=$2 AND e.status='published'`,
+    [req.params.id,organizer]
+  );
+  if(!conversation.rowCount)return res.status(403).json({error:'Только организатор этого события может разрешить участие'});
+  const row=conversation.rows[0];
+  if(!eventAgeBounds(row.age_range))return res.status(400).json({error:'Для этого события возрастное исключение не требуется'});
+  await pool.query(
+    `INSERT INTO event_age_approvals(event_id,user_id,approved_by)
+     VALUES($1,$2,$3) ON CONFLICT(event_id,user_id)
+     DO UPDATE SET approved_by=EXCLUDED.approved_by,approved_at=NOW()`,
+    [row.event_id,row.participant_id,organizer]
+  );
+  res.json({approved:true,event_id:String(row.event_id),user_id:String(row.participant_id)});
+});
 app.get('/api/event-contacts/:id/messages', async (req, res) => {
   const afterId = parseAfterMessageId(req, res);
   if (afterId === undefined) return;
@@ -1382,9 +1420,25 @@ app.post('/api/events/:id/join', async (req, res) => {
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
-    const event = await client.query('SELECT id, creator_id, capacity, status, starts_at, ends_at FROM events WHERE id=$1 FOR UPDATE', [req.params.id]);
+    const event = await client.query('SELECT id, creator_id, capacity, status, starts_at, ends_at, age_range FROM events WHERE id=$1 FOR UPDATE', [req.params.id]);
     if (!event.rowCount || event.rows[0].status !== 'published') {
       await client.query('ROLLBACK'); return res.status(404).json({ error: 'Event not found' });
+    }
+    const ageBounds=eventAgeBounds(event.rows[0].age_range);
+    if(ageBounds && String(event.rows[0].creator_id)!==String(req.telegramUser.id)){
+      const approved=await client.query('SELECT 1 FROM event_age_approvals WHERE event_id=$1 AND user_id=$2',[req.params.id,req.telegramUser.id]);
+      if(!approved.rowCount){
+        const profile=await client.query('SELECT birth_date FROM users WHERE id=$1',[req.telegramUser.id]);
+        const age=ageOnDate(profile.rows[0]?.birth_date,event.rows[0].starts_at);
+        if(age===null || age<ageBounds.min || (ageBounds.max!==null && age>ageBounds.max)){
+          await client.query('ROLLBACK');
+          return res.status(403).json({
+            code:'AGE_RESTRICTION',
+            error:age===null?'Укажи дату рождения в профиле или попроси организатора разрешить участие.':'Возраст не совпадает с условием события. Напиши организатору — он может разрешить исключение.',
+            age_range:event.rows[0].age_range
+          });
+        }
+      }
     }
     const startMs = new Date(event.rows[0].starts_at).getTime();
     const endMs = event.rows[0].ends_at
