@@ -5,6 +5,12 @@ const path = require('node:path');
 
 const server = fs.readFileSync(path.join(__dirname, '..', 'server', 'index.js'), 'utf8');
 const page = fs.readFileSync(path.join(__dirname, '..', 'docs', 'telegram', 'index.html'), 'utf8');
+test('repeat calendar only enables dates after the source event and within three years', () => {
+  assert.ok(page.includes("let repeatCalendarMonth=null,repeatSelectedDates=[],repeatBaseTime='19:00',repeatBaseDate=''"));
+  assert.ok(page.includes('const past=date<=today||date<=repeatBaseDate||date>maxDate'));
+  assert.ok(page.includes('repeatBaseDate=event.date||localDateKey(eventStart(event))'));
+});
+
 
 test('bot /id response uses a real line break escape, not a literal \\n', () => {
   assert.match(server, /Твой Telegram ID:[^\n]*\\nСкопируй/);
