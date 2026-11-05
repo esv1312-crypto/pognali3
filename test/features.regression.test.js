@@ -99,3 +99,13 @@ test('event detail hydrates organizer Telegram ID even for legacy events without
   assert.match(handler, /ev\.owner=localUserId\(raw\.creator_id\);if\(ev\.owner!==2\)db\.users\[ev\.owner\]=/);
   assert.match(handler, /telegramId:String\(raw\.creator_id\)/);
 });
+
+
+test('organizer cannot finish a published event before its start time', () => {
+  const start = server.indexOf("app.post('/api/events/:id/finish'");
+  const end = server.indexOf("app.get('/api/events/:id/messages'", start);
+  const route = server.slice(start, end);
+  assert.ok(start >= 0 && end > start);
+  assert.match(route, /starts_at <= NOW\(\)/);
+  assert.match(route, /status\(409\)\.json\(\{ error: 'Завершить событие можно только после начала встречи'/);
+});
