@@ -199,3 +199,19 @@ CREATE TABLE IF NOT EXISTS telegram_notification_dedup (
   dedupe_key TEXT PRIMARY KEY,
   last_sent_at TIMESTAMPTZ NOT NULL
 );
+
+
+-- Audit trail for moderator actions that remove events from public listings.
+CREATE TABLE IF NOT EXISTS event_moderation_actions (
+ id BIGSERIAL PRIMARY KEY,
+ event_id BIGINT NOT NULL REFERENCES events(id) ON DELETE CASCADE,
+ actor_id BIGINT NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
+ action TEXT NOT NULL CHECK (action IN ('cancelled_by_moderator')),
+ previous_status TEXT NOT NULL CHECK (previous_status IN ('published')),
+ new_status TEXT NOT NULL CHECK (new_status IN ('cancelled')),
+ created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS event_moderation_actions_event_created_idx
+ ON event_moderation_actions(event_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS event_moderation_actions_actor_created_idx
+ ON event_moderation_actions(actor_id, created_at DESC);

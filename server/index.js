@@ -705,14 +705,34 @@ app.patch('/api/events/:id', async (req, res) => {
 
 app.delete('/api/events/:id', async (req, res) => {
   if (isAdminTelegramUser(req.telegramUser.id)) {
-    // Keep the event and its report/audit history; moderation removes it from public listings.
-    const result = await pool.query(
-      "UPDATE events SET status='cancelled', updated_at=NOW() WHERE id=$1 AND status='published' RETURNING id, creator_id",
-      [req.params.id]
-    );
-    if (!result.rowCount) return res.status(404).json({ error: 'Event not found or already removed' });
-    res.json({ deleted: true, moderated: true, eventId: String(req.params.id) });
-    return;
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+      const current = await client.query(
+        "SELECT id,status FROM events WHERE id=$1 AND status='published' FOR UPDATE",
+        [req.params.id]
+      );
+      if (!current.rowCount) {
+        await client.query('ROLLBACK');
+        return res.status(404).json({ error: 'Event not found or already removed' });
+      }
+      await client.query(
+        "UPDATE events SET status='cancelled', updated_at=NOW() WHERE id=$1",
+        [req.params.id]
+      );
+      await client.query(
+        "INSERT INTO event_moderation_actions(event_id,actor_id,action,previous_status,new_status) VALUES($1,$2,'cancelled_by_moderator',$3,'cancelled')",
+        [req.params.id, req.telegramUser.id, current.rows[0].status]
+      );
+      await client.query('COMMIT');
+      res.json({ deleted: true, moderated: true, eventId: String(req.params.id) });
+      return;
+    } catch (error) {
+      await client.query('ROLLBACK').catch(() => {});
+      throw error;
+    } finally {
+      client.release();
+    }
   }
   const client = await pool.connect();
   try {
@@ -1435,6 +1455,21 @@ function requireTelegramAdmin(req,res,next){
   if(!isAdminTelegramUser(req.telegramUser.id))return res.status(403).json({error:'Admin access denied'});
   next();
 }
+app.get('/api/admin/moderation/events/:id/actions',requireTelegramAdmin,async(req,res)=>{
+  const id=String(req.params.id||'');
+  if(!/^[1-9]\d{0,18}$/.test(id))return res.status(400).json({error:'Invalid event ID'});
+  const result=await pool.query(
+    `SELECT a.id,a.action,a.previous_status,a.new_status,a.created_at,a.actor_id,
+            COALESCE(u.display_name,u.first_name,u.username,a.actor_id::text) AS actor_name
+     FROM event_moderation_actions a
+     LEFT JOIN users u ON u.id=a.actor_id
+     WHERE a.event_id=$1
+     ORDER BY a.created_at DESC,a.id DESC
+     LIMIT 100`,
+    [id]
+  );
+  res.json({actions:result.rows});
+});
 app.get('/api/admin/moderation/reports',requireTelegramAdmin,async(req,res)=>{
   const status=String(req.query.status||'open');
   if(!['all','open','reviewing','resolved','dismissed'].includes(status))return res.status(400).json({error:'Invalid report status'});
