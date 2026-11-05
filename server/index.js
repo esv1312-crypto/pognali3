@@ -1457,7 +1457,7 @@ function requireTelegramAdmin(req,res,next){
 }
 app.get('/api/admin/moderation/events/:id/actions',requireTelegramAdmin,async(req,res)=>{
   const id=String(req.params.id||'');
-  if(!/^[1-9]\\d{0,18}$/.test(id))return res.status(400).json({error:'Invalid event ID'});
+  if(!/^[1-9]\d{0,18}$/.test(id))return res.status(400).json({error:'Invalid event ID'});
   const result=await pool.query(
     `SELECT a.id,a.action,a.previous_status,a.new_status,a.created_at,a.actor_id,
             COALESCE(u.display_name,u.first_name,u.username,a.actor_id::text) AS actor_name
