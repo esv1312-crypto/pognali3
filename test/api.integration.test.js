@@ -39,8 +39,9 @@ async function api(user, p, { method = 'GET', body, raw, headers = {} } = {}) {
   try { json = await res.json(); } catch { /* no body */ }
   return { status: res.status, json, headers: res.headers };
 }
+let eventSequence = 0;
 const newEvent = (over = {}) => ({
-  title: 'Футбол во дворе', category: 'Спорт', city: 'Симферополь', address: 'Парк', latitude: 44.95, longitude: 34.1,
+  title: 'Футбол во дворе ' + (++eventSequence), category: 'Спорт', city: 'Симферополь', address: 'Парк', latitude: 44.95, longitude: 34.1,
   starts_at: new Date(Date.now() + 864e5).toISOString(), capacity: 10, description: 'Описание', ...over
 });
 const create = async (user, over) => (await api(user, '/events', { method: 'POST', body: newEvent(over) })).json.event;
@@ -459,7 +460,7 @@ t('new events notify admins and Telegram callback buttons keep or block them', a
   const notification = ctx.telegram.find(call =>
     call.method === 'sendMessage' &&
     String(call.body?.chat_id) === '999' &&
-    String(call.body?.text || '').includes('Создано новое событие') &&
+    String(call.body?.text || '').includes('Новое событие — результат автоматической модерации') &&
     String(call.body?.text || '').includes('Новое событие для админ-уведомления')
   );
   assert.ok(notification);
