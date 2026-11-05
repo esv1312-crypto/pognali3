@@ -56,7 +56,7 @@ test.before(async () => {
   const port = 30000 + Math.floor(Math.random() * 10000);
   Object.assign(process.env, {
     DATABASE_URL: `postgres://postgres:pw@127.0.0.1:${dbPort}/pognali`, DATABASE_SSL: 'disable', PORT: String(port),
-    TELEGRAM_BOT_TOKEN: TOKEN, TELEGRAM_BOT_USERNAME: 'test_bot', MINI_APP_URL: 'https://app.test', TELEGRAM_WEBHOOK_SECRET: 's', ADMIN_API_TOKEN: 'adm', ADMIN_TELEGRAM_IDS: String(A.id)
+    TELEGRAM_BOT_TOKEN: TOKEN, TELEGRAM_BOT_USERNAME: 'test_bot', MINI_APP_URL: 'https://app.test', TELEGRAM_WEBHOOK_SECRET: 's', ADMIN_API_TOKEN: 'adm', ADMIN_TELEGRAM_IDS: String(A.id), ADMIN_TELEGRAM_CHAT_ID: '999'
   });
   ctx.db = new Pool({ connectionString: process.env.DATABASE_URL, ssl: false });
   const realFetch = global.fetch;
@@ -359,6 +359,42 @@ t('admin can update a report with a numeric ID', async () => {
   });
   assert.equal(updated.status, 200);
   assert.equal(updated.json.report.status, 'reviewing');
+});
+
+t('Telegram admin moderation routes enforce allowlist and preserve an audit trail', async () => {
+  const ev = await create(A, { title: 'Проверка прав модератора' });
+  const beforeNotifications = ctx.telegram.length;
+  const reported = await api(B, `/events/${ev.id}/reports`, { method: 'POST', body: { reason: 'unsafe', details: 'Проверка уведомления модератору' } });
+  assert.equal(reported.status, 201);
+  const reportId = reported.json.reportId;
+
+  const deniedList = await api(B, '/admin/moderation/reports?status=all');
+  assert.equal(deniedList.status, 403);
+  const deniedHistory = await api(B, `/admin/moderation/reports/${reportId}/actions`);
+  assert.equal(deniedHistory.status, 403);
+  const deniedUpdate = await api(B, `/admin/moderation/reports/${reportId}`, { method: 'PATCH', body: { status: 'resolved' } });
+  assert.equal(deniedUpdate.status, 403);
+
+  const listed = await api(A, '/admin/moderation/reports?status=all');
+  assert.equal(listed.status, 200);
+  assert.ok(listed.json.reports.some(report => String(report.id) === String(reportId)));
+
+  const updated = await api(A, `/admin/moderation/reports/${reportId}`, { method: 'PATCH', body: { status: 'reviewing' } });
+  assert.equal(updated.status, 200);
+  assert.equal(updated.json.changed, true);
+  const unchanged = await api(A, `/admin/moderation/reports/${reportId}`, { method: 'PATCH', body: { status: 'reviewing' } });
+  assert.equal(unchanged.status, 200);
+  assert.equal(unchanged.json.changed, false);
+
+  const history = await api(A, `/admin/moderation/reports/${reportId}/actions`);
+  assert.equal(history.status, 200);
+  assert.equal(history.json.actions.length, 1);
+  assert.equal(history.json.actions[0].previous_status, 'open');
+  assert.equal(history.json.actions[0].new_status, 'reviewing');
+
+  for (let i = 0; i < 20 && ctx.telegram.length === beforeNotifications; i++) await sleep(50);
+  assert.ok(ctx.telegram.slice(beforeNotifications).some(call => call.method === 'sendMessage' && call.body.chat_id === '999' && call.body.text.includes('Жалоба №' + reportId)),
+    'new report alert is delivered through the Telegram notification outbox');
 });
 
 t('event updates reject dates outside the supported range', async () => {
