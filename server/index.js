@@ -584,7 +584,7 @@ app.get('/api/events/:id/messages', async (req, res) => {
   const afterId = parseAfterMessageId(req, res);
   if (afterId === undefined) return;
   const member = await pool.query(
-    `SELECT 1 FROM events e WHERE e.id=$1 AND (e.creator_id=$2 OR EXISTS (SELECT 1 FROM event_participants ep WHERE ep.event_id=e.id AND ep.user_id=$2 AND ep.status='joined'))`,
+    `SELECT 1 FROM events e WHERE e.id=$1 AND e.status <> 'cancelled' AND (e.creator_id=$2 OR EXISTS (SELECT 1 FROM event_participants ep WHERE ep.event_id=e.id AND ep.user_id=$2 AND ep.status='joined'))`,
     [req.params.id, req.telegramUser.id]
   );
   if (!member.rowCount) return res.status(403).json({ error: 'Join the event to access its chat' });
@@ -620,7 +620,7 @@ app.post('/api/events/:id/messages', async (req, res) => {
   const body = typeof req.body.body === 'string' ? req.body.body.trim() : '';
   if (!body || body.length > 2000) return res.status(400).json({ error: 'Message must contain 1–2000 characters' });
   const member = await pool.query(
-    `SELECT 1 FROM events e WHERE e.id=$1 AND (e.creator_id=$2 OR EXISTS (SELECT 1 FROM event_participants ep WHERE ep.event_id=e.id AND ep.user_id=$2 AND ep.status='joined'))`,
+    `SELECT 1 FROM events e WHERE e.id=$1 AND e.status <> 'cancelled' AND (e.creator_id=$2 OR EXISTS (SELECT 1 FROM event_participants ep WHERE ep.event_id=e.id AND ep.user_id=$2 AND ep.status='joined'))`,
     [req.params.id, req.telegramUser.id]
   );
   if (!member.rowCount) return res.status(403).json({ error: 'Join the event to send messages' });
@@ -837,7 +837,7 @@ app.get('/api/event-contacts/:id/messages', async (req, res) => {
   const afterId = parseAfterMessageId(req, res);
   if (afterId === undefined) return;
   const conversation = await pool.query(
-    'SELECT id,event_id,participant_id,organizer_id FROM event_contact_conversations WHERE id=$1 AND (participant_id=$2 OR organizer_id=$2)',
+    `SELECT c.id,c.event_id,c.participant_id,c.organizer_id FROM event_contact_conversations c JOIN events e ON e.id=c.event_id WHERE c.id=$1 AND e.status <> 'cancelled' AND (c.participant_id=$2 OR c.organizer_id=$2)`,
     [req.params.id, req.telegramUser.id]
   );
   if (!conversation.rowCount) return res.status(404).json({ error: 'Conversation not found' });
@@ -872,7 +872,7 @@ app.get('/api/event-contacts/:id/messages', async (req, res) => {
   );
   res.json({ messages: messages.rows, conversation: row });
 });
-app.post('/api/event-contacts/:id/messages',async(req,res)=>{const body=typeof(req.body&&req.body.body)==='string'?req.body.body.trim():'';if(!body||body.length>2000)return res.status(400).json({error:'Message must contain 1–2000 characters'});const c=await pool.query('SELECT id,participant_id,organizer_id FROM event_contact_conversations WHERE id=$1 AND (participant_id=$2 OR organizer_id=$2)',[req.params.id,req.telegramUser.id]);if(!c.rowCount)return res.status(404).json({error:'Conversation not found'});const row=c.rows[0],other=String(row.participant_id)===String(req.telegramUser.id)?row.organizer_id:row.participant_id;if(await hasMessagingBlock(req.telegramUser.id,other))return res.status(403).json({error:'Messaging is unavailable between these users'});const r=await pool.query('INSERT INTO event_contact_messages(conversation_id,sender_id,body) VALUES($1,$2,$3) RETURNING id,sender_id,body,created_at',[req.params.id,req.telegramUser.id,body]);await pool.query('UPDATE event_contact_conversations SET updated_at=NOW() WHERE id=$1',[req.params.id]);res.status(201).json({message:r.rows[0]});notifyUser(other,'💬 Новое сообщение по событию в «Погнали». Открой приложение, чтобы ответить.','ec:'+other+':'+req.params.id,60000)});
+app.post('/api/event-contacts/:id/messages',async(req,res)=>{const body=typeof(req.body&&req.body.body)==='string'?req.body.body.trim():'';if(!body||body.length>2000)return res.status(400).json({error:'Message must contain 1–2000 characters'});const c=await pool.query(`SELECT c.id,c.participant_id,c.organizer_id FROM event_contact_conversations c JOIN events e ON e.id=c.event_id WHERE c.id=$1 AND e.status <> 'cancelled' AND (c.participant_id=$2 OR c.organizer_id=$2)`,[req.params.id,req.telegramUser.id]);if(!c.rowCount)return res.status(404).json({error:'Conversation not found'});const row=c.rows[0],other=String(row.participant_id)===String(req.telegramUser.id)?row.organizer_id:row.participant_id;if(await hasMessagingBlock(req.telegramUser.id,other))return res.status(403).json({error:'Messaging is unavailable between these users'});const r=await pool.query('INSERT INTO event_contact_messages(conversation_id,sender_id,body) VALUES($1,$2,$3) RETURNING id,sender_id,body,created_at',[req.params.id,req.telegramUser.id,body]);await pool.query('UPDATE event_contact_conversations SET updated_at=NOW() WHERE id=$1',[req.params.id]);res.status(201).json({message:r.rows[0]});notifyUser(other,'💬 Новое сообщение по событию в «Погнали». Открой приложение, чтобы ответить.','ec:'+other+':'+req.params.id,60000)});
 
 async function recordEventShareAction(eventId, userId, action) {
   const table = await pool.query("SELECT to_regclass('public.event_share_events') AS table_name");
