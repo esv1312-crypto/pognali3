@@ -665,16 +665,19 @@ app.get('/api/messages/unread-count', async (req, res) => {
       (SELECT COUNT(*) FROM direct_messages m
        JOIN direct_conversations c ON c.id=m.conversation_id
        WHERE (c.user_low=$1 OR c.user_high=$1) AND c.status='accepted' AND m.sender_id<>$1
+         AND NOT EXISTS (SELECT 1 FROM user_blocks ub WHERE (ub.blocker_id=$1 AND ub.blocked_id=CASE WHEN c.user_low=$1 THEN c.user_high ELSE c.user_low END) OR (ub.blocker_id=CASE WHEN c.user_low=$1 THEN c.user_high ELSE c.user_low END AND ub.blocked_id=$1))
          AND m.created_at > COALESCE((SELECT r.last_read_at FROM message_reads r WHERE r.user_id=$1 AND r.conversation_type='direct' AND r.conversation_id=c.id), 'epoch'::timestamptz))
       +
       (SELECT COUNT(*) FROM event_contact_messages m
        JOIN event_contact_conversations c ON c.id=m.conversation_id
-       WHERE (c.participant_id=$1 OR c.organizer_id=$1) AND m.sender_id<>$1
+       JOIN events e ON e.id=c.event_id
+       WHERE e.status <> 'cancelled' AND (c.participant_id=$1 OR c.organizer_id=$1) AND m.sender_id<>$1
+         AND NOT EXISTS (SELECT 1 FROM user_blocks ub WHERE (ub.blocker_id=$1 AND ub.blocked_id=CASE WHEN c.participant_id=$1 THEN c.organizer_id ELSE c.participant_id END) OR (ub.blocker_id=CASE WHEN c.participant_id=$1 THEN c.organizer_id ELSE c.participant_id END AND ub.blocked_id=$1))
          AND m.created_at > COALESCE((SELECT r.last_read_at FROM message_reads r WHERE r.user_id=$1 AND r.conversation_type='event_contact' AND r.conversation_id=c.id), 'epoch'::timestamptz))
       +
       (SELECT COUNT(*)::int FROM (
          SELECT 1 FROM event_messages m JOIN events e ON e.id=m.event_id
-         WHERE m.sender_id<>$1
+         WHERE e.status <> 'cancelled' AND m.sender_id<>$1
            AND (e.creator_id=$1 OR EXISTS (SELECT 1 FROM event_participants ep WHERE ep.event_id=e.id AND ep.user_id=$1 AND ep.status='joined'))
            AND m.created_at > COALESCE((SELECT r.last_read_at FROM message_reads r WHERE r.user_id=$1 AND r.conversation_type='event' AND r.conversation_id=e.id), 'epoch'::timestamptz)
          LIMIT 9900) event_unread)
@@ -693,13 +696,13 @@ app.post('/api/messages/read', async (req, res) => {
   const uid = req.telegramUser.id;
   let allowed = false;
   if (type === 'event') {
-    const r = await pool.query("SELECT 1 FROM events e WHERE e.id=$1 AND (e.creator_id=$2 OR EXISTS (SELECT 1 FROM event_participants ep WHERE ep.event_id=e.id AND ep.user_id=$2 AND ep.status='joined'))", [id, uid]);
+    const r = await pool.query("SELECT 1 FROM events e WHERE e.id=$1 AND e.status <> 'cancelled' AND (e.creator_id=$2 OR EXISTS (SELECT 1 FROM event_participants ep WHERE ep.event_id=e.id AND ep.user_id=$2 AND ep.status='joined'))", [id, uid]);
     allowed = r.rowCount > 0;
   } else if (type === 'direct') {
     const r = await pool.query("SELECT 1 FROM direct_conversations WHERE id=$1 AND status='accepted' AND (user_low=$2 OR user_high=$2)", [id, uid]);
     allowed = r.rowCount > 0;
   } else {
-    const r = await pool.query("SELECT 1 FROM event_contact_conversations WHERE id=$1 AND (participant_id=$2 OR organizer_id=$2)", [id, uid]);
+    const r = await pool.query("SELECT 1 FROM event_contact_conversations c JOIN events e ON e.id=c.event_id WHERE c.id=$1 AND e.status <> 'cancelled' AND (c.participant_id=$2 OR c.organizer_id=$2)", [id, uid]);
     allowed = r.rowCount > 0;
   }
   if (!allowed) return res.status(403).json({ error: 'Conversation is not available to this user' });
