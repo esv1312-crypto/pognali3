@@ -299,3 +299,36 @@ t('Telegram webhook validates its secret and formats /id without a literal backs
   assert.match(reply.body.text, /4242/);
   assert.equal(reply.body.text.includes('\\n'), false);
 });
+
+
+t('physical event deletion removes polymorphic read cursors for group and organizer-participant chats', async () => {
+  const event = await makeEvent(ANNA, { title: 'Очистка курсоров после удаления' });
+  assert.equal((await join(BORIS, event.id)).status, 200);
+  assert.equal((await call(BORIS, `/events/${event.id}/messages`, { method: 'POST', body: { body: 'Сообщение в общем чате' } })).status, 201);
+  assert.equal((await call(ANNA, '/messages/read', { method: 'POST', body: { type: 'event', conversation_id: event.id } })).status, 200);
+
+  const contact = await call(ANNA, `/events/${event.id}/participants/${BORIS.id}/contact`, { method: 'POST', body: {} });
+  assert.equal(contact.status, 201, contact.text);
+  assert.equal((await call(BORIS, `/event-contacts/${contact.json.conversation.id}/messages`, { method: 'POST', body: { body: 'Личное сообщение' } })).status, 201);
+  assert.equal((await call(ANNA, '/messages/read', { method: 'POST', body: { type: 'event_contact', conversation_id: contact.json.conversation.id } })).status, 200);
+
+  const { Client } = require('pg');
+  const db = new Client({ connectionString: process.env.DATABASE_URL });
+  await db.connect();
+  try {
+    const before = await db.query(
+      "SELECT conversation_type, conversation_id FROM message_reads WHERE (conversation_type='event' AND conversation_id=$1) OR (conversation_type='event_contact' AND conversation_id=$2)",
+      [event.id, contact.json.conversation.id]
+    );
+    assert.equal(before.rowCount, 2, 'both read cursors exist before deletion');
+    const deleted = await call(ANNA, `/events/${event.id}`, { method: 'DELETE' });
+    assert.equal(deleted.status, 200, deleted.text);
+    const after = await db.query(
+      "SELECT 1 FROM message_reads WHERE (conversation_type='event' AND conversation_id=$1) OR (conversation_type='event_contact' AND conversation_id=$2)",
+      [event.id, contact.json.conversation.id]
+    );
+    assert.equal(after.rowCount, 0, 'event and event-contact cursors must be cleaned with deleted conversations');
+  } finally {
+    await db.end();
+  }
+});
