@@ -77,3 +77,15 @@ test('open chat polling requests only messages after the last received ID', () =
   assert.ok(server.includes('function parseAfterMessageId(req, res)'));
   assert.ok((server.match(/m\.id>\$2/g) || []).length >= 3);
 });
+
+
+test('participant list hydrates real members and Telegram IDs before showing profiles', () => {
+  const start = page.indexOf('async function openParticipants');
+  const end = page.indexOf('async function openChat', start);
+  const handler = page.slice(start, end);
+  assert.ok(start >= 0 && end > start);
+  assert.match(handler, /apiRequest\('\/events\//);
+  assert.match(handler, /detail\.participants/);
+  assert.match(handler, /telegramId:String\(p\.id\)/);
+  assert.match(handler, /showToast\(error\.message\|\|'Не удалось загрузить участников'/);
+});
