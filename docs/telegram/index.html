@@ -594,8 +594,30 @@ body{background:var(--pg-bg)!important}
 <style id="pognali-fixes">.sheet .tag{display:inline-block;margin:0 0 10px;line-height:1.2}.sheet h2{margin:0 0 8px}.life-tagline{overflow:hidden!important;text-overflow:ellipsis!important;white-space:nowrap!important}@media(max-width:359px){.life-tagline{display:none!important}}</style>
 <style id="pognali-a11y">.bottomnav .nav span{font-size:11px!important;letter-spacing:-.2px}.bottomnav .nav:not(.active):not(.create-nav) span{color:#5f6672!important}.create-hero-kicker,.create-hero-foot{font-size:11px!important;color:#5f6672!important}.calendar-week span{font-size:11px!important;color:#5f6672!important}button[onclick="clearCalendarDate()"]{min-height:36px;padding:0 14px}.maplibregl-ctrl-group button{width:40px!important;height:40px!important}</style>
 <style id="pognali-clusters">.event-cluster.stack{--h:40px;display:flex;align-items:center;height:var(--h);padding:0 7px 0 4px;background:#fff;border:2px solid #17171a;border-radius:99px;box-shadow:0 6px 16px rgba(0,0,0,.28);cursor:pointer;position:relative;font:inherit}.event-cluster.stack.tier2{--h:48px}.event-cluster.stack.tier3{--h:58px;border-width:3px}.cl-faces{display:flex}.cl-face{width:calc(var(--h) - 12px);height:calc(var(--h) - 12px);border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:calc(var(--h) * .42);line-height:1;border:2px solid #fff;margin-left:-8px}.cl-face:first-child{margin-left:0}.cl-face.f0{background:#ffe1d8}.cl-face.f1{background:#d5f6e8}.cl-face.f2{background:#fff0c2}.cl-n{position:absolute;top:-10px;right:-7px;background:#ff6b4a;color:#fff;font:800 12px system-ui,sans-serif;font-style:normal;border-radius:99px;padding:2px 7px;border:2px solid #fff;min-width:24px;text-align:center}</style>
+<style id="pognali-startup-splash">
+#pognaliSplash{position:fixed;inset:0;z-index:99999;display:grid;place-items:center;background:#0b0b0b;opacity:1;visibility:visible;transition:opacity .5s ease,visibility .5s ease;pointer-events:auto}
+#pognaliSplash img{display:block;width:100%;height:100%;object-fit:contain;object-position:center}
+#pognaliSplash.is-hidden{opacity:0;visibility:hidden;pointer-events:none}
+@media(prefers-reduced-motion:reduce){#pognaliSplash{transition:none}}
+</style>
 </head>
 <body>
+<div id="pognaliSplash" aria-label="Погнали — загрузка приложения"><img src="/file_00000000c5a081f488c652aeb4ab4bfa.png" alt="Погнали" onerror="this.closest('#pognaliSplash')?.classList.add('is-hidden')"></div>
+<script>
+(function(){
+  const splash=document.getElementById('pognaliSplash');
+  if(!splash)return;
+  const tg=window.Telegram?.WebApp;
+  if(!tg?.initData){splash.classList.add('is-hidden');return;}
+  let dataReady=false,mapReady=false,done=false;
+  function hide(){if(done)return;done=true;splash.classList.add('is-hidden');setTimeout(()=>splash.remove(),550)}
+  function check(){if(dataReady&&mapReady)hide()}
+  window.__pognaliSplashDataReady=()=>{dataReady=true;check()};
+  window.__pognaliSplashMapReady=()=>{mapReady=true;check()};
+  window.addEventListener('pognali-maplibre-failed',()=>window.__pognaliSplashMapReady(),{once:true});
+  setTimeout(hide,12000);
+})();
+</script>
 <div class="app">
 <header class="top"><button class="logo-btn" type="button" onclick="go('events')" aria-label="Погнали — открыть события"><span class="logo-emoji">🚀</span><span>Погнали</span></button><div class="life-tagline">Жизнь начинается здесь <b>→</b></div><div class="spacer"></div><button class="pill lang-btn" onclick="openLanguage()" aria-label="Выбрать язык">🌐 <span id="langLabel">RU</span> ▾</button></header>
 <div id="previewBanner" class="preview-banner hidden">🧪 ДЕМО-режим: события тестовые, данные не общие. Открой приложение через Telegram после настройки сервера.</div>
@@ -922,7 +944,7 @@ map.on('contextmenu',ev=>{if(ev.originalEvent)ev.originalEvent.preventDefault();
 mapEl.addEventListener('touchstart',ev=>{if(!ev.touches||ev.touches.length!==1)return;const t=ev.touches[0];holdStart={x:t.clientX,y:t.clientY};const rect=mapEl.getBoundingClientRect(),point=map.unproject([t.clientX-rect.left,t.clientY-rect.top]);holdTimer=setTimeout(()=>askCreateAtMapPoint(point.lat,point.lng),650)},{passive:true});
 mapEl.addEventListener('touchmove',ev=>{if(!holdStart||!ev.touches||!ev.touches.length)return;const t=ev.touches[0];if(Math.hypot(t.clientX-holdStart.x,t.clientY-holdStart.y)>12)clearHold()},{passive:true});mapEl.addEventListener('touchend',clearHold,{passive:true});mapEl.addEventListener('touchcancel',clearHold,{passive:true});
 const updateMapState=()=>{if(!map)return;const c=map.getCenter();lastMapView={lat:c.lat,lng:c.lng,zoom:map.getZoom()};mapViews[selectedFilter]=lastMapView;try{localStorage.setItem(KEY+'_map_views',JSON.stringify(mapViews))}catch(e){}const el=document.getElementById('map');if(el)el.classList.toggle('map-zoomed',map.getZoom()>=13.5);const scope=document.getElementById('mapScope');if(scope){scope.textContent=mapScopeLabel();scope.classList.toggle('world',!mapRadiusKm(map.getZoom())&&!!userGeo)}};
-map.on('moveend',updateMapState);map.on('load',()=>{if(!map)return;updateMapState();const points=es.map(e=>[Number(e.lng),Number(e.lat)]).filter(([lng,lat])=>Number.isFinite(lat)&&Number.isFinite(lng)&&Math.abs(lat)<=90&&Math.abs(lng)<=180);if(selectedFilter==='Мои'){if(points.length===1){lastMapView={lat:points[0][1],lng:points[0][0],zoom:13};mapViews[selectedFilter]=lastMapView;map.jumpTo({center:points[0],zoom:13})}else if(points.length>1)map.fitBounds(points,{padding:{top:48,bottom:48,left:48,right:48},maxZoom:13})}else if(API_MODE&&points.length&&!selectedCityPoint&&!userGeo&&(!savedView||savedView.zoom<5)){/* Первый запуск: не оставляем события Симферополя за кадром на мировом масштабе. */if(points.length===1)map.jumpTo({center:points[0],zoom:13});else map.fitBounds(points,{padding:{top:72,bottom:90,left:36,right:36},maxZoom:12})}if(!userGeo&&selectedFilter!=='Мои')requestUserLocation();else if(userGeo&&selectedFilter!=='Мои')drawUserLocation(userGeo.lat,userGeo.lng,false);refreshMainMapLayout(!!selectedDate)});
+map.on('moveend',updateMapState);map.on('load',()=>{if(!map)return;window.__pognaliSplashMapReady?.();updateMapState();const points=es.map(e=>[Number(e.lng),Number(e.lat)]).filter(([lng,lat])=>Number.isFinite(lat)&&Number.isFinite(lng)&&Math.abs(lat)<=90&&Math.abs(lng)<=180);if(selectedFilter==='Мои'){if(points.length===1){lastMapView={lat:points[0][1],lng:points[0][0],zoom:13};mapViews[selectedFilter]=lastMapView;map.jumpTo({center:points[0],zoom:13})}else if(points.length>1)map.fitBounds(points,{padding:{top:48,bottom:48,left:48,right:48},maxZoom:13})}else if(API_MODE&&points.length&&!selectedCityPoint&&!userGeo&&(!savedView||savedView.zoom<5)){/* Первый запуск: не оставляем события Симферополя за кадром на мировом масштабе. */if(points.length===1)map.jumpTo({center:points[0],zoom:13});else map.fitBounds(points,{padding:{top:72,bottom:90,left:36,right:36},maxZoom:12})}if(!userGeo&&selectedFilter!=='Мои')requestUserLocation();else if(userGeo&&selectedFilter!=='Мои')drawUserLocation(userGeo.lat,userGeo.lng,false);refreshMainMapLayout(!!selectedDate)});
 markers=[];renderEventsMarkersOnly();}
 
 let pendingMapCreatePoint=null;
@@ -1889,7 +1911,7 @@ function initTelegramMiniApp(){
       if(name&&db.profile&&(!db.profile.name||db.profile.name==='Стас'))db.profile.name=name;
       if(u.photo_url&&db.profile&&!db.profile.photo)db.profile.telegramPhoto=u.photo_url;
     }
-    if(API_MODE){void openSharedEventFromStartParam();refreshApiData().catch(e=>{console.error('Pognali API:',e);showToast(e.message||'Сервер пока не настроен','error')}).finally(()=>openSharedEventFromStartParam())}else setTimeout(openSharedEventFromStartParam,0);
+    if(API_MODE){void openSharedEventFromStartParam();refreshApiData().catch(e=>{console.error('Pognali API:',e);showToast(e.message||'Сервер пока не настроен','error')}).finally(()=>{window.__pognaliSplashDataReady?.();openSharedEventFromStartParam()})}else setTimeout(openSharedEventFromStartParam,0);
   }catch(e){console.warn('Telegram Mini App initialization:',e)}
 }
 
