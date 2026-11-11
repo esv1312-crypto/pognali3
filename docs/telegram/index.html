@@ -631,7 +631,7 @@ body{background:var(--pg-bg)!important}
 })();
 </script>
 <div class="app">
-<header class="top"><button class="logo-btn" type="button" onclick="go('events')" aria-label="Погнали — открыть события"><span class="logo-emoji">🚀</span><span>Погнали</span></button><div class="life-tagline">Жизнь начинается здесь <b>→</b></div><div class="spacer"></div><button class="pill lang-btn" onclick="openLanguage()" aria-label="Выбрать язык">🌐 <span id="langLabel">RU</span> ▾</button></header>
+<header class="top"><button class="logo-btn" type="button" onclick="go('events')" aria-label="Погнали — открыть события"><span class="logo-emoji">🚀</span><span>Погнали</span></button><div class="life-tagline" aria-label="Жизнь начинается здесь"><span>Жизнь начинается</span><strong>здесь <i aria-hidden="true">↗</i></strong></div><div class="spacer"></div><button class="pill lang-btn" onclick="openLanguage()" aria-label="Выбрать язык">🌐 <span id="langLabel">RU</span> ▾</button></header>
 <div id="previewBanner" class="preview-banner hidden">🧪 ДЕМО-режим: события тестовые, данные не общие. Открой приложение через Telegram после настройки сервера.</div>
 <main class="content" id="content"></main>
 <nav class="bottomnav"> <button class="nav active" data-tab="events" onclick="go('events')"><b>🗺️</b><span>События</span></button> <button class="nav create-nav" data-tab="create" onclick="go('create')"><b>＋</b><span>Создать</span></button> <button class="nav" data-tab="mine" onclick="go('mine')"><b>🙋</b><span>Мои</span></button> <button class="nav" data-tab="messages" onclick="go('messages')"><b>💬</b><i class="unread-badge hidden" id="messageUnreadBadge" aria-label="Непрочитанные сообщения"></i><span>Сообщения</span></button> <button class="nav" data-tab="profile" onclick="go('profile')"><b>👤</b><span>Профиль</span></button> </nav></div>
@@ -1970,3 +1970,104 @@ new MutationObserver(()=>{if(!window.__pognaliLocalizing){window.__pognaliLocali
 .cat-choice .cat-name{font-size:11px!important;line-height:1.15}
 </style>
 <style id="pognali-map-bottom-gap-fix">#content:has(>.mapwrap){padding-bottom:0!important}</style>
+
+
+<style id="pognali-expressive-header-v1">
+/* Expressive brand header: readable slogan, calm premium surface. */
+.top{
+  position:relative!important;
+  min-height:78px!important;
+  padding:12px 13px!important;
+  gap:11px!important;
+  align-items:center!important;
+  background:linear-gradient(112deg,#fff 0%,#fffdfa 58%,#fff5f0 100%)!important;
+  border-bottom:1px solid #eee8df!important;
+  box-shadow:0 5px 18px rgba(35,29,22,.055)!important;
+}
+.top:after{
+  content:"";
+  position:absolute;
+  left:0;right:0;bottom:-1px;height:2px;
+  background:linear-gradient(90deg,#e85b43 0%,#f2a06d 34%,rgba(232,91,67,0) 78%);
+  pointer-events:none;
+}
+.top .logo-btn{
+  flex:0 0 auto!important;
+  min-height:49px!important;
+  padding:0 14px 0 12px!important;
+  gap:7px!important;
+  border-radius:15px!important;
+  background:linear-gradient(145deg,#202521,#111612)!important;
+  color:#fff!important;
+  box-shadow:0 6px 13px rgba(23,29,24,.17),inset 0 1px 0 rgba(255,255,255,.12)!important;
+  font-size:19px!important;
+  letter-spacing:-.7px!important;
+}
+.top .logo-btn .logo-emoji{font-size:21px!important}
+.top .life-tagline{
+  display:flex!important;
+  flex:1 1 auto!important;
+  min-width:0!important;
+  max-width:none!important;
+  flex-direction:column!important;
+  align-items:flex-start!important;
+  justify-content:center!important;
+  gap:1px!important;
+  margin:0!important;
+  overflow:visible!important;
+  white-space:normal!important;
+  color:#62675f!important;
+  font-size:clamp(11px,3.25vw,14px)!important;
+  line-height:1.08!important;
+  letter-spacing:-.25px!important;
+  font-weight:750!important;
+}
+.top .life-tagline span{display:block!important;white-space:nowrap!important}
+.top .life-tagline strong{
+  display:flex!important;
+  align-items:center!important;
+  gap:4px!important;
+  color:#e85b43!important;
+  font-size:clamp(16px,4.5vw,19px)!important;
+  line-height:1.05!important;
+  letter-spacing:-.55px!important;
+  font-weight:950!important;
+}
+.top .life-tagline i{
+  display:inline-grid!important;
+  place-items:center!important;
+  width:18px;height:18px;
+  border-radius:50%;
+  background:#fff0eb;
+  color:#e85b43;
+  font-size:12px;
+  line-height:1;
+  font-style:normal;
+  font-weight:900;
+}
+.top .life-tagline b{display:none!important}
+.top .spacer{display:none!important}
+.top .lang-btn{
+  flex:0 0 auto!important;
+  min-height:42px!important;
+  padding:0 9px!important;
+  border:1px solid #eae5dc!important;
+  border-radius:13px!important;
+  background:rgba(255,255,255,.9)!important;
+  color:#343a34!important;
+  box-shadow:0 2px 7px rgba(30,34,29,.045)!important;
+  font-size:11px!important;
+}
+@media(max-width:380px){
+  .top{gap:8px!important;padding-left:10px!important;padding-right:10px!important}
+  .top .logo-btn{min-height:46px!important;padding:0 10px!important;font-size:17px!important}
+  .top .logo-btn .logo-emoji{font-size:19px!important}
+  .top .life-tagline{font-size:10px!important}
+  .top .life-tagline strong{font-size:15px!important}
+  .top .lang-btn{padding:0 7px!important;font-size:10px!important}
+}
+@media(prefers-reduced-motion:no-preference){
+  .top .logo-btn{transition:transform .16s ease,box-shadow .16s ease!important}
+  .top .logo-btn:active{transform:translateY(1px) scale(.98)!important}
+}
+</style>
