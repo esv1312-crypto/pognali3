@@ -607,14 +607,17 @@ body{background:var(--pg-bg)!important}
 (function(){
   const splash=document.getElementById('pognaliSplash');
   if(!splash)return;
-  const tg=window.Telegram?.WebApp;
-  if(!tg?.initData){splash.classList.add('is-hidden');return;}
   let dataReady=false,mapReady=false,done=false;
   function hide(){if(done)return;done=true;splash.classList.add('is-hidden');setTimeout(()=>splash.remove(),550)}
   function check(){if(dataReady&&mapReady)hide()}
   window.__pognaliSplashDataReady=()=>{dataReady=true;check()};
   window.__pognaliSplashMapReady=()=>{mapReady=true;check()};
   window.addEventListener('pognali-maplibre-failed',()=>window.__pognaliSplashMapReady(),{once:true});
+  // Telegram's WebApp script is deferred; check initData only after deferred scripts execute.
+  document.addEventListener('DOMContentLoaded',()=>{
+    const tg=window.Telegram?.WebApp;
+    if(!tg?.initData)hide();
+  },{once:true});
   setTimeout(hide,12000);
 })();
 </script>
