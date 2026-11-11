@@ -631,7 +631,7 @@ body{background:var(--pg-bg)!important}
 })();
 </script>
 <div class="app">
-<header class="top"><button class="logo-btn" type="button" onclick="go('events')" aria-label="Погнали — открыть события"><span class="logo-emoji">🚀</span><span>Погнали</span></button><div class="life-tagline" aria-label="Жизнь начинается здесь"><span>Жизнь начинается</span><strong>здесь</strong></div><div class="spacer"></div><button class="pill lang-btn" onclick="openLanguage()" aria-label="Выбрать язык">🌐 <span id="langLabel">RU</span> ▾</button></header>
+<header class="top"><button class="logo-btn" type="button" onclick="go('events')" aria-label="Погнали — открыть события"><span class="logo-emoji">🚀</span><span>Погнали</span></button><div class="life-tagline">Жизнь начинается здесь <b>→</b></div><div class="spacer"></div><button class="pill lang-btn" onclick="openLanguage()" aria-label="Выбрать язык">🌐 <span id="langLabel">RU</span> ▾</button></header>
 <div id="previewBanner" class="preview-banner hidden">🧪 ДЕМО-режим: события тестовые, данные не общие. Открой приложение через Telegram после настройки сервера.</div>
 <main class="content" id="content"></main>
 <nav class="bottomnav"> <button class="nav active" data-tab="events" onclick="go('events')"><b>🗺️</b><span>События</span></button> <button class="nav create-nav" data-tab="create" onclick="go('create')"><b>＋</b><span>Создать</span></button> <button class="nav" data-tab="mine" onclick="go('mine')"><b>🙋</b><span>Мои</span></button> <button class="nav" data-tab="messages" onclick="go('messages')"><b>💬</b><i class="unread-badge hidden" id="messageUnreadBadge" aria-label="Непрочитанные сообщения"></i><span>Сообщения</span></button> <button class="nav" data-tab="profile" onclick="go('profile')"><b>👤</b><span>Профиль</span></button> </nav></div>
@@ -1990,56 +1990,4 @@ new MutationObserver(()=>{if(!window.__pognaliLocalizing){window.__pognaliLocali
   vertical-align:-1px!important;
 }
 @media(max-width:380px){.top .life-tagline{font-size:10.5px!important;letter-spacing:-.28px!important}}
-</style>
-
-
-<style id="pognali-handwritten-tagline">
-/* Let the slogan use all the space between the original logo and language control. */
-.top .life-tagline{
-  display:flex!important;
-  flex:1 1 0!important;
-  min-width:0!important;
-  max-width:none!important;
-  margin:0!important;
-  padding:0 5px!important;
-  flex-direction:column!important;
-  align-items:center!important;
-  justify-content:center!important;
-  gap:0!important;
-  overflow:visible!important;
-  white-space:normal!important;
-  text-align:center!important;
-  color:#55458f!important;
-  font-family:"Segoe Print","Bradley Hand","Comic Sans MS",cursive!important;
-  font-size:clamp(12px,3.8vw,16px)!important;
-  font-weight:700!important;
-  line-height:1.02!important;
-  letter-spacing:-.35px!important;
-}
-.top .life-tagline span{
-  display:block!important;
-  max-width:100%!important;
-  font:inherit!important;
-  white-space:nowrap!important;
-}
-.top .life-tagline strong{
-  display:block!important;
-  margin:0!important;
-  color:#7657c8!important;
-  font-family:"Segoe Print","Bradley Hand","Comic Sans MS",cursive!important;
-  font-size:clamp(16px,5vw,21px)!important;
-  font-weight:800!important;
-  line-height:1.05!important;
-  letter-spacing:-.5px!important;
-}
-.top .life-tagline b{display:none!important}
-.top .spacer{display:none!important}
-@media(max-width:380px){
-  .top .life-tagline{padding:0 2px!important;font-size:clamp(10px,3.4vw,13px)!important}
-  .top .life-tagline strong{font-size:clamp(15px,4.5vw,18px)!important}
-}
-@media(max-width:340px){
-  .top .life-tagline span{font-size:10px!important;letter-spacing:-.45px!important}
-  .top .life-tagline strong{font-size:15px!important}
-}
 </style>
