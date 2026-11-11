@@ -631,7 +631,7 @@ body{background:var(--pg-bg)!important}
 })();
 </script>
 <div class="app">
-<header class="top"><button class="logo-btn" type="button" onclick="go('events')" aria-label="Погнали — открыть события"><span class="logo-emoji" aria-hidden="true">🚀</span><span class="logo-word">Погнали</span></button><div class="life-tagline" aria-label="Жизнь начинается здесь"><span>Жизнь начинается</span><strong>здесь <i aria-hidden="true">↗</i></strong></div><div class="spacer"></div><button class="pill lang-btn" onclick="openLanguage()" aria-label="Выбрать язык">🌐 <span id="langLabel">RU</span> ▾</button></header>
+<header class="top"><button class="logo-btn" type="button" onclick="go('events')" aria-label="Погнали — открыть события"><span class="logo-emoji">🚀</span><span>Погнали</span></button><div class="life-tagline">Жизнь начинается здесь <b>→</b></div><div class="spacer"></div><button class="pill lang-btn" onclick="openLanguage()" aria-label="Выбрать язык">🌐 <span id="langLabel">RU</span> ▾</button></header>
 <div id="previewBanner" class="preview-banner hidden">🧪 ДЕМО-режим: события тестовые, данные не общие. Открой приложение через Telegram после настройки сервера.</div>
 <main class="content" id="content"></main>
 <nav class="bottomnav"> <button class="nav active" data-tab="events" onclick="go('events')"><b>🗺️</b><span>События</span></button> <button class="nav create-nav" data-tab="create" onclick="go('create')"><b>＋</b><span>Создать</span></button> <button class="nav" data-tab="mine" onclick="go('mine')"><b>🙋</b><span>Мои</span></button> <button class="nav" data-tab="messages" onclick="go('messages')"><b>💬</b><i class="unread-badge hidden" id="messageUnreadBadge" aria-label="Непрочитанные сообщения"></i><span>Сообщения</span></button> <button class="nav" data-tab="profile" onclick="go('profile')"><b>👤</b><span>Профиль</span></button> </nav></div>
@@ -1972,184 +1972,22 @@ new MutationObserver(()=>{if(!window.__pognaliLocalizing){window.__pognaliLocali
 <style id="pognali-map-bottom-gap-fix">#content:has(>.mapwrap){padding-bottom:0!important}</style>
 
 
-<style id="pognali-expressive-header-v1">
-/* Expressive brand header: readable slogan, calm premium surface. */
-.top{
-  position:relative!important;
-  min-height:78px!important;
-  padding:12px 13px!important;
-  gap:11px!important;
-  align-items:center!important;
-  background:linear-gradient(112deg,#fff 0%,#fffdfa 58%,#fff5f0 100%)!important;
-  border-bottom:1px solid #eee8df!important;
-  box-shadow:0 5px 18px rgba(35,29,22,.055)!important;
-}
-.top:after{
-  content:"";
-  position:absolute;
-  left:0;right:0;bottom:-1px;height:2px;
-  background:linear-gradient(90deg,#e85b43 0%,#f2a06d 34%,rgba(232,91,67,0) 78%);
-  pointer-events:none;
-}
-.top .logo-btn{
-  flex:0 0 auto!important;
-  min-height:49px!important;
-  padding:0 14px 0 12px!important;
-  gap:7px!important;
-  border-radius:15px!important;
-  background:linear-gradient(145deg,#202521,#111612)!important;
-  color:#fff!important;
-  box-shadow:0 6px 13px rgba(23,29,24,.17),inset 0 1px 0 rgba(255,255,255,.12)!important;
-  font-size:19px!important;
-  letter-spacing:-.7px!important;
-}
-.top .logo-btn .logo-emoji{font-size:21px!important}
+<style id="pognali-tagline-polish">
+/* Keep the original compact header; give only the slogan a clearer, stronger voice. */
 .top .life-tagline{
-  display:flex!important;
-  flex:1 1 auto!important;
-  min-width:0!important;
-  max-width:none!important;
-  flex-direction:column!important;
-  align-items:flex-start!important;
-  justify-content:center!important;
-  gap:1px!important;
-  margin:0!important;
-  overflow:visible!important;
-  white-space:normal!important;
-  color:#62675f!important;
-  font-size:clamp(11px,3.25vw,14px)!important;
-  line-height:1.08!important;
-  letter-spacing:-.25px!important;
-  font-weight:750!important;
+  font-size:clamp(11px,3.3vw,14px)!important;
+  line-height:1.15!important;
+  font-weight:800!important;
+  letter-spacing:-.22px!important;
+  color:#55458f!important;
 }
-.top .life-tagline span{display:block!important;white-space:nowrap!important}
-.top .life-tagline strong{
-  display:flex!important;
-  align-items:center!important;
-  gap:4px!important;
-  color:#e85b43!important;
-  font-size:clamp(16px,4.5vw,19px)!important;
-  line-height:1.05!important;
-  letter-spacing:-.55px!important;
-  font-weight:950!important;
+.top .life-tagline b{
+  display:inline!important;
+  margin-left:3px!important;
+  color:#6d4aff!important;
+  font-size:17px!important;
+  font-weight:900!important;
+  vertical-align:-1px!important;
 }
-.top .life-tagline i{
-  display:inline-grid!important;
-  place-items:center!important;
-  width:18px;height:18px;
-  border-radius:50%;
-  background:#fff0eb;
-  color:#e85b43;
-  font-size:12px;
-  line-height:1;
-  font-style:normal;
-  font-weight:900;
-}
-.top .life-tagline b{display:none!important}
-.top .spacer{display:none!important}
-.top .lang-btn{
-  flex:0 0 auto!important;
-  min-height:42px!important;
-  padding:0 9px!important;
-  border:1px solid #eae5dc!important;
-  border-radius:13px!important;
-  background:rgba(255,255,255,.9)!important;
-  color:#343a34!important;
-  box-shadow:0 2px 7px rgba(30,34,29,.045)!important;
-  font-size:11px!important;
-}
-@media(max-width:380px){
-  .top{gap:8px!important;padding-left:10px!important;padding-right:10px!important}
-  .top .logo-btn{min-height:46px!important;padding:0 10px!important;font-size:17px!important}
-  .top .logo-btn .logo-emoji{font-size:19px!important}
-  .top .life-tagline{font-size:10px!important}
-  .top .life-tagline strong{font-size:15px!important}
-  .top .lang-btn{padding:0 7px!important;font-size:10px!important}
-}
-@media(prefers-reduced-motion:no-preference){
-  .top .logo-btn{transition:transform .16s ease,box-shadow .16s ease!important}
-  .top .logo-btn:active{transform:translateY(1px) scale(.98)!important}
-}
-</style>
-
-
-<style id="pognali-expressive-header-v2">
-/* A distinct, playful brand signature while preserving the existing black/white/coral palette. */
-.top{
-  margin:8px 10px 9px!important;
-  min-height:80px!important;
-  padding:10px 11px!important;
-  border:1px solid #f0e2d9!important;
-  border-bottom:1px solid #f0e2d9!important;
-  border-radius:19px!important;
-  background:linear-gradient(135deg,#fff 0%,#fffaf6 100%)!important;
-  box-shadow:0 7px 20px rgba(44,31,23,.09),0 1px 3px rgba(44,31,23,.04)!important;
-  overflow:visible!important;
-}
-.top:after{left:18px!important;right:18px!important;bottom:0!important;height:3px!important;border-radius:99px!important;opacity:.9}
-.top .logo-btn{
-  min-height:52px!important;
-  padding:5px 13px 5px 8px!important;
-  gap:8px!important;
-  border-radius:16px!important;
-  background:linear-gradient(145deg,#242a25 0%,#101511 100%)!important;
-  box-shadow:0 5px 12px rgba(17,24,19,.2),inset 0 1px 0 rgba(255,255,255,.16)!important;
-}
-.top .logo-btn .logo-emoji{
-  display:grid!important;
-  place-items:center!important;
-  width:34px!important;height:34px!important;
-  border-radius:11px!important;
-  background:linear-gradient(145deg,#ff8c69,#e85b43)!important;
-  font-size:21px!important;
-  line-height:1!important;
-  transform:rotate(-7deg)!important;
-  box-shadow:inset 0 1px 2px rgba(255,255,255,.38),0 2px 5px rgba(0,0,0,.16)!important;
-}
-.top .logo-btn .logo-word{
-  font-family:"Arial Rounded MT Bold","Trebuchet MS",system-ui,sans-serif!important;
-  font-size:21px!important;
-  font-weight:950!important;
-  letter-spacing:-1.05px!important;
-  text-shadow:0 1px 0 rgba(255,255,255,.08)!important;
-}
-.top .life-tagline{
-  gap:3px!important;
-  font-family:"Trebuchet MS",system-ui,sans-serif!important;
-  font-size:clamp(10px,3vw,13px)!important;
-  font-weight:750!important;
-  letter-spacing:-.3px!important;
-  color:#77766f!important;
-}
-.top .life-tagline span{
-  font-size:clamp(10px,2.9vw,12px)!important;
-  font-weight:750!important;
-  letter-spacing:-.2px!important;
-}
-.top .life-tagline strong{
-  gap:5px!important;
-  font-family:"Arial Rounded MT Bold","Trebuchet MS",system-ui,sans-serif!important;
-  font-size:clamp(17px,4.8vw,21px)!important;
-  font-weight:950!important;
-  letter-spacing:-.8px!important;
-  text-transform:uppercase!important;
-  color:#e85b43!important;
-  text-shadow:0 1px 0 rgba(232,91,67,.08)!important;
-}
-.top .life-tagline i{
-  width:19px!important;height:19px!important;
-  background:#ffe9e1!important;
-  box-shadow:0 1px 3px rgba(232,91,67,.13)!important;
-  font-size:12px!important;
-}
-@media(max-width:380px){
-  .top{margin:7px 8px 8px!important;padding:9px!important;gap:7px!important;min-height:74px!important}
-  .top .logo-btn{min-height:47px!important;padding:4px 9px 4px 6px!important;gap:6px!important}
-  .top .logo-btn .logo-emoji{width:30px!important;height:30px!important;font-size:19px!important}
-  .top .logo-btn .logo-word{font-size:18px!important;letter-spacing:-.9px!important}
-  .top .life-tagline{font-size:10px!important}
-  .top .life-tagline span{font-size:9.5px!important}
-  .top .life-tagline strong{font-size:16px!important}
-  .top .lang-btn{min-height:39px!important;padding:0 7px!important}
-}
+@media(max-width:380px){.top .life-tagline{font-size:10.5px!important;letter-spacing:-.28px!important}}
 </style>
