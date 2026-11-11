@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#f7f7f4">
+<title>Погнали — тест новой карты</title>
+<link href="https://unpkg.com/maplibre-gl@5.6.2/dist/maplibre-gl.css" rel="stylesheet">
+<style>
+:root{font-family:Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;color:#17191d;background:#f7f7f4}
+*{box-sizing:border-box}body{margin:0}.page{max-width:900px;margin:0 auto;padding:14px}.head{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:12px}.head h1{font-size:22px;letter-spacing:-.7px;margin:0}.head p{font-size:12px;color:#777;margin:4px 0 0}.badge{background:#e6f5e9;color:#176c36;border-radius:99px;padding:7px 10px;font-size:10px;font-weight:900;white-space:nowrap}.notice{background:white;border:1px solid #e8e8e2;border-radius:14px;padding:10px 13px;margin-bottom:12px;font-size:12px;line-height:1.45;color:#656970}.stage{height:min(78vh,800px);min-height:540px;border-radius:24px;overflow:hidden;border:1px solid #e4e4de;box-shadow:0 14px 45px #15151512;background:#e9eee8;position:relative}.map{position:absolute;inset:0}.overlay{position:absolute;z-index:5;top:12px;left:12px;right:12px;display:flex;flex-wrap:wrap;gap:8px;pointer-events:none}.brand,.locate,.filters,.search{pointer-events:auto}.brand{background:#fff;border:1px solid #eeede8;border-radius:15px;padding:10px 13px;font-size:16px;font-weight:950;box-shadow:0 5px 18px #1b1b1b12}.brand small{display:block;font-size:10px;color:#777;font-weight:650;margin-top:2px}.locate{margin-left:auto;width:44px;height:44px;border-radius:14px;border:1px solid #e7e7e2;background:#fff;font-size:22px;box-shadow:0 5px 18px #1b1b1b12}.search{display:flex;gap:6px;width:100%;position:relative}.search input{min-width:0;flex:1;border:1px solid #e7e7e2;border-radius:13px;background:white;padding:12px;font-size:13px;box-shadow:0 4px 14px #1515150d;outline:none}.search button{border:1px solid #e7e7e2;border-radius:13px;background:white;padding:0 14px;font-weight:850}.results{position:absolute;top:49px;left:0;right:0;background:white;border:1px solid #e7e7e2;border-radius:14px;box-shadow:0 12px 30px #15151524;max-height:220px;overflow:auto;padding:5px}.result{display:block;width:100%;border:0!important;text-align:left;padding:10px;border-radius:10px;background:white!important}.result:hover{background:#f2f4f0!important}.result strong,.result span{display:block}.result strong{font-size:12px}.result span{font-size:10px;color:#777;margin-top:3px}.filters{display:flex;gap:6px;overflow:auto;width:100%;padding:0 0 4px;scrollbar-width:none}.filter{border:1px solid #e7e7e2;background:#fff;color:#4d5158;border-radius:999px;padding:9px 12px;font-size:11px;font-weight:850;white-space:nowrap;box-shadow:0 3px 12px #1515150d}.filter.active{background:#17191d;color:#fff;border-color:#17191d}.count{position:absolute;z-index:4;top:158px;left:12px;background:#fff;border:1px solid #eeede8;border-radius:999px;padding:8px 11px;font-size:11px;font-weight:850;box-shadow:0 4px 14px #15151510}.foot{font-size:11px;color:#777;text-align:center;margin:10px 0}.pin{width:43px;height:43px;border:2px solid white;border-radius:16px 16px 16px 5px;transform:rotate(-45deg);display:grid;place-items:center;background:#202420;box-shadow:0 4px 12px #1114;cursor:pointer}.pin span{transform:rotate(45deg);font-size:20px}.popup{font-family:inherit;min-width:190px}.popup b{font-size:14px}.popup p{margin:7px 0;color:#666;font-size:12px}.popup button{border:0;border-radius:10px;background:#17191d;color:#fff;padding:9px 12px;font-weight:800}.maplibregl-popup-content{border-radius:15px;padding:13px;box-shadow:0 8px 24px #1112}.maplibregl-ctrl-group{border-radius:12px!important;overflow:hidden;box-shadow:0 4px 15px #1112!important}.maplibregl-ctrl-bottom-right{bottom:30px}.maplibregl-ctrl-attrib{font-size:9px!important}
+@media(max-width:520px){.page{padding:8px}.head h1{font-size:18px}.stage{height:calc(100dvh - 135px);min-height:480px;border-radius:19px}.overlay{top:9px;left:9px;right:9px}.count{left:9px;top:151px}.brand{font-size:15px}}
+</style>
+</head>
+<body>
+<main class="page">
+<header class="head"><div><h1>Карта «Погнали»</h1><p>Новый вариант карты · тестовая страница</p></div><span class="badge">ТЕСТ</span></header>
+<div class="notice">Проверяем другой картографический движок и оформление. Это демонстрационные события: ничего не создаётся и не сохраняется в основной базе.</div>
+<section class="stage"><div id="map" class="map" aria-label="Карта событий"></div>
+<div class="overlay">
+<div class="brand">📍 Погнали<small>Рядом происходит жизнь</small></div>
+<button class="locate" id="locate" title="Моё местоположение" aria-label="Моё местоположение">⌖</button>
+<div class="search"><input id="query" placeholder="Найти место или адрес" autocomplete="off"><button id="searchBtn">Найти</button><div id="results" class="results" hidden></div></div>
+<div class="filters" id="filters"><button class="filter active" data-cat="Все">Все</button><button class="filter" data-cat="Спорт">⚽ Спорт</button><button class="filter" data-cat="Прогулка">🚶 Прогулки</button><button class="filter" data-cat="Общение">☕ Общение</button><button class="filter" data-cat="Игры">🎲 Игры</button><button class="filter" data-cat="Музыка">🎵 Музыка</button></div>
+</div><div class="count" id="count">5 событий рядом</div></section>
+<p class="foot">Карта: OpenFreeMap · MapLibre. Геоданные © OpenStreetMap contributors.</p>
+</main>
+<script src="https://unpkg.com/maplibre-gl@5.6.2/dist/maplibre-gl.js"></script>
+<script>
+(function(){
+const events=[
+{id:'d1',title:'Вечерняя прогулка',cat:'Прогулка',emoji:'🚶',place:'Парк Горького',date:'Сегодня · 19:00',lng:37.6014,lat:55.7298,desc:'Пройдёмся, поболтаем и проветрим голову.'},
+{id:'d2',title:'Футбол на площадке',cat:'Спорт',emoji:'⚽',place:'Спортивная площадка',date:'Сегодня · 18:30',lng:37.6084,lat:55.7351,desc:'Нужны ещё несколько игроков. Берите воду.'},
+{id:'d3',title:'Кофе и знакомство',cat:'Общение',emoji:'☕',place:'Кафе у парка',date:'Завтра · 12:00',lng:37.6126,lat:55.7247,desc:'Неформальная встреча, можно приходить одному.'},
+{id:'d4',title:'Настольные игры',cat:'Игры',emoji:'🎲',place:'Культурное пространство',date:'Завтра · 17:00',lng:37.5941,lat:55.7385,desc:'Играем в простые настолки. Новичкам рады.'},
+{id:'d5',title:'Уличная музыка',cat:'Музыка',emoji:'🎵',place:'Набережная',date:'Сегодня · 20:00',lng:37.6052,lat:55.7189,desc:'Послушаем музыку и погуляем рядом.'}
+];
+const map=new maplibregl.Map({container:'map',style:'https://tiles.openfreemap.org/styles/bright',center:[37.6014,55.7298],zoom:13.5,attributionControl:true});
+map.addControl(new maplibregl.NavigationControl({showCompass:false}),'bottom-right');
+const markers=[];let active='Все';
+function draw(){
+ markers.forEach(m=>m.remove());markers.length=0;
+ const shown=events.filter(e=>active==='Все'||e.cat===active);
+ shown.forEach(e=>{
+  const el=document.createElement('button');el.className='pin';el.type='button';el.setAttribute('aria-label',e.title);
+  const span=document.createElement('span');span.textContent=e.emoji;el.appendChild(span);
+  const marker=new maplibregl.Marker({element:el,anchor:'bottom'}).setLngLat([e.lng,e.lat]).addTo(map);
+  el.addEventListener('click',()=>{
+   const node=document.createElement('div');node.className='popup';
+   const title=document.createElement('b');title.textContent=e.title;node.appendChild(title);
+   const meta=document.createElement('p');meta.textContent=e.place+' · '+e.date;node.appendChild(meta);
+   const desc=document.createElement('p');desc.textContent=e.desc;node.appendChild(desc);
+   const btn=document.createElement('button');btn.textContent='Присоединиться';btn.addEventListener('click',()=>alert('Тестовый режим: «'+e.title+'». Подключение к событиям добавим отдельно.'));node.appendChild(btn);
+   new maplibregl.Popup({offset:25,closeButton:true,maxWidth:'270px'}).setLngLat([e.lng,e.lat]).setDOMContent(node).addTo(map);
+  });
+  markers.push(marker);
+ });
+ document.getElementById('count').textContent=shown.length+' '+(shown.length===1?'событие':'события')+' на карте';
+}
+document.getElementById('filters').addEventListener('click',e=>{const b=e.target.closest('[data-cat]');if(!b)return;active=b.dataset.cat;document.querySelectorAll('.filter').forEach(x=>x.classList.toggle('active',x===b));draw();});
+document.getElementById('locate').addEventListener('click',()=>{if(!navigator.geolocation){alert('Геолокация не поддерживается браузером');return;}navigator.geolocation.getCurrentPosition(pos=>map.flyTo({center:[pos.coords.longitude,pos.coords.latitude],zoom:15}),()=>alert('Не удалось получить местоположение. Разреши доступ к геолокации браузеру.'),{enableHighAccuracy:true,timeout:10000});});
+async function search(){
+ const q=document.getElementById('query').value.trim(),box=document.getElementById('results');if(!q)return;
+ box.hidden=false;box.replaceChildren();const loading=document.createElement('button');loading.className='result';loading.textContent='Ищем место…';box.appendChild(loading);
+ try{
+  const url='https://photon.komoot.io/api/?limit=6&lang=ru&q='+encodeURIComponent(q);
+  let response=await fetch(url);if(!response.ok)throw new Error('Photon failed');let data=await response.json();
+  if(!data.features?.length){response=await fetch('https://nominatim.openstreetmap.org/search?format=jsonv2&limit=6&accept-language=ru&q='+encodeURIComponent(q));data={features:(await response.json()).map(x=>({geometry:{coordinates:[Number(x.lon),Number(x.lat)]},properties:{name:x.name,city:x.address?.city||x.address?.town||x.address?.village,country:x.address?.country,label:x.display_name}}))};}
+  box.replaceChildren();
+  if(!data.features?.length){const empty=document.createElement('button');empty.className='result';empty.textContent='Ничего не найдено';box.appendChild(empty);return;}
+  data.features.forEach(f=>{const p=f.properties||{},coords=f.geometry?.coordinates;if(!coords)return;const b=document.createElement('button');b.className='result';b.type='button';const name=document.createElement('strong');name.textContent=p.name||p.label||'Место на карте';const detail=document.createElement('span');detail.textContent=p.label||[p.street,p.city,p.state,p.country].filter(Boolean).join(', ');b.append(name,detail);b.addEventListener('click',()=>{map.flyTo({center:coords,zoom:15});box.hidden=true;});box.appendChild(b);});
+ }catch(err){box.replaceChildren();const msg=document.createElement('button');msg.className='result';msg.textContent='Поиск временно недоступен. Попробуй ещё раз.';box.appendChild(msg);}
+}
+document.getElementById('searchBtn').addEventListener('click',search);document.getElementById('query').addEventListener('keydown',e=>{if(e.key==='Enter')search();});document.addEventListener('click',e=>{if(!e.target.closest('.search'))document.getElementById('results').hidden=true;});
+map.on('load',draw);
+})();
+</script>
+</body></html>
