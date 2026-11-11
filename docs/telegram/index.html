@@ -595,10 +595,11 @@ body{background:var(--pg-bg)!important}
 <style id="pognali-a11y">.bottomnav .nav span{font-size:11px!important;letter-spacing:-.2px}.bottomnav .nav:not(.active):not(.create-nav) span{color:#5f6672!important}.create-hero-kicker,.create-hero-foot{font-size:11px!important;color:#5f6672!important}.calendar-week span{font-size:11px!important;color:#5f6672!important}button[onclick="clearCalendarDate()"]{min-height:36px;padding:0 14px}.maplibregl-ctrl-group button{width:40px!important;height:40px!important}</style>
 <style id="pognali-clusters">.event-cluster.stack{--h:40px;display:flex;align-items:center;height:var(--h);padding:0 7px 0 4px;background:#fff;border:2px solid #17171a;border-radius:99px;box-shadow:0 6px 16px rgba(0,0,0,.28);cursor:pointer;position:relative;font:inherit}.event-cluster.stack.tier2{--h:48px}.event-cluster.stack.tier3{--h:58px;border-width:3px}.cl-faces{display:flex}.cl-face{width:calc(var(--h) - 12px);height:calc(var(--h) - 12px);border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:calc(var(--h) * .42);line-height:1;border:2px solid #fff;margin-left:-8px}.cl-face:first-child{margin-left:0}.cl-face.f0{background:#ffe1d8}.cl-face.f1{background:#d5f6e8}.cl-face.f2{background:#fff0c2}.cl-n{position:absolute;top:-10px;right:-7px;background:#ff6b4a;color:#fff;font:800 12px system-ui,sans-serif;font-style:normal;border-radius:99px;padding:2px 7px;border:2px solid #fff;min-width:24px;text-align:center}</style>
 <style id="pognali-startup-splash">
-#pognaliSplash{position:fixed;inset:0;z-index:99999;display:grid;place-items:center;overflow:hidden;background:#0b0b0b;opacity:1;visibility:visible;transition:opacity .72s cubic-bezier(.22,.75,.25,1),visibility .72s ease;pointer-events:auto}
-#pognaliSplash img{display:block;width:100%;height:100%;object-fit:cover;object-position:center;transform:scale(1);filter:blur(0);transition:transform 1s cubic-bezier(.2,.7,.25,1),filter .72s ease,opacity .72s ease}
+#pognaliSplash{position:fixed;inset:0;z-index:99999;display:grid;place-items:center;overflow:hidden;background:#0b0b0b;opacity:1;visibility:visible;transition:opacity .82s cubic-bezier(.22,.75,.25,1),visibility .82s ease;pointer-events:auto}
+#pognaliSplash::before{content:"";position:absolute;inset:-24px;background:url("/file_00000000c5a081f488c652aeb4ab4bfa.png") center/cover no-repeat;filter:blur(22px) brightness(.42);transform:scale(1.06)}
+#pognaliSplash img{position:relative;z-index:1;display:block;width:100%;height:100%;object-fit:contain;object-position:center;transform:scale(1);filter:blur(0);transition:transform 1s cubic-bezier(.2,.7,.25,1),filter .82s ease,opacity .82s ease}
 #pognaliSplash.is-hidden{opacity:0;visibility:hidden;pointer-events:none}
-#pognaliSplash.is-hidden img{transform:scale(1.055);filter:blur(3px);opacity:.82}
+#pognaliSplash.is-hidden img{transform:scale(1.025);filter:blur(2px);opacity:.9}
 @media(prefers-reduced-motion:reduce){#pognaliSplash,#pognaliSplash img{transition:none}}
 </style>
 </head>
@@ -608,11 +609,16 @@ body{background:var(--pg-bg)!important}
 (function(){
   const splash=document.getElementById('pognaliSplash');
   if(!splash)return;
-  let dataReady=false,mapReady=false,done=false,hideTimer=null;
-  const shownAt=Date.now(),minVisibleMs=1800;
-  function finishHide(){if(done)return;done=true;splash.classList.add('is-hidden');setTimeout(()=>splash.remove(),780)}
-  function hide(){if(done||hideTimer)return;const wait=Math.max(0,minVisibleMs-(Date.now()-shownAt));if(wait){hideTimer=setTimeout(finishHide,wait);return}finishHide()}
-  function check(){if(dataReady&&mapReady)hide()}
+  const splashImage=splash.querySelector('img');
+  let dataReady=false,mapReady=false,imageReady=!!(splashImage?.complete&&splashImage.naturalWidth>0),done=false,hideTimer=null;
+  const minReadyHoldMs=1800;
+  function finishHide(){if(done)return;done=true;splash.classList.add('is-hidden');setTimeout(()=>splash.remove(),880)}
+  function hide(){if(done||hideTimer)return;hideTimer=setTimeout(finishHide,minReadyHoldMs)}
+  function check(){if(dataReady&&mapReady&&imageReady)hide()}
+  if(splashImage&&!imageReady){
+    splashImage.addEventListener('load',()=>{imageReady=true;check()},{once:true});
+    splashImage.addEventListener('error',()=>{imageReady=true;check()},{once:true});
+  }
   window.__pognaliSplashDataReady=()=>{dataReady=true;check()};
   window.__pognaliSplashMapReady=()=>{mapReady=true;check()};
   window.addEventListener('pognali-maplibre-failed',()=>window.__pognaliSplashMapReady(),{once:true});
